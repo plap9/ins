@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRouter from "./routes/auth";
+import post from "./routes/post";
+import user from "./routes/user";
 
 dotenv.config();
 const app = express();
@@ -11,6 +13,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRouter);
+app.use("/posts", post);
+app.use("/users", user);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("Global error:", err.stack);
