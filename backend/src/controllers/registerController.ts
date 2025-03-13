@@ -1,23 +1,25 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import pool from "../config/db";
 import { sendVerificationEmail } from "../config/email";
 import { sendOTP } from "../config/sms";
 
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { username, contact, password } = req.body;
 
         if (!username || !contact || !password) {
-            return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin" });
+            res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin" });
+            return;
         }
 
         const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
         const isPhone = /^\+?[84]\d{1,14}$/.test(contact);
 
         if (!isEmail && !isPhone) {
-            return res.status(400).json({ error: "Định dạng email hoặc số điện thoại không hợp lệ" });
+            res.status(400).json({ error: "Định dạng email hoặc số điện thoại không hợp lệ" });
+            return;
         }
 
         const [existingUsers]: any = await pool.query(
@@ -26,7 +28,8 @@ export const register = async (req: Request, res: Response) => {
         );
 
         if (existingUsers.length > 0) {
-            return res.status(400).json({ error: "Email hoặc số điện thoại đã tồn tại" });
+            res.status(400).json({ error: "Email hoặc số điện thoại đã tồn tại" });
+            return;
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -44,7 +47,8 @@ export const register = async (req: Request, res: Response) => {
 
             await sendVerificationEmail(contact, verificationToken);
 
-            return res.status(201).json({ message: "Vui lòng kiểm tra email để xác thực." });
+            res.status(201).json({ message: "Vui lòng kiểm tra email để xác thực." });
+            return;
         } else {
             const phoneVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
             const phoneVerificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
@@ -58,20 +62,20 @@ export const register = async (req: Request, res: Response) => {
 
             await sendOTP(contact, phoneVerificationCode);
 
-            return res.status(201).json({ message: "Vui lòng kiểm tra tin nhắn SMS để xác thực." });
+            res.status(201).json({ message: "Vui lòng kiểm tra tin nhắn SMS để xác thực." });
         }
     } catch (error) {
-        console.error("Lỗi khi đăng ký:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
 
-export const verifyEmail = async (req: Request, res: Response) => {
+export const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { token } = req.query;
 
         if (!token) {
-            return res.status(400).json({ error: "Thiếu token xác thực" });
+            res.status(400).json({ error: "Thiếu token xác thực" });
+            return;
         }
 
         const [users]: any = await pool.query(
@@ -80,7 +84,8 @@ export const verifyEmail = async (req: Request, res: Response) => {
         );
 
         if (users.length === 0) {
-            return res.status(400).json({ error: "Token không hợp lệ hoặc đã hết hạn" });
+            res.status(400).json({ error: "Token không hợp lệ hoặc đã hết hạn" });
+            return;
         }
 
         const userId = users[0].id;
@@ -90,19 +95,19 @@ export const verifyEmail = async (req: Request, res: Response) => {
             [userId]
         );
 
-        return res.json({ message: "Xác thực email thành công!" });
+        res.json({ message: "Xác thực email thành công!" });
     } catch (error) {
-        console.error("Lỗi xác thực email:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
 
-export const verifyPhone = async (req: Request, res: Response) => {
+export const verifyPhone = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { phone, otp } = req.body;
 
         if (!phone || !otp) {
-            return res.status(400).json({ error: "Thiếu số điện thoại hoặc mã OTP" });
+            res.status(400).json({ error: "Thiếu số điện thoại hoặc mã OTP" });
+            return;
         }
 
         const [users]: any = await pool.query(
@@ -110,8 +115,9 @@ export const verifyPhone = async (req: Request, res: Response) => {
             [phone, otp]
         );
 
-        if (users.length === 0) {
-            return res.status(400).json({ error: "Mã OTP không hợp lệ hoặc đã hết hạn" });
+        if (users.length === 0) {   
+            res.status(400).json({ error: "Mã OTP không hợp lệ hoặc đã hết hạn" });
+            return;
         }
 
         const userId = users[0].id;
@@ -121,9 +127,9 @@ export const verifyPhone = async (req: Request, res: Response) => {
             [userId]
         );
 
-        return res.json({ message: "Xác thực số điện thoại thành công!" });
+        res.json({ message: "Xác thực số điện thoại thành công!" });
     } catch (error) {
-        console.error("Lỗi xác thực số điện thoại:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
+

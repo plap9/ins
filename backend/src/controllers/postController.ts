@@ -1,9 +1,9 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import pool from "../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../middlewares/authMiddleware";
 
-export const createPost = async (req: AuthRequest, res: Response): Promise<void> => {
+export const createPost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { content, location, privacy } = req.body;
         const user_id = req.user?.id;
@@ -48,12 +48,11 @@ export const createPost = async (req: AuthRequest, res: Response): Promise<void>
             videoUrls,
         });
     } catch (error) {
-        console.error("Lỗi khi tạo bài viết:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
 
-export const getPosts = async (req: Request, res: Response): Promise<void> => {
+export const getPosts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const [posts] = await pool.query("SELECT * FROM posts ORDER BY created_at DESC");
 
@@ -65,12 +64,11 @@ export const getPosts = async (req: Request, res: Response): Promise<void> => {
 
         res.json(formattedPosts);
     } catch (error) {
-        console.error("Lỗi khi lấy bài viết:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
 
-export const deletePost = async (req: AuthRequest, res: Response): Promise<void> => {
+export const deletePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { id } = req.params;
         const user_id = req.user?.id;
@@ -90,7 +88,6 @@ export const deletePost = async (req: AuthRequest, res: Response): Promise<void>
 
         res.json({ message: "Xóa bài viết thành công" });
     } catch (error) {
-        console.error("Lỗi khi xóa bài viết:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };

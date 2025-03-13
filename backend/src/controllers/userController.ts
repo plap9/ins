@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import pool from '../config/db';
 
-export const getUserProfile = async (req: Request, res: Response): Promise<void> => {
+export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userId = req.params.id;
         const [users]: any = await pool.query(
@@ -19,13 +19,12 @@ export const getUserProfile = async (req: Request, res: Response): Promise<void>
 
         res.json(users[0]); 
     } catch (error) {
-        console.error("Lỗi lấy thông tin người dùng:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
 
 
-export const updateUserProfile = async (req: Request, res: Response): Promise<void> => {
+export const updateUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userId = req.params.id;
         const { full_name, bio, profile_picture } = req.body;
@@ -35,7 +34,6 @@ export const updateUserProfile = async (req: Request, res: Response): Promise<vo
         );
         res.json({ message: "Cập nhật thông tin thành công" });
     } catch (error) {
-        console.error("Lỗi cập nhật thông tin người dùng:", error);
-        res.status(500).json({ error: "Lỗi server" });
+        next(error);
     }
 };
