@@ -16,6 +16,11 @@ app.use("/auth", authRouter);
 app.use("/posts", post);
 app.use("/users", user);
 
+app.use((req, res, next) => {
+  console.log(`🔍 Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("Global error:", err.stack);
     res.status(500).json({ message: "Something went wrong", error: err.message });
