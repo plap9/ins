@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import pool from '../config/db';
+import pool from '../../config/db';
 
 export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -18,21 +18,6 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
         }
 
         res.json(users[0]); 
-    } catch (error) {
-        next(error);
-    }
-};
-
-
-export const updateUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const userId = req.params.id;
-        const { full_name, bio, profile_picture } = req.body;
-        await pool.query(
-            "UPDATE users SET full_name = ?, bio = ?, profile_picture = ? WHERE id = ?",
-            [full_name, bio, profile_picture, userId]
-        );
-        res.json({ message: "Cập nhật thông tin thành công" });
     } catch (error) {
         next(error);
     }

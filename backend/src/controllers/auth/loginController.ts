@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import pool from "../config/db";
+import pool from "../../config/db";
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -49,43 +49,9 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
         const { password_hash, ...userWithoutPassword } = user;
 
-        res.json({ token, refreshToken ,user: userWithoutPassword });
+        res.json({ token, refreshToken, user: userWithoutPassword });
         return;
     } catch (error) {
         next(error);
     }
 };
-
-export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const { refreshToken} = req.body;
-
-        if (!refreshToken) {
-            res.status(400).json({ error: "Thiếu token" });
-            return;
-        }
-
-        const [tokens]: any = await pool.query(
-            "SELECT * FROM refresh_tokens WHERE token = ?",
-            [refreshToken]
-        )
-
-        if (tokens.length === 0) {
-            res.status(400).json({ error: "Token không hợp lệ" });
-            return;
-        }
-
-        jwt.verify(refreshToken, process.env.REFRESH_SECRET as string, async (error: any, decoded: any) => {
-            if (error) {
-                return res.status(400).json({ error: "Token không hợp lệ" });
-            }
-            const newAcessToken = jwt.sign({ id: decoded.id}, process.env.JWT_SECRET as string, {
-                expiresIn: "1h",
-            });
-
-            res.json({ token: newAcessToken });
-        });
-    } catch (error) {
-        next(error);
-    }
-}
