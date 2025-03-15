@@ -17,7 +17,7 @@ export default function TabsLayout() {
             <Tabs.Screen 
             name="new" 
             options={{ 
-                headerTitle: 'For you', 
+                headerTitle: 'Create Post', 
                 tabBarIcon: ({color}) => (
                     <FontAwesome name="plus-square-o" size={26} color={color} />
                 ),
@@ -27,7 +27,7 @@ export default function TabsLayout() {
             <Tabs.Screen 
             name="profile" 
             options={{ 
-                headerTitle: 'For you', 
+                headerTitle: 'Profile Screen', 
                 tabBarIcon: ({color}) => (
                     <FontAwesome name="user" size={26} color={color} />
                 ),
