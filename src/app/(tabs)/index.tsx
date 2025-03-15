@@ -6,10 +6,15 @@ import posts from "../../../assets/data/posts.json";
 export default function FeedScreen() {
     return (
     <FlatList
-        className="items-center"
         data={posts}
-        contentContainerStyle={{gap:10, maxWidth: 512, flex: 1, width: '100%',}}
+        className=" bg-slate-400"
         renderItem={({item}) => <PostListItem posts={item} />}
+        contentContainerStyle={{
+            gap:10,
+            alignItems: "center",
+            width: "100%",
+            
+        }}
         showsVerticalScrollIndicator={false}
     />
     );
