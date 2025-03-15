@@ -4,22 +4,21 @@ import crypto from "crypto";
 import pool from "../../config/db";
 import { sendVerificationEmail } from "../../config/email";
 import { sendOTP } from "../../config/sms";
+import { AppError } from "../../middlewares/errorHandler";
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { username, contact, password } = req.body;
 
         if (!username || !contact || !password) {
-            res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin" });
-            return;
+            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400);
         }
 
         const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
         const isPhone = /^\+?[84]\d{1,14}$/.test(contact);
 
         if (!isEmail && !isPhone) {
-            res.status(400).json({ error: "Định dạng email hoặc số điện thoại không hợp lệ" });
-            return;
+            throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400);
         }
 
         const [existingUsers]: any = await pool.query(
@@ -28,35 +27,31 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         );
 
         if (existingUsers.length > 0) {
-            res.status(400).json({ error: "Email hoặc số điện thoại đã tồn tại" });
-            return;
+            throw new AppError("Email hoặc số điện thoại đã tồn tại", 400);
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         if (isEmail) {
             const verificationToken = crypto.randomBytes(32).toString("hex");
-            const verificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
+            const verificationExpires = new Date(Date.now() + 3 * 60 * 1000); // Hết hạn sau 3 phút
 
             await pool.query(
                 `INSERT INTO users (username, email, password_hash, verification_token, verification_expires, contact_type) 
                  VALUES (?, ?, ?, ?, ?, ?)`,
-
                 [username, contact, hashedPassword, verificationToken, verificationExpires, "email"]
             );
 
             await sendVerificationEmail(contact, verificationToken);
 
             res.status(201).json({ message: "Vui lòng kiểm tra email để xác thực." });
-            return;
         } else {
             const phoneVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-            const phoneVerificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
+            const phoneVerificationExpires = new Date(Date.now() + 3 * 60 * 1000); // Hết hạn sau 3 phút
 
             await pool.query(
                 `INSERT INTO users (username, phone_number, password_hash, phone_verification_code, phone_verification_expires, contact_type) 
                  VALUES (?, ?, ?, ?, ?, ?)`,
-
                 [username, contact, hashedPassword, phoneVerificationCode, phoneVerificationExpires, "phone"]
             );
 

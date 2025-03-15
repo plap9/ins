@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { Schema } from "joi";
+import { Schema, ValidationError } from "joi";
+import { AppError } from "../middlewares/errorHandler";
 
 export const validate = (schema: Schema) => 
     (req: Request, res: Response, next: NextFunction): void => {
@@ -7,10 +8,8 @@ export const validate = (schema: Schema) =>
 
         if (error) {
             const errors = error.details.map((err) => err.message);
-            res.status(400).json({ error: "Dữ liệu không hợp lệ", details: errors });
-            return;
+            return next(new AppError("Dữ liệu không hợp lệ", 400));
         }
 
         next();
     };
-
