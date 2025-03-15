@@ -25,10 +25,16 @@ CREATE TABLE `users` (
     `phone_verification_expires` TIMESTAMP NULL DEFAULT NULL,
     `email_verified` TINYINT(1) DEFAULT 0,
     `phone_verified` TINYINT(1) DEFAULT 0,
-     `allow_messages` BOOLEAN DEFAULT TRUE,
+    `allow_messages` BOOLEAN DEFAULT TRUE,
     `allow_tags` BOOLEAN DEFAULT TRUE,
     `allow_comments` BOOLEAN DEFAULT TRUE,
-    `allow_follow_requests`BOOLEAN DEFAULT TRUE,
+    `allow_follow_requests` BOOLEAN DEFAULT TRUE,
+    `allow_like_notifications` BOOLEAN DEFAULT TRUE,
+    `allow_comment_notifications` BOOLEAN DEFAULT TRUE,
+    `allow_follow_notifications` BOOLEAN DEFAULT TRUE,
+    `allow_mention_notifications` BOOLEAN DEFAULT TRUE,
+    `allow_message_notifications` BOOLEAN DEFAULT TRUE,
+    `allow_story_notifications` BOOLEAN DEFAULT TRUE,
     PRIMARY KEY (`user_id`),
     UNIQUE KEY `uq_users_username` (`username`),
     UNIQUE KEY `uq_users_email` (`email`),
@@ -42,16 +48,16 @@ CREATE INDEX idx_users_created_at ON users(created_at);
 
 
 CREATE TABLE `posts` (
-    `photo_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `post_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,
     `content` TEXT DEFAULT NULL,
-    `image_url` TEXT DEFAULT NULL,
     `location` VARCHAR(255) DEFAULT NULL,
     `privacy` ENUM('public', 'private', 'followers') DEFAULT 'public',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(), 
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
-    `video_url` TEXT DEFAULT NULL,
-    PRIMARY KEY (`photo_id`),
+    `like_count` INT DEFAULT 0,
+    `comment_count` INT DEFAULT 0,
+    PRIMARY KEY (`post_id`),
     CONSTRAINT `posts_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -145,6 +151,7 @@ CREATE TABLE `stories` (
     `sticker_data` TEXT,
     `filter_data` TEXT,
     `view_count` INT DEFAULT 0,
+    `close_friends_only` BOOLEAN DEFAULT FALSE,
     PRIMARY KEY (`story_id`),
     CONSTRAINT `stories_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -194,20 +201,25 @@ CREATE INDEX idx_followers_following_id ON followers(following_id);
 CREATE TABLE `notifications` (
     `notification_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,
-    `type` ENUM('like', 'comment', 'follow', 'mention', 'message', 'story_view', 'story_reply', 'call') NOT NULL,
-    `message` TEXT,  
+    `type` ENUM('like', 'comment', 'follow', 'mention', 'message', 'story_view', 'story_reply', 'call', 'reel_comment', 'reel_like', 'reel_mention', 'close_friend_add') NOT NULL,
+    `message` TEXT,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     `is_read` BOOLEAN DEFAULT FALSE,
     `related_id` BIGINT(20) DEFAULT NULL,
-    `story_id` BIGINT(20) DEFAULT NULL, 
+    `story_id` BIGINT(20) DEFAULT NULL,
+    `post_id` BIGINT(20) DEFAULT NULL,
+    `comment_id` BIGINT(20) DEFAULT NULL,
+    `message_id` BIGINT(20) DEFAULT NULL,
     PRIMARY KEY (`notification_id`),
     CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-     CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE
+    CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
+    CONSTRAINT `notifications_ibfk_4` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `notifications_ibfk_5` FOREIGN KEY (`comment_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE,
+    CONSTRAINT `notifications_ibfk_6` FOREIGN KEY (`message_id`) REFERENCES `messages` (`message_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_type ON notifications(type);
-
 CREATE TABLE `search_history` (
     `history_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,
@@ -233,3 +245,137 @@ CREATE TABLE `refresh_tokens` (
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+
+CREATE TABLE `reels` (
+    `reel_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `user_id` BIGINT(20) NOT NULL,
+    `video_url` TEXT NOT NULL,
+    `thumbnail_url` TEXT DEFAULT NULL,
+    `caption` TEXT DEFAULT NULL,
+    `duration` INT NOT NULL, 
+    `audio_track` VARCHAR(255) DEFAULT NULL,
+    `views_count` INT DEFAULT 0,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`reel_id`),
+    CONSTRAINT `reels_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_reels_user_id ON reels(user_id);
+CREATE INDEX idx_reels_created_at ON reels(created_at);
+
+CREATE TABLE `reel_tags` (
+    `tag_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `reel_id` BIGINT(20) NOT NULL,
+    `tag_text` VARCHAR(100) NOT NULL,
+    PRIMARY KEY (`tag_id`),
+    CONSTRAINT `reel_tags_ibfk_1` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_reel_tags_reel_id ON reel_tags(reel_id);
+CREATE INDEX idx_reel_tags_text ON reel_tags(tag_text);
+
+CREATE TABLE `reel_likes` (
+    `like_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `reel_id` BIGINT(20) NOT NULL,
+    `user_id` BIGINT(20) NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`like_id`),
+    CONSTRAINT `reel_likes_ibfk_1` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE,
+    CONSTRAINT `reel_likes_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    UNIQUE KEY `uq_reel_likes_user_reel` (`user_id`, `reel_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_reel_likes_reel_id ON reel_likes(reel_id);
+CREATE INDEX idx_reel_likes_user_id ON reel_likes(user_id);
+
+CREATE TABLE `reel_comments` (
+    `comment_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `reel_id` BIGINT(20) NOT NULL,
+    `user_id` BIGINT(20) NOT NULL,
+    `parent_id` BIGINT(20) DEFAULT NULL,
+    `content` TEXT NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`comment_id`),
+    CONSTRAINT `reel_comments_ibfk_1` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE,
+    CONSTRAINT `reel_comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `reel_comments_ibfk_3` FOREIGN KEY (`parent_id`) REFERENCES `reel_comments` (`comment_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_reel_comments_reel_id ON reel_comments(reel_id);
+CREATE INDEX idx_reel_comments_user_id ON reel_comments(user_id);
+
+CREATE TABLE `highlights` (
+    `highlight_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `user_id` BIGINT(20) NOT NULL,
+    `title` VARCHAR(100) NOT NULL,
+    `cover_image_url` TEXT DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`highlight_id`),
+    CONSTRAINT `highlights_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_highlights_user_id ON highlights(user_id);
+
+CREATE TABLE `highlight_stories` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `highlight_id` BIGINT(20) NOT NULL,
+    `story_id` BIGINT(20) NOT NULL,
+    `added_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    CONSTRAINT `highlight_stories_ibfk_1` FOREIGN KEY (`highlight_id`) REFERENCES `highlights` (`highlight_id`) ON DELETE CASCADE,
+    CONSTRAINT `highlight_stories_ibfk_2` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
+    UNIQUE KEY `uq_highlight_story` (`highlight_id`, `story_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_highlight_stories_highlight_id ON highlight_stories(highlight_id);
+CREATE INDEX idx_highlight_stories_story_id ON highlight_stories(story_id);
+
+CREATE TABLE `close_friends` (
+    `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `user_id` BIGINT(20) NOT NULL,
+    `friend_id` BIGINT(20) NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`id`),
+    CONSTRAINT `close_friends_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `close_friends_ibfk_2` FOREIGN KEY (`friend_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    UNIQUE KEY `uq_close_friends` (`user_id`, `friend_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_close_friends_user_id ON close_friends(user_id);
+CREATE INDEX idx_close_friends_friend_id ON close_friends(friend_id);
+
+CREATE TABLE `mentions` (
+    `mention_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `user_id` BIGINT(20) NOT NULL, 
+    `mentioned_by` BIGINT(20) NOT NULL, 
+    `post_id` BIGINT(20) DEFAULT NULL,
+    `comment_id` BIGINT(20) DEFAULT NULL,
+    `story_id` BIGINT(20) DEFAULT NULL,
+    `reel_id` BIGINT(20) DEFAULT NULL,
+    `message_id` BIGINT(20) DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`mention_id`),
+    CONSTRAINT `mentions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_2` FOREIGN KEY (`mentioned_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_3` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_4` FOREIGN KEY (`comment_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_5` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_6` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_7` FOREIGN KEY (`message_id`) REFERENCES `messages` (`message_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `reel_statistics` (
+    `stat_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `reel_id` BIGINT(20) NOT NULL,
+    `views` INT DEFAULT 0,
+    `likes` INT DEFAULT 0,
+    `comments` INT DEFAULT 0,
+    `shares` INT DEFAULT 0,
+    `engagement_rate` FLOAT DEFAULT 0,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`stat_id`),
+    CONSTRAINT `reel_statistics_ibfk_1` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE,
+    UNIQUE KEY `uq_reel_statistics_reel_id` (`reel_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
