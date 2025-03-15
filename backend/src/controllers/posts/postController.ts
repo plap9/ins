@@ -1,47 +1,63 @@
-import { NextFunction, Request, Response } from "express";
+import { NextFunction, Response } from "express";
 import pool from "../../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
+import { AppError } from "../../middlewares/errorHandler";
 
 export const createPost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
-        const { content, location, privacy } = req.body;
-        const user_id = req.user?.id;
+        const { content, location } = req.body;
+        const user_id = req.user?.user_id;
 
-        if (!user_id) {
-            res.status(401).json({ error: "Người dùng chưa được xác thực" });
-            return;
+        console.log("🚀 req.user:", req.user);
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
+
+        const hasContent = content && content.trim() !== "";
+        const hasFiles = req.files && Array.isArray(req.files) && req.files.length > 0;
+
+        if (!hasContent && !hasFiles) {
+            return next(new AppError("Bài viết phải có nội dung hoặc ít nhất một ảnh/video", 400));
         }
 
-        const [result] = await pool.query<ResultSetHeader>(
-            "INSERT INTO posts (user_id, content, location, privacy) VALUES (?, ?, ?, ?)",
-            [user_id, content, location, privacy]
+        await connection.beginTransaction();
+
+        const [result] = await connection.query<ResultSetHeader>(
+            "INSERT INTO posts (user_id, content, location) VALUES (?, ?, ?)",
+            [user_id, content || null, location || null]
         );
+        const post_id = result.insertId;
 
-        const post_id = result.insertId; 
-
-        if (req.files && Array.isArray(req.files)) {
+        if (hasFiles) {
             const files = req.files as Express.MulterS3.File[];
 
             for (const file of files) {
-                const media_type = file.mimetype.startsWith("image") ? 'image' : 'video';
+                if (!file.mimetype.startsWith("image") && !file.mimetype.startsWith("video")) {
+                    await connection.rollback();
+                    return next(new AppError("Chỉ hỗ trợ ảnh và video", 400));
+                }
 
-                await pool.query(
+                const media_type = file.mimetype.startsWith("image") ? "image" : "video";
+                await connection.query(
                     "INSERT INTO media (post_id, media_url, media_type) VALUES (?, ?, ?)",
-                    [post_id, file.location, media_type] 
+                    [post_id, file.location, media_type]
                 );
             }
         }
 
+        await connection.commit();
         res.status(201).json({
             message: "Bài viết đã được tạo",
             post_id,
             user_id,
-            content,
-            location,
-            privacy,
+            content: content || null,
+            location: location || null,
+            post_privacy: "public",
         });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release();
     }
 };

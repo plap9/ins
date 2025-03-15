@@ -7,10 +7,10 @@ CREATE TABLE `users` (
     `password_hash` VARCHAR(255) NOT NULL,
     `full_name` VARCHAR(100) DEFAULT NULL,
     `bio` TEXT DEFAULT NULL,
-    `profile_picure` TEXT DEFAULT NULL,
+    `profile_picture` TEXT DEFAULT NULL,
     `phone_number` VARCHAR(15) DEFAULT NULL,
     `is_private` TINYINT(1) DEFAULT 0,
-    `is_verified` TINYINT(1) DEFAULT 0,
+    `is_verified` TINYINT(1) DEFAULT 0,  
     `website` VARCHAR(255) DEFAULT NULL,
     `gender` ENUM('male', 'female', 'other') DEFAULT NULL,
     `date_of_birth` DATE DEFAULT NULL,
@@ -18,13 +18,14 @@ CREATE TABLE `users` (
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
     `last_login` TIMESTAMP NULL DEFAULT NULL,
     `status` ENUM('active', 'deactivated', 'banned') DEFAULT 'active',
-    `verification_token` VARCHAR(255) DEFAULT NULL,
-    `verification_expires` TIMESTAMP NULL DEFAULT NULL,
+    `email-verification_code` VARCHAR(255) DEFAULT NULL UNIQUE,  
+    `email-verification_expires` TIMESTAMP NULL DEFAULT NULL,
     `phone_verification_code` VARCHAR(6) DEFAULT NULL,
-    `contact_type` ENUM('email', 'phone') NOT NULL,
     `phone_verification_expires` TIMESTAMP NULL DEFAULT NULL,
     `email_verified` TINYINT(1) DEFAULT 0,
     `phone_verified` TINYINT(1) DEFAULT 0,
+    `contact_type` ENUM('email', 'phone') DEFAULT NULL,  
+    `privacy_user` ENUM('public', 'private') DEFAULT 'public',
     `allow_messages` BOOLEAN DEFAULT TRUE,
     `allow_tags` BOOLEAN DEFAULT TRUE,
     `allow_comments` BOOLEAN DEFAULT TRUE,
@@ -47,12 +48,13 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_created_at ON users(created_at);
 
 
+
 CREATE TABLE `posts` (
     `post_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,
     `content` TEXT DEFAULT NULL,
     `location` VARCHAR(255) DEFAULT NULL,
-    `privacy` ENUM('public', 'private', 'followers') DEFAULT 'public',
+    `post_privacy` ENUM('public', 'private', 'followers') DEFAULT 'public',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(), 
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP() ON UPDATE CURRENT_TIMESTAMP(),
     `like_count` INT DEFAULT 0,
@@ -72,7 +74,7 @@ CREATE TABLE `media` (
     `media_type` ENUM('image', 'video') NOT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`media_id`),
-    CONSTRAINT `media_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE
+    CONSTRAINT `media_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX idx_media_post_id ON media(post_id);
@@ -86,7 +88,7 @@ CREATE TABLE `comments` (
     `content` TEXT NOT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`comment_id`),
-    CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
     CONSTRAINT `comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
      CONSTRAINT `comments_ibfk_3` FOREIGN KEY (`parent_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -104,7 +106,7 @@ CREATE TABLE `likes` (
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`like_id`),
     CONSTRAINT `likes_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-    CONSTRAINT `likes_ibfk_2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `likes_ibfk_2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
      CONSTRAINT `likes_ibfk_3` FOREIGN KEY (`comment_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE,
     UNIQUE KEY `uq_likes_user_post_comment` (`user_id`, `post_id`, `comment_id`)  
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -122,7 +124,7 @@ CREATE TABLE `saved_posts` (
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
     PRIMARY KEY (`saved_post_id`),
     CONSTRAINT `saved_posts_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-    CONSTRAINT `saved_posts_ibfk_2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE
+    CONSTRAINT `saved_posts_ibfk_2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX idx_saved_posts_user_id ON saved_posts(user_id);
@@ -134,7 +136,7 @@ CREATE TABLE `tags` (
     `post_id` BIGINT(20) NOT NULL,
     `tag_text` VARCHAR(100) NOT NULL,
     PRIMARY KEY (`tag_id`),
-    CONSTRAINT `tags_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE
+    CONSTRAINT `tags_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX idx_tags_post_id ON tags(post_id);
@@ -213,7 +215,7 @@ CREATE TABLE `notifications` (
     PRIMARY KEY (`notification_id`),
     CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
-    CONSTRAINT `notifications_ibfk_4` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `notifications_ibfk_4` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
     CONSTRAINT `notifications_ibfk_5` FOREIGN KEY (`comment_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE,
     CONSTRAINT `notifications_ibfk_6` FOREIGN KEY (`message_id`) REFERENCES `messages` (`message_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -359,7 +361,7 @@ CREATE TABLE `mentions` (
     PRIMARY KEY (`mention_id`),
     CONSTRAINT `mentions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     CONSTRAINT `mentions_ibfk_2` FOREIGN KEY (`mentioned_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-    CONSTRAINT `mentions_ibfk_3` FOREIGN KEY (`post_id`) REFERENCES `posts` (`photo_id`) ON DELETE CASCADE,
+    CONSTRAINT `mentions_ibfk_3` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
     CONSTRAINT `mentions_ibfk_4` FOREIGN KEY (`comment_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE,
     CONSTRAINT `mentions_ibfk_5` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
     CONSTRAINT `mentions_ibfk_6` FOREIGN KEY (`reel_id`) REFERENCES `reels` (`reel_id`) ON DELETE CASCADE,

@@ -1,5 +1,6 @@
 import mysql from "mysql2";
 import dotenv from "dotenv";
+import { AppError } from "../middlewares/errorHandler";
 
 dotenv.config();
 
@@ -14,9 +15,10 @@ const pool = mysql.createPool({
 
 pool.getConnection((err, connection) => {
   if (err) {
-    console.error(" Lỗi kết nối MySQL:", err);
+    console.error("Lỗi kết nối MySQL:", err);
+    throw new AppError("Không thể kết nối đến cơ sở dữ liệu", 503);
   } else {
-    console.log(" Kết nối MySQL thành công!");
+    console.log("Kết nối MySQL thành công!");
     connection.release();
   }
 });
