@@ -7,7 +7,7 @@ CREATE TABLE `users` (
     `password_hash` VARCHAR(255) NOT NULL,
     `full_name` VARCHAR(100) DEFAULT NULL,
     `bio` TEXT DEFAULT NULL,
-    `profile_pic` TEXT DEFAULT NULL,
+    `profile_picure` TEXT DEFAULT NULL,
     `phone_number` VARCHAR(15) DEFAULT NULL,
     `is_private` TINYINT(1) DEFAULT 0,
     `is_verified` TINYINT(1) DEFAULT 0,

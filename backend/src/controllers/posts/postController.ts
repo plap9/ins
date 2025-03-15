@@ -13,39 +13,33 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             return;
         }
 
-        let imageUrls: string[] = [];
-        let videoUrls: string[] = [];
-
-      
-        if (req.files && Array.isArray(req.files)) {
-            const files = req.files as Express.MulterS3.File[];
-            files.forEach((file) => {
-                if (file.mimetype.startsWith("image")) {
-                    imageUrls.push(file.location);
-                } else if (file.mimetype.startsWith("video")) {
-                    videoUrls.push(file.location);
-                }
-            });
-        }
-
-        
         const [result] = await pool.query<ResultSetHeader>(
-            "INSERT INTO posts (user_id, content, location, privacy, image_url, video_url) VALUES (?, ?, ?, ?, ?, ?)",
-            [user_id, content, location, privacy, JSON.stringify(imageUrls), JSON.stringify(videoUrls)]
+            "INSERT INTO posts (user_id, content, location, privacy) VALUES (?, ?, ?, ?)",
+            [user_id, content, location, privacy]
         );
 
-       
-        const post_id = result.insertId;
+        const post_id = result.insertId; 
+
+        if (req.files && Array.isArray(req.files)) {
+            const files = req.files as Express.MulterS3.File[];
+
+            for (const file of files) {
+                const media_type = file.mimetype.startsWith("image") ? 'image' : 'video';
+
+                await pool.query(
+                    "INSERT INTO media (post_id, media_url, media_type) VALUES (?, ?, ?)",
+                    [post_id, file.location, media_type] 
+                );
+            }
+        }
 
         res.status(201).json({
             message: "Bài viết đã được tạo",
-            post_id, 
+            post_id,
             user_id,
             content,
             location,
             privacy,
-            imageUrls,
-            videoUrls,
         });
     } catch (error) {
         next(error);

@@ -5,10 +5,10 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
     try {
         const userId = req.params.id;
         const [users]: any = await pool.query(
-            `SELECT id, username, email, full_name, bio, profile_picture, 
+            `SELECT user_id, username, email, full_name, bio, profile_picture, 
                     phone_number, is_private, is_verified, website, gender, 
                     date_of_birth, created_at, updated_at, last_login, status
-             FROM users WHERE id = ?`,
+             FROM users WHERE user_id = ?`,
             [userId]
         );
 

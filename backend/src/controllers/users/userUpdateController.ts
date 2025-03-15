@@ -6,7 +6,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         const userId = req.params.id;
         const { full_name, bio, profile_picture } = req.body;
         await pool.query(
-            "UPDATE users SET full_name = ?, bio = ?, profile_picture = ? WHERE id = ?",
+            "UPDATE users SET full_name = ?, bio = ?, profile_picture = ? WHERE user_id = ?",
             [full_name, bio, profile_picture, userId]
         );
         res.json({ message: "Cập nhật thông tin thành công" });
