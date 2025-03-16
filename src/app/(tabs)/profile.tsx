@@ -1,6 +1,15 @@
+import { View, Text, TextInput, Image, TouchableOpacity, Pressable } from "react-native";
+import { useState } from "react";
+import * as ImagePicker from 'expo-image-picker';
+import ProfileScreen from "~/app/profile/index";
 
-import { Text } from "react-native";
 
-export default function ProfileScreen() {
-    return <Text>Profile Screen </Text>;
+export default function Profile() {
+    return(
+        <View>
+            <ProfileScreen/>
+        </View>
+    );
 }
+
+

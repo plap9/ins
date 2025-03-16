@@ -3,7 +3,7 @@ import { FlatList } from "react-native";
 import PostListItem from "../../components/PostListItem";
 import posts from "../../../assets/data/posts.json";
 
-export default function FeedScreen() {
+export default function SearchSreen() {
     return (
     <FlatList
         data={posts}
