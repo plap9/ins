@@ -4,15 +4,17 @@ import { RowDataPacket } from "mysql2";
 import { AppError } from "../../middlewares/errorHandler";
 
 export const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
-        const { token } = req.query;
+        await connection.beginTransaction(); 
 
+        const { token } = req.query;
         if (!token) {
             throw new AppError("Thiếu token xác thực", 400);
         }
 
-        const [users]: any = await pool.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE verification_token = ? AND verification_expires > NOW()",
+        const [users]: any = await connection.query<RowDataPacket[]>(
+            "SELECT user_id FROM users WHERE verification_token = ? AND verification_expires > NOW() FOR UPDATE",
             [token]
         );
 
@@ -22,7 +24,7 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
 
         const userId = users[0].user_id;
 
-        await pool.query(
+        await connection.query(
             `UPDATE users 
              SET email_verified = 1, 
                  verification_token = NULL, 
@@ -32,22 +34,29 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
             [userId]
         );
 
+        await connection.commit(); 
+
         res.json({ message: "Xác thực email thành công!" });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release();
     }
 };
 
 export const verifyPhone = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
-        const { phone, otp } = req.body;
+        await connection.beginTransaction(); 
 
+        const { phone, otp } = req.body;
         if (!phone || !otp) {
             throw new AppError("Thiếu số điện thoại hoặc mã OTP", 400);
         }
 
-        const [users]: any = await pool.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE phone_number = ? AND phone_verification_code = ? AND phone_verification_expires > NOW()",
+        const [users]: any = await connection.query<RowDataPacket[]>(
+            "SELECT user_id FROM users WHERE phone_number = ? AND phone_verification_code = ? AND phone_verification_expires > NOW() FOR UPDATE",
             [phone, otp]
         );
 
@@ -57,7 +66,7 @@ export const verifyPhone = async (req: Request, res: Response, next: NextFunctio
 
         const userId = users[0].user_id;
 
-        await pool.query(
+        await connection.query(
             `UPDATE users 
              SET phone_verified = 1, 
                  phone_verification_code = NULL, 
@@ -67,8 +76,13 @@ export const verifyPhone = async (req: Request, res: Response, next: NextFunctio
             [userId]
         );
 
+        await connection.commit(); 
+
         res.json({ message: "Xác thực số điện thoại thành công!" });
     } catch (error) {
+        await connection.rollback();
         next(error);
+    } finally {
+        connection.release();
     }
 };
