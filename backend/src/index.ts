@@ -5,7 +5,7 @@ import authRouter from "./routes/auth";
 import post from "./routes/post";
 import user from "./routes/user";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
-
+import comment from "./routes/comment";
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;

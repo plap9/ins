@@ -13,15 +13,15 @@ import {
     getCommentLikes
 } from "../controllers/posts/comments/commentController";
 
-const router: Router = express.Router();
+const router: Router = express.Router({ mergeParams: true });
 
-router.post("/:id/comments", authMiddleware, validate(createCommentSchema), createComment);
-router.get("/:id/comments", authMiddleware, getComments);
-router.get("/comments/:id/replies", authMiddleware, getReplies);
-router.put("/comments/:id", authMiddleware, validate(updateCommentSchema), updateComment);
-router.delete("/comments/:id", authMiddleware, deleteComment);
-router.post("/comments/:id/like", authMiddleware, likeComment);
-router.delete("/comments/:id/like", authMiddleware, unlikeComment);
-router.get("/comments/:id/likes", authMiddleware, getCommentLikes);
+router.post("/", authMiddleware, validate(createCommentSchema), createComment);
+router.get("/comments", authMiddleware, getComments);
+router.get("/replies/:id", authMiddleware, getReplies);
+router.put("/:id", authMiddleware, validate(updateCommentSchema), updateComment);
+router.delete("/:id", authMiddleware, deleteComment);
+router.post("/:id/like", authMiddleware, likeComment);
+router.delete("/:id/like", authMiddleware, unlikeComment);
+router.get("/:id/likes", authMiddleware, getCommentLikes);
 
 export default router;

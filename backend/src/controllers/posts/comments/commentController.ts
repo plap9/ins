@@ -36,6 +36,8 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
         const userId = req.user?.user_id;
         const { content, parent_id } = req.body;
 
+        
+
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
         if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400));
@@ -207,13 +209,17 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
                 c.content, 
                 c.created_at,
                 u.username,
-                u.profile_picture
+                u.full_name,
+                u.profile_picture,
+                (SELECT COUNT(*) FROM comments WHERE parent_id = c.comment_id) AS reply_count,
+                (SELECT COUNT(*) FROM likes WHERE comment_id = c.comment_id) AS like_count,
+                (SELECT COUNT(*) FROM likes WHERE comment_id = c.comment_id AND user_id = ?) AS is_liked
             FROM comments c
             JOIN users u ON c.user_id = u.user_id
             WHERE c.parent_id = ?
             ORDER BY c.created_at ASC
             LIMIT ? OFFSET ?`,
-            [commentId, limit, offset]
+            [userId, commentId, limit, offset]
         );
 
         const [[totalRow]] = await pool.query<RowDataPacket[]>(
@@ -235,6 +241,7 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         next(error);
     }
 };
+
 
 
 export const updateComment = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
