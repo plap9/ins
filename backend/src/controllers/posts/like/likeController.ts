@@ -5,74 +5,90 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AppError } from '../../../middlewares/errorHandler';
 
 export const likePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction(); 
+
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+        if (!userId) throw new AppError('Người dùng chưa xác thực', 401);
+        if (isNaN(postId)) throw new AppError('ID bài viết không hợp lệ', 400);
 
-        const [[post]] = await pool.query<RowDataPacket[]>(`
-            SELECT 
-                p.post_id, 
+        const [[post]] = await connection.query<RowDataPacket[]>(`
+            SELECT p.post_id, 
                 (SELECT COUNT(*) FROM likes WHERE post_id = ? AND user_id = ?) AS liked
             FROM posts p 
             WHERE p.post_id = ?`, 
             [postId, userId, postId]
         );
 
-        if (!post) return next(new AppError('Bài viết không tồn tại', 404));
-        if (post.liked) return next(new AppError('Bài viết đã được thích', 400));
+        if (!post) throw new AppError('Bài viết không tồn tại', 404);
+        if (post.liked) throw new AppError('Bài viết đã được thích', 400);
 
-        const [insertResult] = await pool.query<ResultSetHeader>(
+        const [insertResult] = await connection.query<ResultSetHeader>(
             "INSERT INTO likes (post_id, user_id) VALUES (?, ?)",
             [postId, userId]
         );
 
-        if (insertResult.affectedRows === 0) return next(new AppError('Lỗi cơ sở dữ liệu', 500));
+        if (insertResult.affectedRows === 0) throw new AppError('Lỗi cơ sở dữ liệu', 500);
 
-        await pool.query("UPDATE posts SET like_count = like_count + 1 WHERE post_id = ?", [postId]);
+        await connection.query("UPDATE posts SET like_count = like_count + 1 WHERE post_id = ?", [postId]);
+
+        await connection.commit();
 
         res.status(201).json({ message: 'Thích bài viết thành công' });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release(); 
     }
 };
 
+
 export const unlikePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction(); 
+
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+        if (!userId) throw new AppError('Người dùng chưa xác thực', 401);
+        if (isNaN(postId)) throw new AppError('ID bài viết không hợp lệ', 400);
 
-        const [[post]] = await pool.query<RowDataPacket[]>(`
-            SELECT 
-                p.post_id, 
+        const [[post]] = await connection.query<RowDataPacket[]>(`
+            SELECT p.post_id, 
                 (SELECT like_id FROM likes WHERE post_id = ? AND user_id = ?) AS like_id
             FROM posts p 
             WHERE p.post_id = ?`, 
             [postId, userId, postId]
         );
 
-        if (!post) return next(new AppError('Bài viết không tồn tại', 404));
-        if (!post.like_id) return next(new AppError('Bài viết chưa được thích', 400));
+        if (!post) throw new AppError('Bài viết không tồn tại', 404);
+        if (!post.like_id) throw new AppError('Bài viết chưa được thích', 400);
 
-        const [deleteResult] = await pool.query<ResultSetHeader>(
+        const [deleteResult] = await connection.query<ResultSetHeader>(
             "DELETE FROM likes WHERE post_id = ? AND user_id = ?",
             [postId, userId]
         );
 
-        if (deleteResult.affectedRows === 0) return next(new AppError('Lỗi cơ sở dữ liệu', 500));
+        if (deleteResult.affectedRows === 0) throw new AppError('Lỗi cơ sở dữ liệu', 500);
 
-        await pool.query("UPDATE posts SET like_count = like_count - 1 WHERE post_id = ?", [postId]);
+        await connection.query("UPDATE posts SET like_count = like_count - 1 WHERE post_id = ?", [postId]);
+
+        await connection.commit(); 
 
         res.status(200).json({ message: 'Bỏ thích bài viết thành công' });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release(); 
     }
 };
+
 
 export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {

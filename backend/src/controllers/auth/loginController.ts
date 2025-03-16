@@ -5,6 +5,7 @@ import pool from "../../config/db";
 import { AppError } from "../../middlewares/errorHandler";
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
         const { login, password } = req.body;
 
@@ -12,7 +13,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
             throw new AppError("Vui lòng nhập đầy đủ thông tin", 400);
         }
 
-        const [users]: any = await pool.query(
+        const [users]: any = await connection.query(
             "SELECT * FROM users WHERE email = ? OR phone_number = ?",
             [login, login]
         );
@@ -33,25 +34,27 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         }
 
         const userId = user.user_id;
-        const token = jwt.sign({ userId }, process.env.JWT_SECRET as string, {
-            expiresIn: "1h",
-        });
+        const token = jwt.sign({ userId }, process.env.JWT_SECRET as string, { expiresIn: "1h" });
+        const refreshToken = jwt.sign({ userId }, process.env.REFRESH_SECRET as string, { expiresIn: "7d" });
 
-        const refreshToken = jwt.sign({ userId }, process.env.REFRESH_SECRET as string, {
-            expiresIn: "7d",
-        });
+        await connection.beginTransaction(); 
 
-        await pool.query(
+        await connection.query(
             "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))",
             [userId, refreshToken]
         );
 
-        await pool.query("UPDATE users SET last_login = NOW() WHERE user_id = ?", [userId]);
+        await connection.query("UPDATE users SET last_login = NOW() WHERE user_id = ?", [userId]);
+
+        await connection.commit(); 
 
         const { password_hash, ...userWithoutPassword } = user;
 
         res.json({ token, refreshToken, user: userWithoutPassword });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release();
     }
 };
