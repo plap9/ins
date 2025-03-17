@@ -57,4 +57,3 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
         connection.release();
     }
 };
-
