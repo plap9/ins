@@ -1,34 +1,43 @@
-import { Request, Response, NextFunction } from 'express';
-import UserService from '../../services/UserService';
+import { NextFunction, Request, Response } from 'express';
+import pool from '../../config/db';
 import { AppError } from '../../middlewares/errorHandler';
+import { RowDataPacket } from 'mysql2';
 
 export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userId = parseInt(req.params.id, 10);
-        if (isNaN(userId)) return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+        if (isNaN(userId)) {
+            return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+        }
 
-        const user = await UserService.getUserById(userId);
-        if (!user) return next(new AppError("Người dùng không tồn tại.", 404));
+        const [users] = await pool.query<RowDataPacket[]>(
+            `SELECT
+                user_id,
+                username,
+                email,
+                full_name,
+                bio,
+                profile_picture,
+                phone_number,
+                is_private,
+                is_verified,
+                website,
+                gender,
+                date_of_birth,
+                created_at,
+                updated_at,
+                last_login,
+                status
+            FROM users
+            WHERE user_id = ?`,
+            [userId]
+        );
 
-        res.status(200).json({ success: true, user });
-    } catch (error) {
-        next(error);
-    }
-};
+        if (users.length === 0) {
+            return next(new AppError("Người dùng không tồn tại.", 404));
+        }
 
-export const updateUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const userId = parseInt(req.params.id, 10);
-        if (isNaN(userId)) return next(new AppError("Tham số 'id' không hợp lệ.", 400));
-
-        const { full_name, bio, profile_picture } = req.body;
-        if (!full_name && !bio && !profile_picture) 
-            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400));
-
-        const isUpdated = await UserService.updateUserProfile(userId, full_name, bio, profile_picture);
-        if (!isUpdated) return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào.", 404));
-
-        res.status(200).json({ success: true, message: "Cập nhật thông tin thành công." });
+        res.status(200).json({ success: true, user: users[0] });
     } catch (error) {
         next(error);
     }

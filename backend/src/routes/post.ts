@@ -5,7 +5,7 @@ import { getPosts, deletePost } from "../controllers/posts/postQueryController";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { validate } from "../middlewares/validate";
 import { postSchema } from "../validations/postValidation";
-import { likePost, unlikePost, getPostLikes } from "../controllers/posts/postLikeController";
+import { likePost, unlikePost, getPostLikes } from "../controllers/posts/like/likeController";
 import comment from "./comment";
 
 const router: Router = express.Router();
