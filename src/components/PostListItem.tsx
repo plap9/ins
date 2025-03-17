@@ -1,10 +1,12 @@
 import { Text, View, Image } from "react-native";
 import {Ionicons, Feather, AntDesign} from '@expo/vector-icons';
+import { SafeAreaView } from "react-native-safe-area-context";
 
 
 export default function PostListItem ({posts}: {posts: any}) {
     return (
-        <View className="bg-white">
+        
+            <View className="bg-white ">
 
             {/* Header */}
             <View className="p-3 flex-row items-center gap-3">
@@ -30,5 +32,6 @@ export default function PostListItem ({posts}: {posts: any}) {
                 <Feather name="bookmark" size={20} color="black" className="ml-auto"/>
             </View>
         </View>
+        
     );
 }

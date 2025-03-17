@@ -4,12 +4,12 @@ export default function Layout() {
   return (
     <Stack>
       <Stack.Screen 
-        name="profile" 
+        name="index" 
         options={{ title: "Profile", headerShown: false }} 
       />
       <Stack.Screen 
-        name="profile/update" 
-        options={{ title: "Update Profile" }} 
+        name="update" 
+        options={{ title: "Update Profile", headerShown: false }} 
       />
     </Stack>
   );

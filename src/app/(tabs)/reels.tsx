@@ -1,21 +1,14 @@
 
-import { FlatList } from "react-native";
-import PostListItem from "../../components/PostListItem";
-import posts from "../../../assets/data/posts.json";
+import { View, SafeAreaView } from "react-native";
+import ReelsScreen from "../reels";
 
-export default function ReelsScreen() {
+export default function Reels() {
     return (
-    <FlatList
-        data={posts}
-        className=" bg-slate-400"
-        renderItem={({item}) => <PostListItem posts={item} />}
-        contentContainerStyle={{
-            gap:10,
-            alignItems: "center",
-            width: "100%",
-        }}
-        showsVerticalScrollIndicator={false}
-    />
+    <SafeAreaView className="">
+        <View>
+            <ReelsScreen/>
+        </View>
+    </SafeAreaView>
     );
 }
 
