@@ -1,38 +1,23 @@
 import { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
-import pool from "../../config/db";
 import { AppError } from "../../middlewares/errorHandler";
+import TokenService from "../../services/TokenService";
 
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { refreshToken } = req.body;
-
         if (!refreshToken) {
-            throw new AppError("Thiếu token", 400);
+            throw new AppError("Thiếu refresh token", 400);
         }
 
-        const [tokens]: any = await pool.query(
-            "SELECT * FROM refresh_tokens WHERE token = ?",
-            [refreshToken]
-        );
+        const userId = await TokenService.verifyRefreshToken(refreshToken);
 
-        if (tokens.length === 0) {
-            throw new AppError("Token không hợp lệ", 400);
-        }
+        const accessToken = await TokenService.generateAccessToken(userId);
+        const newRefreshToken = TokenService.generateTokens(userId).refreshToken;
 
-        jwt.verify(refreshToken, process.env.REFRESH_SECRET as string, async (error: any, decoded: any) => {
-            if (error) {
-                return next(new AppError("Token không hợp lệ", 400));
-            }
+        await TokenService.deleteRefreshToken(refreshToken);
+        await TokenService.storeRefreshToken(userId, newRefreshToken);
 
-            const newAccessToken = jwt.sign(
-                { userId: decoded.userId }, 
-                process.env.JWT_SECRET as string, 
-                { expiresIn: "1h" }
-            );
-
-            res.json({ token: newAccessToken });
-        });
+        res.json({ accessToken, refreshToken: newRefreshToken });
     } catch (error) {
         next(error);
     }
@@ -41,13 +26,11 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 export const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const { refreshToken } = req.body;
-
         if (!refreshToken) {
             throw new AppError("Không có refresh token", 400);
         }
 
-        await pool.query("DELETE FROM refresh_tokens WHERE token = ?", [refreshToken]);
-
+        await TokenService.deleteRefreshToken(refreshToken);
         res.json({ message: "Đăng xuất thành công" });
     } catch (error) {
         next(error);
