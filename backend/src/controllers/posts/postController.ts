@@ -1,43 +1,63 @@
-import { Request, Response, NextFunction } from "express";
-import PostService from "../../services/PostService";
+import { NextFunction, Response } from "express";
+import pool from "../../config/db";
+import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { AppError } from "../../middlewares/errorHandler";
 
-export const getPosts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const createPost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
     try {
-        const page = parseInt(req.query.page as string || "1", 10);
-        const limit = parseInt(req.query.limit as string || "10", 10);
-        const user_id = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
+        const { content, location } = req.body;
+        const user_id = req.user?.user_id;
 
-        if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1 || limit > 100) {
-            throw new AppError("Tham số không hợp lệ.", 400);
+        console.log("🚀 req.user:", req.user);
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
+
+        const hasContent = content && content.trim() !== "";
+        const hasFiles = req.files && Array.isArray(req.files) && req.files.length > 0;
+
+        if (!hasContent && !hasFiles) {
+            return next(new AppError("Bài viết phải có nội dung hoặc ít nhất một ảnh/video", 400));
         }
 
-        const posts = await PostService.getPosts(page, limit, user_id);
-        res.status(200).json({ success: true, posts });
-    } catch (error) {
-        next(error);
-    }
-};
+        await connection.beginTransaction();
 
-export const createPost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const files = req.files ? (req.files as { [fieldname: string]: Express.MulterS3.File[] })['media'] : undefined;
-        const post = await PostService.createPost(req.user!, req.body.content, req.body.location, files);
-        res.status(201).json({ message: "Bài viết đã được tạo", ...post });
-    } catch (error) {
-        next(error);
-    }
-};
+        const [result] = await connection.query<ResultSetHeader>(
+            "INSERT INTO posts (user_id, content, location) VALUES (?, ?, ?)",
+            [user_id, content || null, location || null]
+        );
+        const post_id = result.insertId;
 
-export const deletePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-        const post_id = parseInt(req.params.id, 10);
-        if (isNaN(post_id)) throw new AppError("Tham số 'id' không hợp lệ.", 400);
+        if (hasFiles) {
+            const files = req.files as Express.MulterS3.File[];
 
-        const result = await PostService.deletePost(req.user!, post_id);
-        res.status(200).json(result);
+            for (const file of files) {
+                if (!file.mimetype.startsWith("image") && !file.mimetype.startsWith("video")) {
+                    await connection.rollback();
+                    return next(new AppError("Chỉ hỗ trợ ảnh và video", 400));
+                }
+
+                const media_type = file.mimetype.startsWith("image") ? "image" : "video";
+                await connection.query(
+                    "INSERT INTO media (post_id, media_url, media_type) VALUES (?, ?, ?)",
+                    [post_id, file.location, media_type]
+                );
+            }
+        }
+
+        await connection.commit();
+        res.status(201).json({
+            message: "Bài viết đã được tạo",
+            post_id,
+            user_id,
+            content: content || null,
+            location: location || null,
+            post_privacy: "public",
+        });
     } catch (error) {
+        await connection.rollback(); 
         next(error);
+    } finally {
+        connection.release();
     }
 };

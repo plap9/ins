@@ -1,13 +1,15 @@
 import { Request, Response, NextFunction } from "express";
-import { Schema } from "joi";
-import ValidationService from "../services/ValidationService";
+import { Schema, ValidationError } from "joi";
+import { AppError } from "../middlewares/errorHandler";
 
-export const validate =
-    (schema: Schema) => (req: Request, res: Response, next: NextFunction): void => {
-        try {
-            ValidationService.validateData(schema, req.body);
-            next();
-        } catch (error) {
-            next(error);
+export const validate = (schema: Schema) => 
+    (req: Request, res: Response, next: NextFunction): void => {
+        const { error } = schema.validate(req.body, { abortEarly: false });
+
+        if (error) {
+            const errors = error.details.map((err) => err.message);
+            return next(new AppError("Dữ liệu không hợp lệ", 400));
         }
+
+        next();
     };

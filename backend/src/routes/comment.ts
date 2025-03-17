@@ -11,7 +11,7 @@ import {
     likeComment,
     unlikeComment,
     getCommentLikes
-} from "../controllers/posts/commentController";
+} from "../controllers/posts/comments/commentController";
 
 const router: Router = express.Router({ mergeParams: true });
 
