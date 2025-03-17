@@ -38,20 +38,20 @@ const ReelsScreen: React.FC = (): JSX.Element => {
             </View>
 
             {/* Cột icon tương tác bên phải */}
-            <View className="absolute bottom-10 right-4 gap-5 space-y-10 items-center">
+            <View className="absolute bottom-10 right-4 gap-5 items-center">
                 <TouchableOpacity className="items-center">
                 <SimpleLineIcons name="heart" size={24} color="white" />
                 <Text className="text-white text-xs mt-1">1.2K</Text>
                 </TouchableOpacity>
                 <TouchableOpacity className="items-center">
-                <Feather name="message-circle" size={26} color="white" />
+                    <Feather name="message-circle" size={26} color="white" />
                 <Text className="text-white text-xs mt-1">45</Text>
                 </TouchableOpacity>
                 <TouchableOpacity className="items-center">
-                <Feather name="send" size={24} color="white" />
+                    <Feather name="send" size={24} color="white" />
                 </TouchableOpacity>
                 <TouchableOpacity className="items-center">
-                <Entypo name="dots-three-horizontal" size={24} color="white" />
+                    <Entypo name="dots-three-horizontal" size={24} color="white" />
                 </TouchableOpacity>
             </View>
 

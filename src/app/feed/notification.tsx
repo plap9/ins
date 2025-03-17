@@ -9,12 +9,7 @@ export default function ListMessageScreen() {
   return (
     <SafeAreaView>
       <View>
-        <Text>Danh sách tin nhắn</Text>
-
-        {/* Ví dụ 1 item trong list */}
-        <TouchableOpacity onPress={() => router.push("/feed/message")}>
-          <Text>Nhấn để mở tin nhắn chi tiết</Text>
-        </TouchableOpacity>
+        <Text>Thông báo</Text>
       </View>
     </SafeAreaView>
   );
