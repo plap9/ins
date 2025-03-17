@@ -1,12 +1,7 @@
-import rateLimit from "express-rate-limit";
-import { AppError } from "../middlewares/errorHandler";
+import RateLimiterService from "../services/RateLimiterService";
 
-export const loginRateLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 5, 
-    handler: (req, res, next) => {
-        next(new AppError("Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 15 phút.", 429));
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+export const loginRateLimiter = RateLimiterService.createLimiter(
+    15 * 60 * 1000, 
+    5, 
+    "Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 15 phút."
+);
