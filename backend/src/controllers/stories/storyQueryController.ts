@@ -231,7 +231,7 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
-            "SELECT story_id FROM stories WHERE story_id = ? AND user_id = ?",
+            "SELECT story_id, media_url FROM stories WHERE story_id = ? AND user_id = ?",
             [story_id, user_id]
         );
 
@@ -241,6 +241,53 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
 
         await connection.beginTransaction();
 
+        let highlightId: number;
+        
+        if (highlight_id) {
+            const [highlightRows] = await connection.query<RowDataPacket[]>(
+                "SELECT highlight_id FROM highlights WHERE highlight_id = ? AND user_id = ?",
+                [highlight_id, user_id]
+            );
+            
+            if (highlightRows.length === 0) {
+                await connection.rollback();
+                return next(new AppError("Highlight không tồn tại hoặc không thuộc về bạn.", 404));
+            }
+            
+            highlightId = highlight_id;
+        } else {
+            const [result] = await connection.query<ResultSetHeader>(
+                "INSERT INTO highlights (user_id, title, cover_image_url) VALUES (?, ?, ?)",
+                [user_id, highlight_title, storyRows[0].media_url]
+            );
+            
+            highlightId = result.insertId;
+        }
+        
+        const [existingRows] = await connection.query<RowDataPacket[]>(
+            "SELECT id FROM highlight_stories WHERE highlight_id = ? AND story_id = ?",
+            [highlightId, story_id]
+        );
+        
+        if (existingRows.length > 0) {
+            await connection.rollback();
+            return next(new AppError("Story đã được thêm vào highlight này.", 400));
+        }
+        
+        await connection.query(
+            "INSERT INTO highlight_stories (highlight_id, story_id) VALUES (?, ?)",
+            [highlightId, story_id]
+        );
+        
+        await connection.commit();
+        res.status(201).json({
+            success: true,
+            message: "Đã thêm story vào highlight",
+            data: {
+                highlight_id: highlightId,
+                story_id: story_id
+            }
+        });
     } catch (error) {
         await connection.rollback(); 
         next(error);
