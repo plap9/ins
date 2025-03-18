@@ -5,6 +5,7 @@ const SENSITIVE_FIELDS = [
   'verification_token',
   'phone_verification_code'
 ];
+const COMMENT_CACHE_EXPIRY = 300;
 
 export const sanitizeUserData = (user: any) => {
   const sanitized = { ...user };
@@ -120,5 +121,52 @@ export const updateCachedLikeCount = async (postId: number, increment: boolean) 
   if (counts) {
     counts.likeCount = increment ? counts.likeCount + 1 : Math.max(0, counts.likeCount - 1);
     await cachePostCounts(postId, counts.likeCount, counts.commentCount);
+  }
+};
+
+export const cacheComments = async (key: string, data: any) => {
+  await redisClient.setex(
+    `comments:${key}`,
+    COMMENT_CACHE_EXPIRY,
+    JSON.stringify(data)
+  )
+};
+
+export const getCachedComments = async (key: string) => {
+  const data = await redisClient.get(`comments:${key}`);
+  return data ? JSON.parse(data) : null;
+};
+
+export const invalidateCommentsCache = async (postId : number) => {
+  const keys = await redisClient.keys(`comments:post:${postId}:*`);
+  if (keys.length > 0) {
+    await redisClient.del(keys);
+  }
+};
+
+export const invalidateCommentCache = async (commentId : number) => {
+  const keys = await redisClient.keys(`comments:comment:${commentId}:*`);
+  if (keys.length > 0) {
+    await redisClient.del(keys);
+  }
+};
+
+export const cacheCommentLikes = async (commentId: number, data: any, page = 1, limit = 20) => {
+  await redisClient.setex(
+    `likes:comment:${commentId}:page:${page}:limit:${limit}`,
+    COMMENT_CACHE_EXPIRY,
+    JSON.stringify(data)
+  )
+};
+
+export const getCachedCommentLikes = async (commentId :number, page = 1, limit = 20) => {
+  const data = await redisClient.get(`likes:comment:${commentId}:page:${page}:limit:${limit}`);
+  return data ? JSON.parse(data) : null;
+}
+
+export const invalidateCommentLikesCache = async (commentId: number) => {
+  const keys = await redisClient.keys(`like:comment:${commentId}:*`);
+  if (keys.length > 0) {
+    await redisClient.del(keys);
   }
 };

@@ -4,6 +4,8 @@ import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AppError } from '../../../middlewares/errorHandler';
 import { Pool, PoolConnection} from 'mysql2/promise';
+import { getCachedCommentLikes, getCachedComments, invalidateCommentCache, invalidateCommentsCache, cacheComments, invalidateCommentLikesCache, cacheCommentLikes} from '../../../utils/cacheUtils';
+
 async function countChildComments(connection: PoolConnection, commentId: number): Promise<number> {
     let count = 0;
     
@@ -90,6 +92,11 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
 
         await connection.commit();
 
+        await invalidateCommentsCache(postId);
+        if (parent_id) {
+            await invalidateCommentCache(parent_id);
+        }
+
         res.status(201).json({
             message: 'Thêm bình luận thành công',
             comment: newComment
@@ -112,6 +119,13 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
 
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+
+        const cacheKey = `post:${postId}:page:${page}:limit:${limit}:parent:${parentId || 'null'}:user:${userId}`;
+        const cachedData = await getCachedComments(cacheKey);
+        if (cachedData) {
+            res.status(200).json(cachedData);
+            return;
+        }
 
         const [[post]] = await pool.query<RowDataPacket[]>('SELECT post_id FROM posts WHERE post_id = ?', [postId]);
         if (!post) return next(new AppError('Bài viết không tồn tại', 404));
@@ -169,7 +183,7 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
         const [[totalRow]] = await pool.query<RowDataPacket[]>(countQuery, countParams);
         const total = totalRow?.total || 0;
 
-        res.status(200).json({
+        const result = {
             comments,
             pagination: {
                 page,
@@ -177,7 +191,11 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
                 total,
                 totalPage: Math.ceil(total / limit)
             }
-        });
+        };
+        
+        await cacheComments(cacheKey, result);
+
+        res.status(200).json(result);
     } catch (error) {
         next(error);
     }
@@ -193,6 +211,14 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
 
         if (!userId) return next(new AppError("Người dùng chưa xác thực", 401));
         if (isNaN(commentId)) return next(new AppError("ID bình luận không hợp lệ", 400));
+
+        const cacheKey = `comment:${commentId}:replies:page:${page}:limit:${limit}:user:${userId}`;
+        
+        const cachedData = await getCachedComments(cacheKey);
+        if (cachedData) {
+            res.status(200).json(cachedData);
+            return;
+        }
 
         const [[comment]] = await pool.query<RowDataPacket[]>(
             "SELECT comment_id, post_id FROM comments WHERE comment_id = ?",
@@ -228,7 +254,7 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         );
         const total = totalRow?.total || 0;
 
-        res.status(200).json({
+        const result = {
             replies,
             pagination: {
                 page,
@@ -236,7 +262,11 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
                 total,
                 totalPage: Math.ceil(total / limit)
             }
-        });
+        };
+        
+        await cacheComments(cacheKey, result);
+
+        res.status(200).json(result);
     } catch (error) {
         next(error);
     }
@@ -284,6 +314,9 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
             WHERE c.comment_id = ?
         `, [commentId]);
 
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
+
         res.status(200).json({
             message: 'Cập nhật bình luận thành công',
             comment: updatedComment
@@ -329,6 +362,10 @@ export const deleteComment = async (req: AuthRequest, res: Response, next: NextF
         );
 
         await connection.commit();
+
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
+        await invalidateCommentLikesCache(commentId);
 
         res.status(200).json({
             message: 'Xóa bình luận thành công',
@@ -378,6 +415,10 @@ export const likeComment = async (req: AuthRequest, res: Response, next: NextFun
             return next(new AppError('Lỗi khi thích bình luận', 500));
         }
 
+        await invalidateCommentLikesCache(commentId);
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
+
         res.status(201).json({
             message: 'Thích bình luận thành công',
             like_id: result.insertId
@@ -426,6 +467,11 @@ export const unlikeComment = async (req: AuthRequest, res: Response, next: NextF
             return next(new AppError('Lỗi khi bỏ thích bình luận', 500));
         }
 
+        await invalidateCommentLikesCache(commentId);
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
+
+
         res.status(200).json({
             message: 'Bỏ thích bình luận thành công'
         });
@@ -446,6 +492,13 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
 
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400));
+
+        const cachedData = await getCachedCommentLikes(commentId, page, limit);
+        if (cachedData) {
+            res.status(200).json(cachedData);
+            return;
+        }
+
 
         const [[comment]] = await pool.query<RowDataPacket[]>(
             'SELECT comment_id FROM comments WHERE comment_id = ?',
@@ -477,7 +530,7 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
         );
         const total = totalRow?.total || 0;
 
-        res.status(200).json({
+        const result = {
             likes,
             pagination: {
                 page,
@@ -485,7 +538,12 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
                 total,
                 totalPage: Math.ceil(total / limit)
             }
-        });
+        };
+
+        await cacheCommentLikes(commentId, result, page, limit);
+
+        res.status(200).json(result);
+
     } catch (error) {
         next(error);
     }
