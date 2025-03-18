@@ -64,7 +64,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
         const { password_hash, ...userWithoutPassword } = user;
 
-        await cacheUtils
+        await cacheUtils.storeRefreshToken(userId, refreshToken);
 
         res.json({ token, refreshToken, user: userWithoutPassword });
     } catch (error) {

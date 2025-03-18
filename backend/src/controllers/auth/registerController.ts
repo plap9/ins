@@ -13,7 +13,7 @@ interface SMSJobData {
     code: string;
   }
 interface EmailJobData {
-    phone: string;
+    email: string;
     code: string;
 }
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -63,7 +63,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 
             await connection.commit();
 
-            await emailQueue.add('email-queue',{
+            await emailQueue.add('send-verification-email',{
                 email: contact,
                 token: verificationToken
             }, {
@@ -90,7 +90,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 
             await connection.commit();
 
-            await smsQueue.add('phone-queue',{
+            await smsQueue.add('send-verifiaction-sms',{
                 phone: contact,
                 code: phoneVerificationCode
             }, {
