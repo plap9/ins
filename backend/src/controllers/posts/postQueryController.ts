@@ -3,6 +3,7 @@ import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
 import { AppError } from "../../middlewares/errorHandler";
 import { AuthRequest } from "../../middlewares/authMiddleware";
+import { cachePostList, getCachePostsList } from "../../utils/cacheUtils";
 
 export const getPosts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -10,6 +11,12 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction):
         const limit = parseInt(req.query.limit as string || "10", 10);
         const user_id = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
         const offset = (page - 1) * limit;
+        const cacheKey = user_id ? `user:${user_id}:page:${page}:limit:${limit}` : `page:${page}:limit:${limit}`;
+        const cachedPosts = await getCachePostsList(cacheKey);
+        if (cachedPosts) {
+            res.status(200).json({ sucess: true, posts: cachedPosts, fromCache: true});
+            return;
+        }
 
         if (isNaN(page) || page < 1) return next(new AppError("Tham số 'page' không hợp lệ.", 400));
         if (isNaN(limit) || limit < 1 || limit > 100) return next(new AppError("Tham số 'limit' không hợp lệ (phải từ 1 đến 100).", 400));
@@ -51,6 +58,8 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction):
             media_urls: post.media_urls ? post.media_urls.split("||") : [],
             media_types: post.media_types ? post.media_types.split("||") : [],
         }));
+
+        await cachePostList(cacheKey, formattedPosts);
 
         res.status(200).json({ success: true, posts: formattedPosts });
     } catch (error) {

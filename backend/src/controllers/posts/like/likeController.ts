@@ -3,6 +3,7 @@ import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AppError } from '../../../middlewares/errorHandler';
+import { invalidateLikesCache, cacheUserLikeStatus, invalidateUserLikeStatus, updateCachedLikeCount} from '../../../utils/cacheUtils';
 
 export const likePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
@@ -36,6 +37,10 @@ export const likePost = async (req: AuthRequest, res: Response, next: NextFuncti
         await connection.query("UPDATE posts SET like_count = like_count + 1 WHERE post_id = ?", [postId]);
 
         await connection.commit();
+
+        await invalidateLikesCache(postId);
+        await cacheUserLikeStatus(userId, postId, true);
+        await updateCachedLikeCount(postId, true);
 
         res.status(201).json({ message: 'Thích bài viết thành công' });
     } catch (error) {
@@ -78,7 +83,11 @@ export const unlikePost = async (req: AuthRequest, res: Response, next: NextFunc
 
         await connection.query("UPDATE posts SET like_count = like_count - 1 WHERE post_id = ?", [postId]);
 
-        await connection.commit(); 
+        await connection.commit();
+
+        await invalidateLikesCache(postId);
+        await cacheUserLikeStatus(userId, postId, false);
+        await updateCachedLikeCount(postId, false);
 
         res.status(200).json({ message: 'Bỏ thích bài viết thành công' });
     } catch (error) {
@@ -98,6 +107,7 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
 
         if (!req.user?.user_id) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+        
 
         const [[post]] = await pool.query<RowDataPacket[]>(`
             SELECT post_id FROM posts WHERE post_id = ?`, 

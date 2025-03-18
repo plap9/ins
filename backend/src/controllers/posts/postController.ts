@@ -10,7 +10,7 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
         const { content, location } = req.body;
         const user_id = req.user?.user_id;
 
-        console.log("🚀 req.user:", req.user);
+        console.log(" req.user:", req.user);
         if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
 
         const hasContent = content && content.trim() !== "";
