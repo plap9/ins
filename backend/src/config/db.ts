@@ -11,16 +11,21 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || "instagram_clone",
   port: Number(process.env.DB_PORT) || 3306,
   connectionLimit: 10,
+  idleTimeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
 });
 
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error("Lỗi kết nối MySQL:", err);
-    throw new AppError("Không thể kết nối đến cơ sở dữ liệu", 503);
-  } else {
-    console.log("Kết nối MySQL thành công!");
-    connection.release();
-  }
-});
+if (process.env.NODE_ENV !== 'test') {
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error(" Kết nối MySQL thất bại:", err.message);
+      throw new AppError("Không thể kết nối đến cơ sở dữ liệu", 503);
+    } else {
+      console.log(" Kết nối MySQL thành công!");
+      connection.release();
+    }
+  });
+}
 
 export default pool.promise();
