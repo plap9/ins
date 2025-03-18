@@ -3,7 +3,14 @@ import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { AppError } from '../../../middlewares/errorHandler';
-import { invalidateLikesCache, cacheUserLikeStatus, invalidateUserLikeStatus, updateCachedLikeCount} from '../../../utils/cacheUtils';
+import { 
+    invalidateLikesCache, 
+    cacheUserLikeStatus, 
+    invalidateUserLikeStatus, 
+    updateCachedLikeCount,
+    cacheLikes, 
+    getCacheLikes 
+  } from '../../../utils/cacheUtils';
 
 export const likePost = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
@@ -107,6 +114,12 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
 
         if (!req.user?.user_id) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+
+        const cachedLikes = await getCacheLikes(postId, page, limit);
+        if (cachedLikes) {
+            res.status(200).json(cachedLikes);
+            return;
+        }
         
 
         const [[post]] = await pool.query<RowDataPacket[]>(`
@@ -144,7 +157,7 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
 
         const total = totalRow?.total || 0;
 
-        res.status(200).json({
+        const result = {
             likes,
             pagination: {
                 page,
@@ -152,7 +165,11 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
                 total,
                 totalPage: Math.ceil(total / limit)
             }
-        });
+        };
+
+        await cacheLikes(postId, result, page, limit);
+
+        res.status(200).json(result);
     } catch (error) {
         next(error);
     }
