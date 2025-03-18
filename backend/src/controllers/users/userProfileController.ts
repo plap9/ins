@@ -2,12 +2,23 @@ import { NextFunction, Request, Response } from 'express';
 import pool from '../../config/db';
 import { AppError } from '../../middlewares/errorHandler';
 import { RowDataPacket } from 'mysql2';
+import { 
+    cacheUserProfile, 
+    getCachedUserProfile, 
+    invalidateUserProfileCache 
+  } from '../../utils/cacheUtils';
 
 export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
             return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+        }
+
+        const cachedUser = await getCachedUserProfile(userId);
+        if (cachedUser) {
+            res.status(200).json({ success: true, user: cachedUser, source: 'cache' });
+            return;
         }
 
         const [users] = await pool.query<RowDataPacket[]>(
@@ -37,7 +48,9 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
             return next(new AppError("Người dùng không tồn tại.", 404));
         }
 
-        res.status(200).json({ success: true, user: users[0] });
+        await cacheUserProfile(userId, users[0]);
+
+        res.status(200).json({ success: true, user: users[0], source: 'database' });
     } catch (error) {
         next(error);
     }
