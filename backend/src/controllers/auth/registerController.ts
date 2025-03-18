@@ -5,7 +5,17 @@ import pool from "../../config/db";
 import { sendVerificationEmail } from "../../config/email";
 import { sendOTP } from "../../config/sms";
 import { AppError } from "../../middlewares/errorHandler";
+import { emailQueue, redisClient, smsQueue } from "../../config/redis";
+import { attempt } from "joi";
 
+interface SMSJobData {
+    phone: string;
+    code: string;
+  }
+interface EmailJobData {
+    phone: string;
+    code: string;
+}
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
@@ -20,6 +30,12 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 
         if (!isEmail && !isPhone) {
             throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400);
+        }
+
+        const ipAddress = req.ip;
+        const registraitionCount = await redisClient.get(`registration_count:${ipAddress}`);
+        if (registraitionCount && parseInt(registraitionCount) >= 5) {
+            throw new AppError("Quá nhiều lần đăng ký, vui lòng thử lại sau", 429);
         }
 
         const [existingUsers]: any = await connection.query(
@@ -45,9 +61,21 @@ export const register = async (req: Request, res: Response, next: NextFunction):
                 [username, contact, hashedPassword, verificationToken, verificationExpires, "email"]
             );
 
-            await connection.commit(); 
+            await connection.commit();
 
-            await sendVerificationEmail(contact, verificationToken); 
+            await emailQueue.add('email-queue',{
+                email: contact,
+                token: verificationToken
+            }, {
+                attempts: 3,
+                backoff: {
+                    type: 'exponential',
+                    delay: 2000
+                }
+            });
+
+            await redisClient.incr(`registration_count:${ipAddress}`);
+            await redisClient.expire(`registration_count:${ipAddress}`, 60 * 60);
 
             res.status(201).json({ message: "Vui lòng kiểm tra email để xác thực." });
         } else {
@@ -60,9 +88,21 @@ export const register = async (req: Request, res: Response, next: NextFunction):
                 [username, contact, hashedPassword, phoneVerificationCode, phoneVerificationExpires, "phone"]
             );
 
-            await connection.commit(); 
+            await connection.commit();
 
-            await sendOTP(contact, phoneVerificationCode); 
+            await smsQueue.add('phone-queue',{
+                phone: contact,
+                code: phoneVerificationCode
+            }, {
+                attempts: 3,
+                backoff: {
+                    type: 'exponential',
+                    delay: 2000
+                }
+            });
+
+            await redisClient.incr(`registration_count:${ipAddress}`);
+            await redisClient.expire(`registration_count:${ipAddress}`, 60 * 60);
 
             res.status(201).json({ message: "Vui lòng kiểm tra tin nhắn SMS để xác thực." });
         }

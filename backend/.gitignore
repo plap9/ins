@@ -77,3 +77,10 @@ docker-compose.override.yml
 # *.sql
 *.dump
 *.bak
+
+# Bỏ qua tất cả các test
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
