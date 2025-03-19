@@ -4,7 +4,7 @@ import multerS3 from "multer-s3";
 import dotenv from "dotenv";
 import path from "path";
 import { Request } from "express";
-import { AppError } from "../middlewares/errorHandler";
+import { AppError } from "./errorHandler";
 
 dotenv.config();
 

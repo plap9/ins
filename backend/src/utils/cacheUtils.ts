@@ -333,7 +333,6 @@ export const getUserProfileWithCache = async (userId: number) => {
   return sanitizeUserData(users[0]);
 };
 
-// Generic caching functions for any string key
 export const cacheData = async (key: string, data: any, expireTime = USER_CACHE_EXPIRY) => {
   const safeData = typeof data === 'object' ? sanitizeUserData(data) : data;
   await redisClient.setex(
