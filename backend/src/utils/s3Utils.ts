@@ -26,12 +26,10 @@ interface UploadResult {
 
 const detectContentType = async (data: Buffer | Readable): Promise<string> => {
     try {
-      // Check if it's a Buffer
       if (Buffer.isBuffer(data)) {
         const type = await fileTypeFromBuffer(data);
         return type?.mime || 'application/octet-stream';
       } 
-      // If it's not a Buffer, it must be a Readable
       else {
         const webStream = Readable.toWeb(data as Readable);
         const type = await fileTypeFromStream(webStream);
