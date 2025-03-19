@@ -435,3 +435,15 @@ CREATE TABLE `tags` (
 
 CREATE INDEX idx_tags_post_id ON tags(post_id);
 CREATE INDEX idx_tags_text ON tags(tag_text);
+
+CREATE TABLE IF NOT EXISTS `media_edits` (
+    `edit_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `media_id` BIGINT(20) NOT NULL,
+    `edit_type` ENUM('text', 'filter', 'overlay', 'music', 'effect') NOT NULL,
+    `edit_data` JSON NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`edit_id`),
+    CONSTRAINT `media_edits_ibfk_1` FOREIGN KEY (`media_id`) REFERENCES `media` (`media_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX IF NOT EXISTS idx_media_edits_media_id ON media_edits(media_id);
