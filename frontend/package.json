@@ -9,8 +9,11 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-navigation/native": "^7.0.16",
     "@roninoss/icons": "^0.0.4",
     "@shopify/flash-list": "1.7.3",
+    "axios": "^1.8.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "expo": "~52.0.38",
@@ -32,7 +35,7 @@
     "react-native-feather": "^1.1.2",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-reanimated": "~3.16.1",
-    "react-native-safe-area-context": "4.12.0",
+    "react-native-safe-area-context": "^4.12.0",
     "react-native-screens": "~4.4.0",
     "react-native-swipe-gestures": "^1.0.5",
     "react-native-vector-icons": "^10.2.0",
