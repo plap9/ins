@@ -4,11 +4,11 @@ import SearchSreen from "../search";
 
 export default function Search() {
     return (
-    <SafeAreaView >
+    
         <View>
             <SearchSreen/>
         </View>
-    </SafeAreaView>
+    
     );
 }
 

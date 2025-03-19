@@ -23,7 +23,7 @@ const SearchScreen = () => {
   return (
     <SafeAreaView className=" bg-white " >
       {/* Thanh tìm kiếm */}
-      <View className="flex-row items-center px-4 py-2 border-b border-gray-200 ">
+      <View className="flex-row items-center px-4 py-2 border-b border-gray-200 flex-11 ">
         <View className="flex-1 bg-gray-100 flex-row items-center px-3 py-2 rounded-full">
           <Search size={20} className="text-gray-500 mr-2" />
           <TextInput
@@ -35,7 +35,7 @@ const SearchScreen = () => {
       </View>
 
       {/* Lưới ảnh */}
-      <View className="">
+      <View style={{flexDirection:"row", flexWrap:"wrap", justifyContent:"space-between"}}>
         <FlatList
           data={exploreImages}
           numColumns={3}

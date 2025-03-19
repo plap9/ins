@@ -27,7 +27,7 @@ export default function FeedScreen() {
 
             {/* Nút bên phải: Notifications và Messages */}
             <View className="flex-row gap-8">
-            <TouchableOpacity onPress={() => router.push("/feed/notification")}>{ /* Xử lý thông báo */ }
+            <TouchableOpacity onPress={() => router.push("/feed/notification")}>
                 <Feather name="heart" size={24} color="black" />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push("/feed/listmessage")}>
@@ -76,6 +76,7 @@ export default function FeedScreen() {
             </View>
             </TouchableOpacity>
         </Modal>
+        {/* Danh sách bài post */}
         <FlatList
             data={posts}
             className="bg-white "

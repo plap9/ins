@@ -27,7 +27,7 @@ export default function CreatePost() {
               source={{ uri: 'https://th.bing.com/th/id/R.82220e938f0a24900c7c3bce7bb033c4?rik=lGZvLk6St6MUfA&pid=ImgRaw&r=0' }}
               className='w-[60%] aspect-[3/4] bg-gray-300 rounded-lg'
           />
-          <Text className='m-5 font-semibold text-blue-500'>
+          <Text className='m-5 font-semibold text-blue-500' onPress={pickImage}>
               Change
           </Text>
 
