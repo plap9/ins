@@ -3,11 +3,8 @@ import PostListItem from "../../components/PostListItem";
 import posts from "../../../assets/data/posts.json";
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, Modal } from "react-native";
-import Feather from '@expo/vector-icons/Feather';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import Entypo from '@expo/vector-icons/Entypo';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
+import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5 } from '@expo/vector-icons';
+
 import { useRouter } from "expo-router";
 
 export default function FeedScreen() {

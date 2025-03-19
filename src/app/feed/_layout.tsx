@@ -8,7 +8,13 @@ export default function LayoutFeed() {
         name="index" 
         options={{ title: "Profile", headerShown: false }} 
       />
-      
+
+      {/* Camera */}
+      <Stack.Screen 
+        name="camera" 
+        options={{ title: "camera", headerShown: false }} 
+      />
+
       {/* Tin nhắn */}
       <Stack.Screen 
         name="listmessage" 

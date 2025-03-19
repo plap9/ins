@@ -3,7 +3,7 @@ import { View, Text, TextInput, FlatList, TouchableOpacity } from "react-native"
 import { Avatar } from "react-native-elements";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons, AntDesign, Entypo } from "@expo/vector-icons";
+import { MaterialIcons, AntDesign, Entypo } from "@expo/vector-icons";
 
 interface User {
   id: number;
@@ -40,7 +40,7 @@ const NewMessage = () => {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-300 bg-white">
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="black" />
+          <MaterialIcons name="keyboard-arrow-left" size={24} color="black" />
         </TouchableOpacity>
         <Text className="text-lg font-bold">New Message</Text>
         <View style={{ width: 24 }} /> {/* Để căn giữa title */}

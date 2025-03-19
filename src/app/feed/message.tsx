@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
 } from "react-native";
 import { Avatar } from "react-native-elements";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export const unstable_settings = {
   headerShown: false,
@@ -25,9 +27,9 @@ interface Message {
 
 // Dữ liệu giả, chú ý: tin nhắn của mình có name là "You"
 const messagesData: Message[] = [
-  { id: 1, name: "Alice", message: "Xin chào! Đây là tin nhắn đầu tiên.", time: "10:00 AM" },
+  { id: 1, name: "Lập", message: "Xin chào! Đây là tin nhắn đầu tiên.", time: "10:00 AM" },
   { id: 2, name: "You", message: "Chào bạn! Mình đến rồi.", time: "10:05 AM" },
-  { id: 3, name: "Alice", message: "Hôm nay bạn có bận không?", time: "10:10 AM" },
+  { id: 3, name: "Lập", message: "Hôm nay bạn có bận không?", time: "10:10 AM" },
   { id: 4, name: "You", message: "Không, mình rảnh. Gọi cho mình nhé.", time: "10:15 AM" },
 ];
 
@@ -54,19 +56,25 @@ export default function ChatDetailScreen() {
     messages.find((msg) => msg.name !== "You")?.name || "Chat";
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white">
       {/* Custom Header */}
       <View className="flex-row items-center p-4 border-b border-gray-200">
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
-        <Avatar
-          rounded
-          title={conversationPartner.charAt(0)}
-          containerStyle={{ backgroundColor: "gray", marginLeft: 16 }}
-          size="medium"
-        />
-        <Text className="ml-2 font-bold text-lg">{conversationPartner}</Text>
+        
+        <View className="flex-row items-center">
+          <Avatar
+            rounded
+            title={conversationPartner.charAt(0)}
+            containerStyle={{ backgroundColor: "gray", marginLeft: 16 }}
+            size="medium"
+            />
+          <Text className="ml-2 font-bold text-lg">{conversationPartner}</Text>
+          <TouchableOpacity onPress={() => router.push("/feed/messageprofile")} className="ml-1">
+              <MaterialIcons name="keyboard-arrow-right" size={20} color="black" />
+          </TouchableOpacity>  
+        </View>
       </View>
 
       {/* Danh sách tin nhắn */}
@@ -127,6 +135,6 @@ export default function ChatDetailScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }

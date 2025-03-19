@@ -3,7 +3,7 @@ import { View, Text, TextInput, FlatList, TouchableOpacity } from "react-native"
 import { Avatar } from "react-native-elements";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import AntDesign from '@expo/vector-icons/AntDesign';
+import {MaterialIcons, AntDesign } from '@expo/vector-icons';
 interface Message {
   id: number;
   name: string;
@@ -12,10 +12,10 @@ interface Message {
 }
 
 const messagesData: Message[] = [
-  { id: 1, name: "Alice", message: "Xin chào! Đây là tin nhắn đầu tiên.", time: "10:00 AM" },
-  { id: 2, name: "Bob", message: "Chào bạn! Mình đến rồi.", time: "10:05 AM" },
-  { id: 3, name: "Alice", message: "Hôm nay bạn có bận không?", time: "10:10 AM" },
-  { id: 4, name: "Bob", message: "Không, mình rảnh. Gọi cho mình nhé.", time: "10:15 AM" },
+  { id: 1, name: "Lập", message: "Xin chào! Đây là tin nhắn đầu tiên.", time: "10:00 AM" },
+  { id: 2, name: "Hiệp", message: "Chào bạn! Mình đến rồi.", time: "10:05 AM" },
+  { id: 3, name: "Lập", message: "Hôm nay bạn có bận không?", time: "10:10 AM" },
+  { id: 4, name: "Hiệp", message: "Không, mình rảnh. Gọi cho mình nhé.", time: "10:15 AM" },
 ];
 
 const ListMessage = () => {
@@ -35,18 +35,17 @@ const ListMessage = () => {
         <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-300 bg-white">
         {/* Nút trở về */}
         <TouchableOpacity onPress={() => router.back()}>
-        <AntDesign name="left" size={24} color="black" />
+          <MaterialIcons name="keyboard-arrow-left" size={24} color="black" />
         </TouchableOpacity>
 
         {/* Tên người dùng */}
-        <Text className="text-lg font-bold">Username</Text>
+          <Text className="text-lg font-bold">Username</Text>
 
         {/* Nút Create */}
         <TouchableOpacity onPress={() => router.push("/feed/creategroup")}>
-        <AntDesign name="plus" size={24} color="black" />
+          <AntDesign name="plus" size={24} color="black" />
         </TouchableOpacity>
       </View>
-
 
         {/* Thanh tìm kiếm */}
         <View className="p-4">
