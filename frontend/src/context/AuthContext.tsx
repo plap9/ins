@@ -7,7 +7,6 @@ type User = {
   username: string;
   email?: string;
   phone_number?: string;
-  // Thêm các trường khác nếu cần
 };
 
 type AuthData = {
@@ -23,7 +22,12 @@ type AuthContextData = {
   signOut: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+const AuthContext = createContext<AuthContextData>({
+  authData: null,
+  loading: true, 
+  signIn: async () => {},
+  signOut: async () => {}
+});
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authData, setAuthData] = useState<AuthData | null>(null);
@@ -31,21 +35,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     loadStorageData();
-    setupAxiosInterceptors();
   }, []);
 
-  async function loadStorageData(): Promise<void> {
+  async function loadStorageData() {
     try {
       const authDataSerialized = await AsyncStorage.getItem('@AuthData');
       if (authDataSerialized) {
-        const data = JSON.parse(authDataSerialized) as AuthData;
+        const data = JSON.parse(authDataSerialized);
         setAuthData(data);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
       }
-    } catch (error) {
-      console.log(error);
     } finally {
-      setLoading(false);
+      setLoading(false); 
     }
   }
 
@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error.response?.status === 401 && !originalRequest._retry && authData) {
           originalRequest._retry = true;
           try {
-            const response = await axios.post('/api/auth/refresh-token', {
+            const response = await axios.post('/auth/refresh-token', {
               refreshToken: authData.refreshToken
             });
             const { token } = response.data;
@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   async function signOut(): Promise<void> {
     try {
       if (authData) {
-        await axios.post('/api/auth/logout', {
+        await axios.post('/auth/logout', {
           refreshToken: authData.refreshToken
         });
       }

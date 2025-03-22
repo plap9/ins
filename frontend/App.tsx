@@ -1,22 +1,16 @@
 import "nativewind/tailwind.css";
-
+import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Redirect } from 'expo-router';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>hihihi!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <View style={{ flex: 1 }}>
+        <Redirect href="/(tabs)" />
+        <StatusBar style="auto" />
+      </View>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

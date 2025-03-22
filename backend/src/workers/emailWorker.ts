@@ -4,12 +4,12 @@ import { Worker, Job } from 'bullmq';
 
 interface EmailJobData {
   email: string;
-  token: string;
+  code: string;
 }
 
 const emailWorker = new Worker<EmailJobData>('email-queue', async (job: Job<EmailJobData>) => {
-  const { email, token } = job.data;
-  await sendVerificationEmail(email, token);
+  const { email, code } = job.data;
+  await sendVerificationEmail(email, code);
   return { sent: true };
 }, {
   connection: emailQueue.opts.connection,

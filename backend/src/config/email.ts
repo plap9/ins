@@ -12,15 +12,14 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-export async function sendVerificationEmail(email: string, verificationToken: string) {
+export async function sendVerificationEmail(email: string, verificationCode: string) {
     try {
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
 
         const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
+            from: process.env.EMAIL_USER, 
+            to: email, 
             subject: "Xác thực tài khoản",
-            html: `<p>Nhấp vào link sau để xác thực tài khoản:</p><a href="${verificationUrl}">${verificationUrl}</a>`
+            html: `<p>Mã xác thực của bạn là: <strong>${verificationCode}</strong></p>`
         };
 
         const info = await transporter.sendMail(mailOptions);

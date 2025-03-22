@@ -1,25 +1,25 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 
 export const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction(); 
 
-        const { token } = req.query;
-        if (!token) {
-            throw new AppError("Thiếu token xác thực", 400);
+        const { code } = req.body;
+        if (!code) {
+            throw new AppError("Thiếu token xác thực", 400, ErrorCode.MISSING_TOKEN);
         }
 
         const [users]: any = await connection.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE verification_token = ? AND verification_expires > NOW() FOR UPDATE",
-            [token]
+            "SELECT user_id FROM users WHERE email_verification_code = ? AND email_verificaiton_expires > NOW() FOR UPDATE",
+            [code]
         );
 
         if (users.length === 0) {
-            throw new AppError("Token không hợp lệ hoặc đã hết hạn", 400);
+            throw new AppError("Token không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
         }
 
         const userId = users[0].user_id;
@@ -27,8 +27,8 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
         await connection.query(
             `UPDATE users 
              SET email_verified = 1, 
-                 verification_token = NULL, 
-                 verification_expires = NULL, 
+                 email_verification_code = NULL, 
+                 email_verification_expires = NULL, 
                  is_verified = 1
              WHERE user_id = ?`,
             [userId]
@@ -52,7 +52,7 @@ export const verifyPhone = async (req: Request, res: Response, next: NextFunctio
 
         const { phone, otp } = req.body;
         if (!phone || !otp) {
-            throw new AppError("Thiếu số điện thoại hoặc mã OTP", 400);
+            throw new AppError("Thiếu số điện thoại hoặc mã OTP", 400, ErrorCode.MISSING_CREDENTIALS);
         }
 
         const [users]: any = await connection.query<RowDataPacket[]>(
@@ -61,7 +61,7 @@ export const verifyPhone = async (req: Request, res: Response, next: NextFunctio
         );
 
         if (users.length === 0) {
-            throw new AppError("Mã OTP không hợp lệ hoặc đã hết hạn", 400);
+            throw new AppError("Mã OTP không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
         }
 
         const userId = users[0].user_id;

@@ -1,21 +1,38 @@
-import { Stack } from 'expo-router';
-import { AuthProvider } from '~/context/AuthContext';
-import { useEffect } from 'react';
-import axios from 'axios';
+import { Stack, Redirect } from "expo-router";
+import { AuthProvider, useAuth } from "~/context/AuthContext";
+import { ActivityIndicator, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-export default function RootLayout() {
-  useEffect(() => {
-    axios.defaults.baseURL = 'http://localhost:5000'; 
-  }, []);
+function RootLayoutNav() {
+  const { authData, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
-    <AuthProvider>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/register" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/verification" options={{ headerShown: false }} />
-      </Stack>
-    </AuthProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      {!authData ? (
+        <Stack.Screen name="(auth)" />
+      ) : (
+        <Redirect href="/(tabs)" />
+      )}
+      
+      {!authData && <Redirect href="/(auth)/login" />}
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

@@ -11,7 +11,7 @@ const router: Router = express.Router();
 
 router.post("/register", validate(registerSchema), register);
 router.post("/login", loginRateLimiter, validate(loginSchema), login);
-router.get("/verify-email", verifyEmail);
+router.post("/verify-email", verifyEmail);
 router.post("/verify-phone", validate(verifyPhoneSchema), verifyPhone);
 router.post("/logout", logout);
 router.post("/refresh-token", refreshToken);
