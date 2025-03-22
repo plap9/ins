@@ -2,7 +2,7 @@ import { NextFunction, Response } from 'express';
 import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { AppError } from '../../../middlewares/errorHandler';
+import { AppError, ErrorCode } from '../../../middlewares/errorHandler';
 import { Pool, PoolConnection} from 'mysql2/promise';
 import { getCachedCommentLikes, getCachedComments, invalidateCommentCache, invalidateCommentsCache, cacheComments, invalidateCommentLikesCache, cacheCommentLikes} from '../../../utils/cacheUtils';
 
@@ -40,9 +40,9 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
 
         
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
-        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400));
+        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.ACCOUNT_NOT_FOUND));
+        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400 , ErrorCode.NOT_FOUND));
+        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ));
 
         await connection.beginTransaction();
 

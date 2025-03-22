@@ -2,7 +2,7 @@ import { NextFunction, Response } from "express";
 import pool from "../../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 
 export const createStory = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
@@ -10,11 +10,11 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
         const { has_text, sticker_data, filter_data, close_friends_only } = req.body;
         const user_id = req.user?.user_id;
 
-        if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const hasFiles = req.files && Array.isArray(req.files) && req.files.length > 0;
         if (!hasFiles) {
-            return next(new AppError("Story phải có ít nhất một ảnh/video", 400));
+            return next(new AppError("Story phải có ít nhất một ảnh/video", 400, ErrorCode.STORY_NO_MEDIA));
         }
 
         await connection.beginTransaction();
@@ -22,7 +22,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
         const file = (req.files as Express.MulterS3.File[])[0];
         if (!file.mimetype.startsWith("image") && !file.mimetype.startsWith("video")) {
             await connection.rollback();
-            return next(new AppError("Chỉ hỗ trợ ảnh và video", 400));
+            return next(new AppError("Chỉ hỗ trợ ảnh và video", 400, ErrorCode.STORY_MEDIA_UNSUPPORTED));
         }
 
         const [result] = await connection.query<ResultSetHeader>(

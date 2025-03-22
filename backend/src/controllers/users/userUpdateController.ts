@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import pool from '../../config/db';
-import { AppError } from '../../middlewares/errorHandler';
+import { AppError, ErrorCode } from '../../middlewares/errorHandler';
 import { 
   cacheUserProfile, 
   getCachedUserProfile, 
@@ -36,7 +36,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'user_id' không hợp lệ.", 400));
+            return next(new AppError("Tham số 'user_id' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
         }
 
         const { full_name, bio, profile_picture, phone_number, website, gender, date_of_birth, is_private } = req.body;
@@ -55,7 +55,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         const fieldsToUpdate = Object.keys(updateFields).filter(key => updateFields[key] !== undefined);
         
         if (fieldsToUpdate.length === 0) {
-            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400));
+            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
         }
 
         let updateQuery = "UPDATE users SET ";
@@ -76,7 +76,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         const [result] = await pool.query(updateQuery, queryParams);
 
         if ((result as any).affectedRows === 0) {
-            return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", 404));
+            return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", 404, ErrorCode.USER_NOT_FOUND));
         }
 
         await invalidateUserProfileCache(userId);
@@ -126,7 +126,7 @@ export const getUsersBySearch = async (req: Request, res: Response, next: NextFu
         const offset = (page - 1) * limit;
 
         if (!query || typeof query !== 'string') {
-            return next(new AppError("Tham số tìm kiếm không hợp lệ.", 400));
+            return next(new AppError("Tham số tìm kiếm không hợp lệ.", 400, ErrorCode.USER_SEARCH_INVALID));
         }
 
         const cacheKey = `search:${query.toLowerCase()}:page:${page}:limit:${limit}`;
@@ -219,7 +219,7 @@ export const getUserSettings = async (req: Request, res: Response, next: NextFun
         );
 
         if (settings.length === 0) {
-            return next(new AppError("Cài đặt người dùng không tồn tại.", 404));
+            return next(new AppError("Cài đặt người dùng không tồn tại.", 404, ErrorCode.USER_SETTINGS_NOT_FOUND));
         }
 
         await cacheData(cacheKey, settings[0]);
@@ -254,7 +254,7 @@ export const updateUserSettings = async (req: Request, res: Response, next: Next
         const fieldsToUpdate = Object.keys(updateFields).filter(key => updateFields[key] !== undefined);
         
         if (fieldsToUpdate.length === 0) {
-            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400));
+            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
         }
 
         let updateQuery = "UPDATE user_settings SET ";
@@ -281,7 +281,7 @@ export const updateUserSettings = async (req: Request, res: Response, next: Next
             );
 
             if (checkUser.length === 0) {
-                return next(new AppError("Người dùng không tồn tại.", 404));
+                return next(new AppError("Người dùng không tồn tại.", 404, ErrorCode.USER_NOT_FOUND));
             }
 
             const insertFields = fieldsToUpdate.join(', ');

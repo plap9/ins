@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import pool from '../../config/db';
-import { AppError } from '../../middlewares/errorHandler';
+import { AppError, ErrorCode } from '../../middlewares/errorHandler';
 import { RowDataPacket } from 'mysql2';
 import { 
     cacheUserProfile, 
@@ -12,7 +12,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+            return next(new AppError("Tham số 'id' không hợp lệ.", 400, ErrorCode.USER_NOT_FOUND));
         }
 
         const cachedUser = await getCachedUserProfile(userId);
@@ -45,7 +45,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
         );
 
         if (users.length === 0) {
-            return next(new AppError("Người dùng không tồn tại.", 404));
+            return next(new AppError("Người dùng không tồn tại.", 404, ErrorCode.USER_NOT_FOUND));
         }
 
         await cacheUserProfile(userId, users[0]);
