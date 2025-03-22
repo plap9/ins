@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../../config/db";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 import { redisClient, cacheUtils } from "../../config/redis";
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -10,13 +10,17 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     try {
         const { login, password } = req.body;
 
-        if (!login || !password) {
-            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400);
+        if (!login && !password) {
+            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400, ErrorCode.MISSING_CREDENTIALS);
+        } else if (!login) {
+            throw new AppError("Vui lòng nhập tài khoản", 400, ErrorCode.MISSING_CREDENTIALS, "login");
+        } else if (!password) {
+            throw new AppError("Vui lòng nhập mật khẩu", 400, ErrorCode.MISSING_CREDENTIALS, "password");
         }
 
         const loginAttempts = await redisClient.get(`login_attempts:${login}`);
         if (loginAttempts && parseInt(loginAttempts) >= 5) {
-            throw new AppError("Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau", 429);
+            throw new AppError("Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau", 429, ErrorCode.TOO_MANY_ATTEMPTS, "login");
         }
 
         const [users]: any = await connection.query(
@@ -29,18 +33,18 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
         if (!user) {
             await redisClient.incr(`login_attempts:${login}`);
             await redisClient.expire(`login_attempts:${login}`, 60 * 15);
-            throw new AppError("Tài khoản không tồn tại", 400);
+            throw new AppError("Tài khoản không tồn tại", 400, ErrorCode.ACCOUNT_NOT_FOUND, "login");
         }
 
         if (user.is_verified === 0) {
-            throw new AppError("Tài khoản chưa được xác thực", 400);
+            throw new AppError("Tài khoản chưa được xác thực", 400, ErrorCode.UNVERIFIED_ACCOUNT, "login");
         }
 
         const isMatch = await bcrypt.compare(password, user.password_hash);
         if (!isMatch) {
             await redisClient.incr(`login_attempts:${login}`);
             await redisClient.expire(`login_attempts:${login}`, 60 * 15);
-            throw new AppError("Sai mật khẩu", 400);
+            throw new AppError("Sai mật khẩu", 400, ErrorCode.INVALID_PASSWORD, "password");
         }
 
         await redisClient.del(`login_attempts:${login}`);

@@ -2,40 +2,29 @@ import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import pool from "../../config/db";
-import { sendVerificationEmail } from "../../config/email";
-import { sendOTP } from "../../config/sms";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 import { emailQueue, redisClient, smsQueue } from "../../config/redis";
-import { attempt } from "joi";
 
-interface SMSJobData {
-    phone: string;
-    code: string;
-  }
-interface EmailJobData {
-    email: string;
-    code: string;
-}
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
         const { username, contact, password } = req.body;
 
         if (!username || !contact || !password) {
-            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400);
+            throw new AppError("Vui lòng nhập đầy đủ thông tin",400, ErrorCode.MISSING_CREDENTIALS);
         }
 
         const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
         const isPhone = /^\+?[84]\d{1,14}$/.test(contact);
 
         if (!isEmail && !isPhone) {
-            throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400);
+            throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400, ErrorCode.INVALID_FORMAT, "contact");
         }
 
         const ipAddress = req.ip;
         const registraitionCount = await redisClient.get(`registration_count:${ipAddress}`);
         if (registraitionCount && parseInt(registraitionCount) >= 5) {
-            throw new AppError("Quá nhiều lần đăng ký, vui lòng thử lại sau", 429);
+            throw new AppError("Quá nhiều lần đăng ký, vui lòng thử lại sau", 429, ErrorCode.TOO_MANY_ATTEMPTS);
         }
 
         const [existingUsers]: any = await connection.query(
@@ -44,7 +33,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         );
 
         if (existingUsers.length > 0) {
-            throw new AppError("Email hoặc số điện thoại đã tồn tại", 400);
+            throw new AppError("Email hoặc số điện thoại đã tồn tại", 400, ErrorCode.EXISTING_USER, "contact");
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -52,20 +41,21 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         await connection.beginTransaction(); 
 
         if (isEmail) {
-            const verificationToken = crypto.randomBytes(32).toString("hex");
-            const verificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
+            const emailVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const emailVerificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
 
             await connection.query(
-                `INSERT INTO users (username, email, password_hash, verification_token, verification_expires, contact_type) 
+                `INSERT INTO users (username, email, password_hash, email_verification_code, email_verification_expires, contact_type) 
                  VALUES (?, ?, ?, ?, ?, ?);`,
-                [username, contact, hashedPassword, verificationToken, verificationExpires, "email"]
+                [username, contact, hashedPassword, emailVerificationCode, emailVerificationExpires, "email"]
             );
 
             await connection.commit();
 
+            console.log("[DEBUG] Adding email job to queue for:", contact);
             await emailQueue.add('send-verification-email',{
                 email: contact,
-                token: verificationToken
+                code: emailVerificationCode
             }, {
                 attempts: 3,
                 backoff: {
@@ -89,7 +79,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
             );
 
             await connection.commit();
-
+            
             await smsQueue.add('send-verifiaction-sms',{
                 phone: contact,
                 code: phoneVerificationCode

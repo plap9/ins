@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import pool from "../../config/db";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError,ErrorCode } from "../../middlewares/errorHandler";
 import { cacheUtils } from "../../config/redis";
 
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -9,7 +9,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
         const { refreshToken } = req.body;
 
         if (!refreshToken) {
-            throw new AppError("Thiếu token", 400);
+            throw new AppError("Thiếu token", 400, ErrorCode.MISSING_TOKEN);
         }
 
         const userId = await cacheUtils.getRefreshTokenUserId(refreshToken);
@@ -20,7 +20,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
             );
 
             if (tokens.length === 0) {
-                throw new AppError("Token không hợp lệ", 400);
+                throw new AppError("Token không hợp lệ", 400, ErrorCode.INVALID_TOKEN);
             }
 
             await cacheUtils.storeRefreshToken(tokens[0].user_id, refreshToken);
@@ -30,7 +30,7 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
             if (error) {
                 await cacheUtils.invalidateRefreshToken(refreshToken);
                 await pool.query("DELETE FROM refresh_tokens WHERE token = ?", [refreshToken]);
-                return next(new AppError("Token không hợp lệ", 400));
+                return next(new AppError("Token không hợp lệ", 400, ErrorCode.INVALID_VERIFICATION));
             }
 
             const newAccessToken = jwt.sign(
@@ -52,7 +52,7 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
         const token = req.header("Authorization")?.split(" ")[1];
 
         if (!refreshToken) {
-            throw new AppError("Không có refresh token", 400);
+            throw new AppError("Không có refresh token", 400, ErrorCode.MISSING_TOKEN);
         }
         
         await cacheUtils.invalidateRefreshToken(refreshToken);

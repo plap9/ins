@@ -58,22 +58,6 @@ CREATE TABLE `user_blocks` (
     FOREIGN KEY (`blocked_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE `reports` (
-    `report_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
-    `reporter_id` BIGINT(20) NOT NULL, 
-    `reported_user_id` BIGINT(20) DEFAULT NULL,
-    `post_id` BIGINT(20) DEFAULT NULL, 
-    `comment_id` BIGINT(20) DEFAULT NULL,
-    `reason` TEXT NOT NULL,
-    `status` ENUM('pending', 'resolved') DEFAULT 'pending',
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`report_id`),
-    FOREIGN KEY (`reporter_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
-    FOREIGN KEY (`reported_user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
-    FOREIGN KEY (`post_id`) REFERENCES `posts`(`post_id`) ON DELETE CASCADE,
-    FOREIGN KEY (`comment_id`) REFERENCES `comments`(`comment_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 CREATE TABLE `posts` (
     `post_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,
@@ -91,6 +75,21 @@ CREATE TABLE `posts` (
 CREATE INDEX idx_posts_user_id ON posts(user_id);
 CREATE INDEX idx_posts_created_at ON posts(created_at); 
 
+CREATE TABLE `comments` (
+    `comment_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `post_id` BIGINT(20) NOT NULL,
+    `user_id` BIGINT(20) NOT NULL,
+    `parent_id` BIGINT(20) DEFAULT NULL,
+    `content` TEXT NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`comment_id`),
+    CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
+    CONSTRAINT `comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_comments_post_id ON comments(post_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
+
 CREATE TABLE `media` (
     `media_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `post_id` BIGINT(20) NOT NULL,
@@ -102,22 +101,6 @@ CREATE TABLE `media` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX idx_media_post_id ON media(post_id);
-
-CREATE TABLE `comments` (
-    `comment_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
-    `post_id` BIGINT(20) NOT NULL,
-    `user_id` BIGINT(20) NOT NULL,
-    `parent_id` BIGINT(20) DEFAULT NULL,
-    `content` TEXT NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
-    PRIMARY KEY (`comment_id`),
-    CONSTRAINT `comments_ibfk_1` FOREIGN KEY (`post_id`) REFERENCES `posts` (`post_id`) ON DELETE CASCADE,
-    CONSTRAINT `comments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-    CONSTRAINT `comments_ibfk_3` FOREIGN KEY (`parent_id`) REFERENCES `comments` (`comment_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE INDEX idx_comments_post_id ON comments(post_id);
-CREATE INDEX idx_comments_user_id ON comments(user_id);
 
 
 CREATE TABLE `likes` (
@@ -182,6 +165,16 @@ CREATE TABLE `highlight_stories` (
 CREATE INDEX idx_highlight_stories_highlight_id ON highlight_stories(highlight_id);
 CREATE INDEX idx_highlight_stories_story_id ON highlight_stories(story_id);
 
+CREATE TABLE `chat_groups` (
+    `group_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `creator_id` BIGINT(20) NOT NULL,
+    `group_name` VARCHAR(255) NOT NULL,
+    `group_avatar` TEXT DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`group_id`),
+    FOREIGN KEY (`creator_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `messages` (
     `message_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `sender_id` BIGINT(20) NOT NULL,
@@ -206,15 +199,6 @@ CREATE INDEX idx_messages_sender_id ON messages(sender_id);
 CREATE INDEX idx_messages_receiver_id ON messages(receiver_id);
 CREATE INDEX idx_messages_created_at ON messages(sent_at);
 
-CREATE TABLE `chat_groups` (
-    `group_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
-    `creator_id` BIGINT(20) NOT NULL,
-    `group_name` VARCHAR(255) NOT NULL,
-    `group_avatar` TEXT DEFAULT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`group_id`),
-    FOREIGN KEY (`creator_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `group_members` (
     `member_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -447,3 +431,19 @@ CREATE TABLE IF NOT EXISTS `media_edits` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE INDEX IF NOT EXISTS idx_media_edits_media_id ON media_edits(media_id);
+
+CREATE TABLE `reports` (
+    `report_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `reporter_id` BIGINT(20) NOT NULL, 
+    `reported_user_id` BIGINT(20) DEFAULT NULL,
+    `post_id` BIGINT(20) DEFAULT NULL, 
+    `comment_id` BIGINT(20) DEFAULT NULL,
+    `reason` TEXT NOT NULL,
+    `status` ENUM('pending', 'resolved') DEFAULT 'pending',
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`report_id`),
+    FOREIGN KEY (`reporter_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+    FOREIGN KEY (`reported_user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+    FOREIGN KEY (`post_id`) REFERENCES `posts`(`post_id`) ON DELETE CASCADE,
+    FOREIGN KEY (`comment_id`) REFERENCES `comments`(`comment_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

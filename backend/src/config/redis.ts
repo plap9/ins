@@ -19,7 +19,7 @@ interface TokenPayload {
 
 interface EmailJobData {
   email: string;
-  token: string;
+  code: string;
 }
 
 interface SMSJobData {
