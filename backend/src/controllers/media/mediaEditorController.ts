@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 import pool from "../../config/db";
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import { uploadToS3 } from "../../utils/s3Utils";
@@ -310,11 +310,11 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
   
   try {
     const user_id = req.user?.user_id;
-    if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
+    if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.INVALID_TOKEN));
 
     const editData = req.body as MediaEditRequest;
     if (!editData.mediaUrl && !editData.originalMediaId) {
-      return next(new AppError("Thiếu thông tin media cần chỉnh sửa", 400));
+      return next(new AppError("Thiếu thông tin media cần chỉnh sửa", 400, ErrorCode.MISSING_MEDIA_URL));
     }
 
     let mediaUrl = editData.mediaUrl;
@@ -327,7 +327,7 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
       );
       
       if (mediaRows.length === 0) {
-        return next(new AppError("Không tìm thấy media với ID đã cung cấp", 404));
+        return next(new AppError("Không tìm thấy media với ID đã cung cấp", 404, ErrorCode.MEDIA_NOT_FOUND));
       }
       
       mediaUrl = mediaRows[0].media_url;
@@ -433,7 +433,7 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
 export const getMediaLibrary = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user_id = req.user?.user_id;
-      if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401));
+      if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.INVALID_TOKEN));
   
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
@@ -495,6 +495,6 @@ export const getMediaLibrary = async (req: AuthRequest, res: Response, next: Nex
       });
       
     } catch (error) {
-      next(new AppError("Lỗi hệ thống khi lấy danh sách media", 500));
+      next(new AppError("Lỗi hệ thống khi lấy danh sách media", 500, ErrorCode.SERVER_ERROR));
     }
   };

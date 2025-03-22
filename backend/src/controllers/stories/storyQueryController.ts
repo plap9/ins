@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket, ResultSetHeader } from "mysql2";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 
 export const getStories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -10,7 +10,7 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
         const current_user_id = (req as AuthRequest).user?.user_id;
 
         if (!user_id) {
-            return next(new AppError("Thiếu thông số user_id", 400));
+            return next(new AppError("Thiếu thông số user_id", 400, ErrorCode.VALIDATION_ERROR));
         }
 
         let sql = `
@@ -47,7 +47,7 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
                     AND (s.close_friends_only = FALSE OR (s.close_friends_only = TRUE AND EXISTS (SELECT 1 FROM close_friends WHERE user_id = s.user_id AND friend_id = ?)))`;
                 queryParams.push(current_user_id, current_user_id);
             } else {
-                return next(new AppError("Người dùng chưa được xác thực", 401));
+                return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
             }
         }
         sql += " ORDER BY s.created_at DESC";
@@ -63,10 +63,10 @@ export const deleteStory = async (req: AuthRequest, res: Response, next: NextFun
     const connection = await pool.getConnection();
     try {
         const story_id = parseInt(req.params.id, 10);
-        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400));
+        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
 
         const user_id = req.user?.user_id;
-        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [checkRows] = await connection.query<RowDataPacket[]>(
             "SELECT story_id FROM stories WHERE story_id = ? AND user_id = ?",
@@ -74,7 +74,7 @@ export const deleteStory = async (req: AuthRequest, res: Response, next: NextFun
         );
 
         if (checkRows.length === 0) {
-            return next(new AppError("Bạn không có quyền xóa story này hoặc story không tồn tại.", 403));
+            return next(new AppError("Bạn không có quyền xóa story này hoặc story không tồn tại.", 403, ErrorCode.STORY_ACCESS_DENIED));
         }
 
         await connection.beginTransaction();
@@ -104,10 +104,10 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
     const connection = await pool.getConnection();
     try {
         const story_id = parseInt(req.params.id, 10);
-        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400));
+        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
 
         const viewer_id = req.user?.user_id;
-        if (!viewer_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
+        if (!viewer_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
             "SELECT s.story_id, s.user_id, s.close_friends_only FROM stories s WHERE s.story_id = ? AND s.expires_at > NOW()",
@@ -115,7 +115,7 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
         );
 
         if (storyRows.length === 0) {
-            return next(new AppError("Story không tồn tại hoặc đã hết hạn.", 404));
+            return next(new AppError("Story không tồn tại hoặc đã hết hạn.", 404, ErrorCode.STORY_NOT_FOUND));
         }
 
         const story = storyRows[0];
@@ -127,7 +127,7 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
             );
             
             if (checkCloseFriend.length === 0) {
-                return next(new AppError("Bạn không có quyền xem story này.", 403));
+                return next(new AppError("Bạn không có quyền xem story này.", 403, ErrorCode.STORY_ACCESS_DENIED));
             }
         }
 
@@ -161,11 +161,11 @@ export const replyToStory = async (req: AuthRequest, res: Response, next: NextFu
         const story_id = parseInt(req.params.id, 10);
         const { content } = req.body;
         
-        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400));
-        if (!content || content.trim() === "") return next(new AppError("Nội dung trả lời không được để trống.", 400));
+        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
+        if (!content || content.trim() === "") return next(new AppError("Nội dung trả lời không được để trống.", 400, ErrorCode.VALIDATION_ERROR));
 
         const replier_id = req.user?.user_id;
-        if (!replier_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
+        if (!replier_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
             "SELECT s.story_id, s.user_id, s.close_friends_only FROM stories s WHERE s.story_id = ? AND s.expires_at > NOW()",
@@ -173,7 +173,7 @@ export const replyToStory = async (req: AuthRequest, res: Response, next: NextFu
         );
 
         if (storyRows.length === 0) {
-            return next(new AppError("Story không tồn tại hoặc đã hết hạn.", 404));
+            return next(new AppError("Story không tồn tại hoặc đã hết hạn.", 404, ErrorCode.STORY_NOT_FOUND));
         }
 
         const story = storyRows[0];
@@ -185,7 +185,7 @@ export const replyToStory = async (req: AuthRequest, res: Response, next: NextFu
             );
             
             if (checkCloseFriend.length === 0) {
-                return next(new AppError("Bạn không có quyền trả lời story này.", 403));
+                return next(new AppError("Bạn không có quyền trả lời story này.", 403, ErrorCode.STORY_ACCESS_DENIED));
             }
         }
 
@@ -225,10 +225,10 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         const story_id = parseInt(req.params.id, 10);
         const { highlight_id, highlight_title } = req.body;
         
-        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400));
+        if (isNaN(story_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
         
         const user_id = req.user?.user_id;
-        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
             "SELECT story_id, media_url FROM stories WHERE story_id = ? AND user_id = ?",
@@ -236,7 +236,7 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         );
 
         if (storyRows.length === 0) {
-            return next(new AppError("Story không tồn tại hoặc không thuộc về bạn.", 404));
+            return next(new AppError("Story không tồn tại hoặc không thuộc về bạn.", 404, ErrorCode.STORY_NOT_FOUND));
         }
 
         await connection.beginTransaction();
@@ -251,7 +251,7 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
             
             if (highlightRows.length === 0) {
                 await connection.rollback();
-                return next(new AppError("Highlight không tồn tại hoặc không thuộc về bạn.", 404));
+                return next(new AppError("Highlight không tồn tại hoặc không thuộc về bạn.", 404, ErrorCode.STORY_ACCESS_DENIED));
             }
             
             highlightId = highlight_id;
@@ -271,7 +271,7 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         
         if (existingRows.length > 0) {
             await connection.rollback();
-            return next(new AppError("Story đã được thêm vào highlight này.", 400));
+            return next(new AppError("Story đã được thêm vào highlight này.", 400, ErrorCode.STORY_ALREADY_ADDED));
         }
         
         await connection.query(
