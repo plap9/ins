@@ -141,3 +141,8 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
+
+console.log(
+  'Debug classes:',
+  'bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm'
+);
