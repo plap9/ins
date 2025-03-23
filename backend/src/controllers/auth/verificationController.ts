@@ -14,7 +14,7 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
         }
 
         const [users]: any = await connection.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE email_verification_code = ? AND email_verificaiton_expires > NOW() FOR UPDATE",
+            "SELECT user_id FROM users WHERE email_verification_code = ? AND email_verification_expires > NOW() FOR UPDATE",
             [code]
         );
 
@@ -50,14 +50,14 @@ export const verifyPhone = async (req: Request, res: Response, next: NextFunctio
     try {
         await connection.beginTransaction(); 
 
-        const { phone, otp } = req.body;
-        if (!phone || !otp) {
+        const { phone, code } = req.body;
+        if (!phone || !code) {
             throw new AppError("Thiếu số điện thoại hoặc mã OTP", 400, ErrorCode.MISSING_CREDENTIALS);
         }
 
         const [users]: any = await connection.query<RowDataPacket[]>(
             "SELECT user_id FROM users WHERE phone_number = ? AND phone_verification_code = ? AND phone_verification_expires > NOW() FOR UPDATE",
-            [phone, otp]
+            [phone, code]
         );
 
         if (users.length === 0) {

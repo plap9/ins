@@ -67,7 +67,11 @@ export const register = async (req: Request, res: Response, next: NextFunction):
             await redisClient.incr(`registration_count:${ipAddress}`);
             await redisClient.expire(`registration_count:${ipAddress}`, 60 * 60);
 
-            res.status(201).json({ message: "Vui lòng kiểm tra email để xác thực." });
+            res.status(201).json({ 
+                message: "Vui lòng kiểm tra email để xác thực.",
+                verificationType: "email",
+                contact: contact
+            });
         } else {
             const phoneVerificationCode = Math.floor(100000 + Math.random() * 900000).toString();
             const phoneVerificationExpires = new Date(Date.now() + 3 * 60 * 1000);
@@ -94,7 +98,11 @@ export const register = async (req: Request, res: Response, next: NextFunction):
             await redisClient.incr(`registration_count:${ipAddress}`);
             await redisClient.expire(`registration_count:${ipAddress}`, 60 * 60);
 
-            res.status(201).json({ message: "Vui lòng kiểm tra tin nhắn SMS để xác thực." });
+            res.status(201).json({ 
+                message: "Vui lòng kiểm tra tin nhắn SMS để xác thực.",
+                verificationType: "phone",
+                contact: contact
+            });
         }
     } catch (error) {
         await connection.rollback();
