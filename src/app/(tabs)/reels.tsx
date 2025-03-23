@@ -4,7 +4,7 @@ import ReelsScreen from "../reels";
 
 export default function Reels() {
     return (
-    <SafeAreaView className="">
+    <SafeAreaView className="flex-1 bg-white">
         <View>
             <ReelsScreen/>
         </View>

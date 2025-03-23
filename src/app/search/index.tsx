@@ -21,7 +21,7 @@ const exploreImages = [
 
 const SearchScreen = () => {
   return (
-    <SafeAreaView className=" bg-white " >
+    <View>
       {/* Thanh tìm kiếm */}
       <View className="flex-row items-center px-4 py-2 border-b border-gray-200 flex-11 ">
         <View className="flex-1 bg-gray-100 flex-row items-center px-3 py-2 rounded-full">
@@ -51,8 +51,8 @@ const SearchScreen = () => {
         showsVerticalScrollIndicator={false}
       />
       </View>
+    </View>
       
-    </SafeAreaView>
   );
 };
 

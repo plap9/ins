@@ -6,7 +6,7 @@ import ProfileScreen from "~/app/profile/index";
 
 export default function Profile() {
     return(
-        <SafeAreaView>
+        <SafeAreaView className="flex-1 bg-white">
             <View>
                 <ProfileScreen/>
             </View>

@@ -15,8 +15,12 @@ import {
   Feather,
   FontAwesome,
 } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 const ProfileScreen = () => {
+
+  const router = useRouter();
+
   // State cho modal Thông báo và Tùy chọn
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -130,7 +134,7 @@ const ProfileScreen = () => {
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-300 bg-white">
-        <TouchableOpacity onPress={() => alert("Go back")}>
+        <TouchableOpacity onPress={() => router.back()}>
           <MaterialIcons name="keyboard-arrow-left" size={24} color="black" />
         </TouchableOpacity>
         <Text className="text-lg font-bold">Chat Details</Text>

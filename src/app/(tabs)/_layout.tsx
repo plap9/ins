@@ -23,7 +23,7 @@ export default function TabsLayout() {
                 options={{ 
                     headerShown: false,  // Ẩn header
                     tabBarIcon: ({color}) => (
-                        <Feather name="search" size={24} color="black" />
+                        <Feather name="search" size={24} color={color} />
                     ),
                 }}
             />
@@ -32,7 +32,7 @@ export default function TabsLayout() {
                 options={{ 
                     headerShown: false,  // Ẩn header
                     tabBarIcon: ({color}) => (
-                        <Feather name="plus-square" size={24} color="black" />
+                        <Feather name="plus-square" size={24} color={color} />
                     ),
                 }}
             />
@@ -41,7 +41,7 @@ export default function TabsLayout() {
                 options={{ 
                     headerShown: false,  // Ẩn header
                     tabBarIcon: ({color}) => (
-                        <MaterialIcons name="video-library" size={24} color="black" />
+                        <MaterialIcons name="video-library" size={24} color={color} />
                     ),
                 }}
             />
