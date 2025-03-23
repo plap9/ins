@@ -1,0 +1,38 @@
+[
+    {
+        "id": 1,
+        "image": "toi la ech xanh",
+        "image_url": "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
+        "caption": "Caption 1",
+        "user": {
+            "id": 1,
+            "avatar": "meme",
+            "image_url": "https://m.yodycdn.com/blog/meme-ech-xanh-yody-vn-42.jpg",
+            "username": "lappham"
+        }
+    },
+    {
+        "id": 2,
+        "image": "car",
+        "image_url": "https://motoristprod.s3.amazonaws.com/uploads/redactor_rails/picture/data/5266/JDMs-All-Car-Enthusiasts-Should-Know-Nissan-skyline.jpg",
+        "caption": "Caption 2",
+        "user": {
+            "id": 2,
+            "avatar": "human",
+            "image_url": "https://static.wikia.nocookie.net/wfl/images/0/0c/Dominic_Toretto.jpg/revision/latest?cb=20201208203251",
+            "username": "doanthang"
+        }
+    },
+    {
+        "id": 3,
+        "image": "landscape",
+        "image_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS2XyQdQTV0-5f2uFhJpzosRqJLDSyEUpWjvhHQOSH83NaJJ8tWRFp-gGzJ4CkueJrZqlo&usqp=CAU",
+        "caption": "Caption 3",
+        "user": {
+            "id": 3,
+            "avatar": "meme",
+            "image_url": "https://bizweb.dktcdn.net/thumb/large/100/435/335/products/66.png?v=1710931554937",
+            "username": "duchiep"
+        }
+    }
+]
