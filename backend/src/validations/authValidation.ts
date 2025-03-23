@@ -43,3 +43,53 @@ export const verifyPhoneSchema: ObjectSchema = Joi.object({
             "string.pattern.base": "Mã OTP chỉ được chứa số từ 0-9"
         }),
 });
+
+export const verifySchema: ObjectSchema = Joi.object({
+    contact: Joi.string().required().messages({
+      "string.empty": "Email/số điện thoại không được để trống",
+    }),
+    code: Joi.string()
+      .length(6)
+      .pattern(/^\d+$/)
+      .required()
+      .messages({
+        "string.empty": "Mã xác thực không được để trống",
+        "string.length": "Mã xác thực phải có đúng 6 chữ số",
+        "string.pattern.base": "Mã xác thực chỉ được chứa số từ 0-9"
+      }),
+    verificationType: Joi.string()
+      .valid('email', 'phone')
+      .required()
+      .messages({
+        "any.only": "Loại xác thực không hợp lệ",
+        "string.empty": "Loại xác thực không được để trống"
+      })
+  });
+  
+  export const resendVerificationSchema: ObjectSchema = Joi.object({
+    contact: Joi.string().required().messages({
+      "string.empty": "Email/số điện thoại không được để trống",
+    }),
+    verificationType: Joi.string()
+      .valid('email', 'phone')
+      .required()
+      .messages({
+        "any.only": "Loại xác thực không hợp lệ",
+        "string.empty": "Loại xác thực không được để trống"
+      })
+  });
+
+  export const forgotPasswordSchema: ObjectSchema = Joi.object({
+    contact: Joi.string().required().messages({
+      "string.empty": "Vui lòng nhập email hoặc số điện thoại"
+    })
+  });
+  
+  export const resetPasswordSchema = Joi.object({
+    contact: Joi.string().required(),
+    code: Joi.string().length(6).required(),
+    newPassword: Joi.string()
+      .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
+      .required(),
+    verificationType: Joi.string().valid('email', 'phone').required()
+  });

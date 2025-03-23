@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { Animated, Easing } from 'react-native';
@@ -17,62 +17,44 @@ import { Animated, Easing } from 'react-native';
 axios.defaults.baseURL = 'http://192.168.1.31:5000';
 axios.defaults.headers.post['Content-Type'] = 'application/json';
 
-export default function VerificationScreen() {
-  const params = useLocalSearchParams();
-  const [code, setCode] = useState('');
+export default function ResendVerificationScreen() {
+  const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
-  const contact = params.contact as string;
-  const verificationType = params.verificationType as 'email' | 'phone';
 
   // Animation refs
-  const codeLabelPosition = useRef(new Animated.Value(0)).current;
-  const codeLabelSize = useRef(new Animated.Value(1)).current;
-  const [isFocusedCode, setIsFocusedCode] = useState(false);
+  const contactLabelPosition = useRef(new Animated.Value(0)).current;
+  const contactLabelSize = useRef(new Animated.Value(1)).current;
+  const [isFocusedContact, setIsFocusedContact] = useState(false);
 
-  useEffect(() => {
-    if (!contact || !verificationType) {
-      Alert.alert('Lỗi', 'Thiếu thông tin xác thực', [
-        { text: 'OK', onPress: () => router.push('/auth/login') }
-      ]);
+  const handleResend = async () => {
+    if (!contact) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email hoặc số điện thoại');
+      return;
     }
-  }, []);
 
-  const handleVerify = async () => {
     try {
       setLoading(true);
-      const response = await axios.post('/auth/verify', {
-        contact,
-        code,
-        verificationType
-      });
+      const response = await axios.post<{ 
+        message: string;
+        verificationType: string;
+      }>('/auth/resend-verification', { contact });
 
       Alert.alert(
-        'Thành công',
-        '🎉 Xác thực tài khoản thành công!',
+        'Thành công', 
+        response.data.message,
         [
           { 
             text: 'OK', 
-            onPress: () => router.replace('/auth/login') 
+            onPress: () => router.push({
+              pathname: '/auth/verification',
+              params: {
+                contact: contact,
+                verificationType: response.data.verificationType
+              }
+            })
           }
-        ],
-        { cancelable: false }
+        ]
       );
-    } catch (error: any) {
-      const message = error.response?.data?.message || 'Xác thực thất bại';
-      Alert.alert('Lỗi', message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.post('/auth/resend-verification', { 
-        contact,
-        verificationType 
-      });
-      Alert.alert('Thành công', 'Mã xác thực đã được gửi lại');
     } catch (error: any) {
       const message = error.response?.data?.message || 'Gửi lại thất bại';
       Alert.alert('Lỗi', message);
@@ -81,16 +63,17 @@ export default function VerificationScreen() {
     }
   };
 
-  const handleCodeFocus = () => {
-    setIsFocusedCode(true);
+  // Animation handlers
+  const handleContactFocus = () => {
+    setIsFocusedContact(true);
     Animated.parallel([
-      Animated.timing(codeLabelPosition, {
+      Animated.timing(contactLabelPosition, {
         toValue: 1,
         duration: 200,
         easing: Easing.out(Easing.ease),
         useNativeDriver: false,
       }),
-      Animated.timing(codeLabelSize, {
+      Animated.timing(contactLabelSize, {
         toValue: 0.8,
         duration: 200,
         easing: Easing.out(Easing.ease),
@@ -99,17 +82,17 @@ export default function VerificationScreen() {
     ]).start();
   };
 
-  const handleCodeBlur = () => {
-    if (!code) {
-      setIsFocusedCode(false);
+  const handleContactBlur = () => {
+    if (!contact) {
+      setIsFocusedContact(false);
       Animated.parallel([
-        Animated.timing(codeLabelPosition, {
+        Animated.timing(contactLabelPosition, {
           toValue: 0,
           duration: 200,
           easing: Easing.out(Easing.ease),
           useNativeDriver: false,
         }),
-        Animated.timing(codeLabelSize, {
+        Animated.timing(contactLabelSize, {
           toValue: 1,
           duration: 200,
           easing: Easing.out(Easing.ease),
@@ -119,16 +102,16 @@ export default function VerificationScreen() {
     }
   };
 
-  const codeAnimatedStyle = {
-    top: codeLabelPosition.interpolate({
+  const contactAnimatedStyle = {
+    top: contactLabelPosition.interpolate({
       inputRange: [0, 1],
       outputRange: [23, 4],
     }),
-    fontSize: codeLabelSize.interpolate({
+    fontSize: contactLabelSize.interpolate({
       inputRange: [0.8, 1],
       outputRange: [12, 14],
     }),
-    color: codeLabelPosition.interpolate({
+    color: contactLabelPosition.interpolate({
       inputRange: [0, 1],
       outputRange: ['#8e8e8e', '#8e8e8e'],
     }),
@@ -138,12 +121,20 @@ export default function VerificationScreen() {
     <SafeAreaView className="flex-1 bg-[#132026]">
       <StatusBar barStyle="light-content" />
 
+      {/* Header */}
       <View className="flex-row items-center px-4 py-2">
         <TouchableOpacity onPress={() => router.back()}>
           <Text className="text-white text-2xl">&larr;</Text>
         </TouchableOpacity>
+        <View className="flex-1 items-center">
+          <TouchableOpacity className="flex-row items-center">
+            <Text className="text-white text-base">Tiếng Việt</Text>
+            <Text className="text-white ml-1">▼</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Main Content */}
       <View className="flex-1 justify-center items-center px-8">
         <Image
           source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Instagram_logo_2022.svg/1200px-Instagram_logo_2022.svg.png" }}
@@ -152,19 +143,19 @@ export default function VerificationScreen() {
         />
 
         <Text className="text-white text-center text-lg mb-4">
-          Nhập mã xác thực 6 chữ số
-        </Text>
-        
-        <Text className="text-gray-400 text-center mb-8">
-          Đã gửi đến {verificationType === 'email' ? 'email' : 'số điện thoại'}
-          <Text className="font-semibold"> {contact}</Text>
+          Gửi lại mã xác thực
         </Text>
 
+        <Text className="text-gray-400 text-center mb-8">
+          Nhập email hoặc số điện thoại đã đăng ký để nhận mã mới
+        </Text>
+
+        {/* Contact Input */}
         <View className="w-full mb-6">
           <View className="rounded-[20px] border border-[#363636] px-4 pt-5 pb-2 relative">
             <Animated.View
               style={[
-                codeAnimatedStyle,
+                contactAnimatedStyle,
                 {
                   position: 'absolute',
                   left: 16,
@@ -174,44 +165,62 @@ export default function VerificationScreen() {
                 },
               ]}
             >
-              <Text className="text-[#8e8e8e]">Mã xác thực</Text>
+              <Text className="text-[#8e8e8e]">Email hoặc số điện thoại</Text>
             </Animated.View>
             <TextInput
               className="text-white text-base pt-1"
               placeholder=""
               placeholderTextColor="transparent"
-              value={code}
-              onChangeText={setCode}
-              onFocus={handleCodeFocus}
-              onBlur={handleCodeBlur}
-              keyboardType="number-pad"
-              maxLength={6}
+              value={contact}
+              onChangeText={setContact}
+              onFocus={handleContactFocus}
+              onBlur={handleContactBlur}
+              autoCapitalize="none"
+              keyboardType="email-address"
               style={{ height: 40, backgroundColor: 'transparent' }}
             />
           </View>
         </View>
 
+        {/* Resend Button */}
         <TouchableOpacity
           className={`w-full bg-[#0095f6] rounded-[40px] py-3 items-center mb-4 ${loading ? 'opacity-50' : ''}`}
-          onPress={handleVerify}
+          onPress={handleResend}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-bold text-base">Xác thực</Text>
+            <Text className="text-white font-bold text-base">Gửi lại mã</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity
           className="py-2"
-          onPress={handleResendCode}
-          disabled={loading}
+          onPress={() => router.push('/auth/verification')}
         >
           <Text className="text-[#0095f6] text-sm font-semibold">
-            Gửi lại mã
+            Đã có mã xác thực? Nhập ngay
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Footer */}
+      <View className="pb-5 border-t border-[#262626]">
+        <View className="py-4 items-center px-8">
+          <TouchableOpacity
+            className="w-full rounded-[40px] border border-[#0095f6] py-2.5 items-center"
+            onPress={() => router.push('/auth/login')}
+          >
+            <Text className="text-[#0095f6] font-semibold text-base">
+              Quay lại đăng nhập
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View className="items-center mt-4">
+          <Text className="text-[#737373] text-sm">Meta</Text>
+        </View>
       </View>
     </SafeAreaView>
   );

@@ -310,7 +310,9 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity className="mt-8">
+        <TouchableOpacity 
+          onPress={() => router.push("/auth/forgotPassword")}
+          className="mt-8">
           <Text className="text-[#8e8e8e] text-sm font-semibold">
             Bạn quên mật khẩu ư?
           </Text>
