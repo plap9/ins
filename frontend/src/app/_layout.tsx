@@ -1,8 +1,8 @@
 import React from "react";
 import { Stack } from "expo-router";
 import { AuthProvider } from "./context/AuthContext";
-import { View, ActivityIndicator } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import "../../global.css";
 
 function RootLayoutNav() {
   return (

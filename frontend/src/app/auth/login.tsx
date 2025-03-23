@@ -1,148 +1,338 @@
-import  { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
-import { router } from 'expo-router';
-import { useAuth } from '../context/AuthContext'
-import axios from 'axios';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useState, useRef } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  Alert,
+  StatusBar,
+} from "react-native";
+import { router } from "expo-router";
+import { useAuth } from "../context/AuthContext";
+import axios from "axios";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Animated, Easing } from "react-native";
 
-
-axios.defaults.baseURL = 'http://192.168.1.31:5000';
-axios.defaults.headers.post['Content-Type'] = 'application/json';
+axios.defaults.baseURL = "http://192.168.1.31:5000";
+axios.defaults.headers.post["Content-Type"] = "application/json";
 
 export default function LoginScreen() {
-  const [login, setLogin] = useState('');
-  const [password, setPassword] = useState('');
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
 
+  const [isFocused, setIsFocused] = useState(false);
+  const labelPosition = useRef(new Animated.Value(0)).current;
+  const labelSize = useRef(new Animated.Value(1)).current;
+  const [isFocusedUsername, setIsFocusedUsername] = useState(false);
+
+  const [isFocusedPassword, setIsFocusedPassword] = useState(false);
+  const passwordLabelPosition = useRef(new Animated.Value(0)).current;
+  const passwordLabelSize = useRef(new Animated.Value(1)).current;
+
   const handleLogin = async () => {
     if (!login || !password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
+      Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
       return;
     }
 
     try {
       setLoading(true);
-      
-      console.log('Sending login request:', { login, password });
-      
-      const response = await axios.post<{ 
-        token?: string; 
+
+      const response = await axios.post<{
+        token?: string;
         refreshToken?: string;
-        user?: any 
-      }>('/auth/login', {
+        user?: any;
+      }>("/auth/login", {
         login,
-        password
+        password,
       });
 
       if (!response.data.token || !response.data.user) {
-        throw new Error('Invalid response format');
+        throw new Error("Invalid response format");
       }
 
       const { token, refreshToken, user } = response.data;
 
       if (!token || !refreshToken || !user) {
-        throw new Error('Missing authentication data');
+        throw new Error("Missing authentication data");
       }
 
       await signIn({ token, refreshToken, user });
-      
+
       setTimeout(() => {
-        router.replace('/(tabs)');
+        router.replace("/(tabs)");
       }, 100);
-      
     } catch (error: any) {
-      let errorMessage = 'Đăng nhập thất bại';
-      
+      let errorMessage = "Đăng nhập thất bại";
+
       if (error.response) {
         errorMessage = error.response.data?.message || errorMessage;
-        console.error('Server error:', error.response.status, error.response.data);
+        console.error(
+          "Server error:",
+          error.response.status,
+          error.response.data
+        );
       } else if (error.request) {
-        errorMessage = 'Không thể kết nối đến server';
-        console.error('No response:', error.request);
+        errorMessage = "Không thể kết nối đến server";
+        console.error("No response:", error.request);
       } else {
-        console.error('Request error:', error.message);
+        console.error("Request error:", error.message);
       }
-      
-      Alert.alert('Lỗi', errorMessage);
+
+      Alert.alert("Lỗi", errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-white">
-      <View className="flex-1 items-center px-5 mt-20">
-        <Image 
-          source={require('../../../assets/instagram-logo.png')} 
-          className="w-48 h-48 mb-16" 
-          resizeMode="contain"
-        />
-        
-        <View className="w-full space-y-2">
-          <TextInput
-            className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm"
-            placeholder="Số điện thoại, tên người dùng hoặc email"
-            placeholderTextColor="#8e8e8e"
-            value={login}
-            onChangeText={setLogin}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-          />
-          
-          <TextInput
-            className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm"
-            placeholder="Mật khẩu"
-            placeholderTextColor="#8e8e8e"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCorrect={false}
-          />
-          
-          <TouchableOpacity 
-            className="bg-blue-500 rounded-lg py-3 items-center mt-4"
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-semibold text-sm">Đăng nhập</Text>
-            )}
-          </TouchableOpacity>
-          
-          <View className="flex-row items-center justify-center space-x-2 my-6">
-            <View className="flex-1 h-px bg-gray-200" />
-            <Text className="text-gray-500 text-sm font-semibold">HOẶC</Text>
-            <View className="flex-1 h-px bg-gray-200" />
-          </View>
+  const animatedLabelStyle = {
+    top: labelPosition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [23, 4],
+    }),
+    fontSize: labelSize.interpolate({
+      inputRange: [0.8, 1],
+      outputRange: [12, 14],
+    }),
+    color: labelPosition.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["#8e8e8e", "#8e8e8e"],
+    }),
+  };
 
-          <TouchableOpacity className="items-center mb-6">
-            <Text className="text-blue-900 text-sm font-semibold">Đăng nhập bằng Facebook</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity className="items-center">
-            <Text className="text-gray-500 text-xs">Quên mật khẩu?</Text>
+  const handleFocus = () => {
+    setIsFocused(true);
+    Animated.parallel([
+      Animated.timing(labelPosition, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+      Animated.timing(labelSize, {
+        toValue: 0.8,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handleBlur = () => {
+    if (!login) {
+      setIsFocused(false);
+      Animated.parallel([
+        Animated.timing(labelPosition, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(labelSize, {
+          toValue: 1,
+          duration: 200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  };
+
+  const handlePasswordFocus = () => {
+    setIsFocusedPassword(true);
+    Animated.parallel([
+      Animated.timing(passwordLabelPosition, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+      Animated.timing(passwordLabelSize, {
+        toValue: 0.8,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }),
+    ]).start();
+  };
+
+  const handlePasswordBlur = () => {
+    if (!password) {
+      setIsFocusedPassword(false);
+      Animated.parallel([
+        Animated.timing(passwordLabelPosition, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(passwordLabelSize, {
+          toValue: 1,
+          duration: 200,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]).start();
+    }
+  };
+
+  const passwordAnimatedLabelStyle = {
+    top: passwordLabelPosition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [23, 4],
+    }),
+    fontSize: passwordLabelSize.interpolate({
+      inputRange: [0.8, 1],
+      outputRange: [12, 14],
+    }),
+    color: passwordLabelPosition.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["#8e8e8e", "#8e8e8e"],
+    }),
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-[#132026]">
+      <StatusBar barStyle="light-content" />
+
+      {/* Header */}
+      <View className="flex-row items-center px-4 py-2">
+        <TouchableOpacity>
+          <Text className="text-white text-2xl">&larr;</Text>
+        </TouchableOpacity>
+        <View className="flex-1 items-center">
+          <TouchableOpacity className="flex-row items-center">
+            <Text className="text-white text-base">Tiếng Việt</Text>
+            <Text className="text-white ml-1">▼</Text>
           </TouchableOpacity>
         </View>
-        
-        <View className="absolute bottom-10 w-full border-t border-gray-200 pt-5">
-          <TouchableOpacity 
-            className="flex-row justify-center items-center"
-            onPress={() => router.push('/auth/register')}
+      </View>
+
+      {/* Main Content */}
+      <View className="flex-1 justify-center items-center px-8">
+        {/* Logo Instagram */}
+        <View className="mb-12 bg-transparent">
+          <Image
+            source={{
+              uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Instagram_logo_2022.svg/1200px-Instagram_logo_2022.svg.png",
+            }}
+            className="w-48 h-16"
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Input Fields */}
+        <View className="w-full">
+          <View className="mb-3 w-full rounded-[20px] px-4 pt-5 pb-2 border border-[#363636] relative">
+            <Animated.View
+              style={[
+                animatedLabelStyle,
+                {
+                  position: "absolute",
+                  left: 16,
+                  zIndex: 1,
+                  backgroundColor: "#132026",
+                  paddingHorizontal: 4,
+                },
+              ]}
+            >
+              <Text className="text-[#8e8e8e]">
+                Tên người dùng, email/số di động
+              </Text>
+            </Animated.View>
+            <TextInput
+              className="text-white text-base pt-1"
+              placeholder=""
+              placeholderTextColor="transparent"
+              value={login}
+              onChangeText={(text) => {
+                setLogin(text);
+                if (text) handleFocus();
+              }}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              autoCapitalize="none"
+              style={{
+                backgroundColor: "transparent",
+                height: 40,
+              }}
+            />
+          </View>
+
+          <View className="mb-2 w-full rounded-[20px] px-4 pt-4 pb-2 border border-[#363636] relative">
+            <Animated.View
+              style={[
+                passwordAnimatedLabelStyle,
+                {
+                  position: "absolute",
+                  left: 16,
+                  zIndex: 1,
+                  backgroundColor: "#132026",
+                  paddingHorizontal: 4,
+                },
+              ]}
+            >
+              <Text className="text-[#8e8e8e]">Mật khẩu</Text>
+            </Animated.View>
+            <TextInput
+              className="text-white text-base pt-1"
+              placeholder=""
+              placeholderTextColor="transparent"
+              secureTextEntry
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (text) handlePasswordFocus();
+              }}
+              onFocus={handlePasswordFocus}
+              onBlur={handlePasswordBlur}
+              style={{
+                backgroundColor: "transparent",
+                height: 40,
+              }}
+            />
+          </View>
+        </View>
+
+        <TouchableOpacity
+          className={`w-full bg-[#0095f6] rounded-[40px] py-2.5 items-center mt-3 ${loading ? "opacity-50" : ""}`}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text className="text-white font-bold text-base">Đăng nhập</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity className="mt-8">
+          <Text className="text-[#8e8e8e] text-sm font-semibold">
+            Bạn quên mật khẩu ư?
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View className="pb-5 border-t border-[#262626]">
+        <View className="py-4 items-center px-8">
+          <TouchableOpacity
+            onPress={() => router.push("/auth/register")}
+            className="w-full rounded-[40px] border border-[#0095f6] bg-[#132026] py-2.5 items-center"
           >
-            <Text className="text-sm text-gray-500">Bạn không có tài khoản? </Text>
-            <Text className="text-blue-500 font-semibold text-sm">Đăng ký</Text>
+            <Text className="text-[#0095f6] font-semibold text-base">
+              Tạo tài khoản mới
+            </Text>
           </TouchableOpacity>
+        </View>
+
+        <View className="items-center mt-4">
+          <Text className="text-[#737373] text-sm">Beta</Text>
         </View>
       </View>
     </SafeAreaView>
   );
 }
-
-console.log(
-  'Debug classes:',
-  'bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm'
-);
