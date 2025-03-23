@@ -11,6 +11,14 @@ export default function LayoutProfile() {
         name="update" 
         options={{ title: "Update Profile", headerShown: false }} 
       />
+      <Stack.Screen 
+        name="settings" 
+        options={{ title: "Settings", headerShown: true }} 
+      />
+      <Stack.Screen 
+        name="create" 
+        options={{ title: "Create New Post", headerShown: true }} 
+      />
     </Stack>
   );
 }

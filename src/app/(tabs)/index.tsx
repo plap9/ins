@@ -1,14 +1,10 @@
 import FeedScreen from "../feed/index";
 import { SafeAreaView, View } from "react-native";
 
-
 export default function Feed() {
     return (
-        <SafeAreaView className="flex-1 bg-white">
-        <View>
+        <SafeAreaView className="flex-1 ">
             <FeedScreen/>
-        </View>
         </SafeAreaView>
     );
 }
-

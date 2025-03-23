@@ -1,15 +1,12 @@
-import { View, Text, Image, FlatList, TouchableOpacity, } from "react-native";
+import { View, Text, Image, FlatList, TouchableOpacity, ScrollView } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native";
-import posts from "../../../assets/data/posts.json";
-import PostListItem from "~/components/PostListItem";
 import { useRouter } from "expo-router";
 import HighlightsStory from "~/components/StoryList";
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useState } from "react";
-import { ScrollView } from "react-native";
 import ProfilePostList from "~/components/ProfilePostList";
+import { Feather, Ionicons, MaterialIcons, Fontisto, AntDesign } from '@expo/vector-icons';
+
 
 // Giả lập dữ liệu cho phần stories:
 const stories = [
@@ -25,15 +22,121 @@ const stories = [
   },
 ];
 
-export default function ProfileScreen() {
-  const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");  
+// Define interface for discover people items
+interface DiscoverPerson {
+  id: string;
+  name: string;
+  image: string;
+  mutualFriends: number;
+}
 
-  
-  
-  
+// Sample discover people data
+const discoverPeople: DiscoverPerson[] = [
+  {
+    id: "1",
+    name: "john_doe",
+    image: "https://randomuser.me/api/portraits/men/32.jpg",
+    mutualFriends: 5,
+  },
+  {
+    id: "2",
+    name: "jane_smith",
+    image: "https://randomuser.me/api/portraits/women/44.jpg",
+    mutualFriends: 3,
+  },
+  {
+    id: "3",
+    name: "robert_johnson",
+    image: "https://randomuser.me/api/portraits/men/45.jpg",
+    mutualFriends: 8,
+  },
+  {
+    id: "4",
+    name: "emily_wilson",
+    image: "https://randomuser.me/api/portraits/women/22.jpg",
+    mutualFriends: 2,
+  },
+  {
+    id: "5",
+    name: "michael_brown",
+    image: "https://randomuser.me/api/portraits/men/67.jpg",
+    mutualFriends: 4,
+  },
+];
+
+export default function ProfileScreen() {
+  const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");
+  const [showDiscoverPeople, setShowDiscoverPeople] = useState(false);
+  const [peopleList, setPeopleList] = useState<DiscoverPerson[]>(discoverPeople);
   const router = useRouter();
+  const username = "username_123"; // You can replace this with actual username from your data
+  
+  // Function to remove a person card
+  const removePerson = (id: string) => {
+    setPeopleList(current => current.filter(person => person.id !== id));
+  };
+  
+  // Discover People Item Component
+  const DiscoverPersonItem = ({ item }: { item: DiscoverPerson }) => {
+    return (
+      <View className="w-40 h-60 mr-3 bg-white rounded-lg border border-gray-200 relative">
+        <TouchableOpacity 
+          className="absolute right-0 top-1 z-10 w-6 h-6 items-center justify-center"
+          onPress={() => removePerson(item.id)}
+        >
+          <Feather name="x" size={14} color="grey" />
+        </TouchableOpacity>
+        <View className="items-center justify-center mt-4">
+          <Image
+            source={{ uri: item.image }}
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              overflow: 'hidden'
+            }}
+            resizeMode="cover"
+          />
+        </View>
+        <View className="p-2 items-center">
+          <Text className="font-bold" numberOfLines={1}>{item.name}</Text>
+          <Text className="text-xs text-gray-500">{item.mutualFriends} mutual friends</Text>
+          <TouchableOpacity className="bg-blue-500 rounded-lg py-2 mt-4 absolute top-16 left-2 right-2">
+            <Text className="text-white text-sm text-center font-semibold">Follow</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+  
   return (
-    <SafeAreaView className="bg-gray-100">
+    <View>
+      {/* Header */}
+      <View className="bg-white flex-row items-center justify-between px-4 py-2 border-b border-gray-200">
+        {/* Username (left side) */}
+        <TouchableOpacity onPress={() => alert("Username pressed")}>
+          <View className="flex-row items-center">
+            <Text className="text-xl font-bold">{username}</Text>
+            <Ionicons name="chevron-down" size={20} color="black" style={{ marginLeft: 5 }} />
+          </View>
+        </TouchableOpacity>
+        
+        {/* Buttons (right side) */}
+        <View className="flex-row items-center">
+          <TouchableOpacity 
+            className="mr-5" 
+            onPress={() => router.push("/profile/create")}
+          >
+            <Feather name="plus-square" size={24} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => router.push("/profile/settings")}
+          >
+            <Feather name="menu" size={24} color="black" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
       <View className="bg-white p-4">
         <StatusBar style="auto" />
         
@@ -41,7 +144,8 @@ export default function ProfileScreen() {
         <View className="flex-row items-center mb-4">
           <Image
             source={{ uri: "https://cdn-useast1.kapwing.com/static/templates/spider-man-triple-meme-template-full-a9a8b78a.webp" }}
-            className="w-20 h-20 rounded-full border border-gray-300"
+            className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
+            style={{ aspectRatio: 1 }}
           />
           <View className="flex-1 ml-4">
             {/* Stats */}
@@ -74,61 +178,78 @@ export default function ProfileScreen() {
         {/* Buttons */}
         <View className="flex-row justify-between mb-4">
           <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
-            <Text className="text-center text-black font-semibold">Chỉnh sửa</Text>
+            <Text className="text-center text-black font-semibold">Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg" onPress={() => router.push("/profile/update")}>
-            <Text className="text-center text-black font-semibold">Chia sẻ trang cá nhân</Text>
+          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
+            <Text className="text-center text-black font-semibold">Share profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12" 
+            onPress={() => setShowDiscoverPeople(!showDiscoverPeople)}
+          >
+            <AntDesign name="addusergroup" size={20} color="black" />
           </TouchableOpacity>
         </View>
         
+        {/* Discover People Section - Only visible when button is pressed */}
+        {showDiscoverPeople && (
+          <View className="mb-4">
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="font-bold text-base">Discover people</Text>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+            >
+              {peopleList.map(person => (
+                <DiscoverPersonItem key={person.id} item={person} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        
+        {/* Pagination */}
         {/* 3 button: Posts, Reels, Tags */}
-        {/* 3 nút Posts, Reels, Tags */}
-        <View className="flex-row border-t border-gray-300">
+        <View className="flex-row">
           <TouchableOpacity
             onPress={() => setActiveTab("posts")}
             className="flex-1 items-center py-2"
           >
-            <Text
-              className={`font-semibold ${
-                activeTab === "posts" ? "text-black" : "text-gray-400"
-              }`}
-            >
-              Posts
-            </Text>
+            <Fontisto 
+              name="nav-icon-grid" 
+              size={22} 
+              color={activeTab === "posts" ? "black" : "#AAAAAA"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setActiveTab("reels")}
             className="flex-1 items-center py-2"
           >
-            <Text
-              className={`font-semibold ${
-                activeTab === "reels" ? "text-black" : "text-gray-400"
-              }`}
-            >
-              Reels
-            </Text>
+            <MaterialIcons 
+              name="video-collection" 
+              size={24} 
+              color={activeTab === "reels" ? "black" : "#AAAAAA"} 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setActiveTab("tags")}
             className="flex-1 items-center py-2"
           >
-            <Text
-              className={`font-semibold ${
-                activeTab === "tags" ? "text-black" : "text-gray-400"
-              }`}
-            >
-              Tags
-            </Text>
+            <Fontisto 
+              name="hashtag" 
+              size={22} 
+              color={activeTab === "tags" ? "black" : "#AAAAAA"} 
+            />
           </TouchableOpacity>
         </View>
         
-        <View className="w-full bg-blue-600">  
+        <View className="w-full">  
           <ProfilePostList activeTab={activeTab}/>
         </View>   
          
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
