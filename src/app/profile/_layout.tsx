@@ -19,6 +19,10 @@ export default function LayoutProfile() {
         name="create" 
         options={{ title: "Create New Post", headerShown: true }} 
       />
+      <Stack.Screen
+        name="gender"
+        options={{ title: "Gender", headerShown: false }}
+      />
     </Stack>
   );
 }
