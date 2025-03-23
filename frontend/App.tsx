@@ -1,13 +1,10 @@
 import "nativewind/tailwind.css";
-
-import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>hihihi!</Text>
-      <StatusBar style="auto" />
+      <Text>Welcome to my app!</Text>
     </View>
   );
 }

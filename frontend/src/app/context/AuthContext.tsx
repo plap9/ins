@@ -1,12 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 
 type User = {
-  user_id: string;
+  id: string;
   username: string;
-  email?: string;
-  phone_number?: string;
 };
 
 type AuthData = {
@@ -17,99 +14,57 @@ type AuthData = {
 
 type AuthContextData = {
   authData: AuthData | null;
-  loading: boolean;
+  isLoading: boolean;
   signIn: (data: AuthData) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextData>({
-  authData: null,
-  loading: true, 
-  signIn: async () => {},
-  signOut: async () => {}
-});
+const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [authData, setAuthData] = useState<AuthData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadStorageData();
   }, []);
 
-  async function loadStorageData() {
+  async function loadStorageData(): Promise<void> {
     try {
       const authDataSerialized = await AsyncStorage.getItem('@AuthData');
       if (authDataSerialized) {
-        const data = JSON.parse(authDataSerialized);
+        const data = JSON.parse(authDataSerialized) as AuthData;
         setAuthData(data);
       }
-    } finally {
-      setLoading(false); 
-    }
-  }
-
-  function setupAxiosInterceptors(): void {
-    axios.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-        if (error.response?.status === 401 && !originalRequest._retry && authData) {
-          originalRequest._retry = true;
-          try {
-            const response = await axios.post<{ token: string }>('/auth/refresh-token', {
-              refreshToken: authData.refreshToken
-            });
-            const { token } = response.data;
-            
-            const newAuthData = {
-              ...authData,
-              token
-            };
-            
-            await AsyncStorage.setItem('@AuthData', JSON.stringify(newAuthData));
-            setAuthData(newAuthData);
-            
-            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-            originalRequest.headers['Authorization'] = `Bearer ${token}`;
-            
-            return axios(originalRequest);
-          } catch (refreshError) {
-            await signOut();
-            return Promise.reject(refreshError);
-          }
-        }
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  async function signIn(data: AuthData): Promise<void> {
-    await AsyncStorage.setItem('@AuthData', JSON.stringify(data));
-    
-    axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-    
-    setAuthData(data);
-  }
-
-  async function signOut(): Promise<void> {
-    try {
-      if (authData) {
-        await axios.post('/auth/logout', {
-          refreshToken: authData.refreshToken
-        });
-      }
     } catch (error) {
-      console.log(error);
+      console.log('Error loading auth data from storage:', error);
     } finally {
-      await AsyncStorage.removeItem('@AuthData');
-      delete axios.defaults.headers.common['Authorization'];
-      setAuthData(null);
+      setIsLoading(false);
     }
   }
+
+  const signIn = async (data: AuthData) => {
+    try {
+      await AsyncStorage.setItem('@AuthData', JSON.stringify(data));
+      setAuthData(data);
+    } catch (error) {
+      console.log('Error storing auth data:', error);
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await AsyncStorage.removeItem('@AuthData');
+      setAuthData(null);
+    } catch (error) {
+      console.log('Error removing auth data:', error);
+      throw error;
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ authData, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ authData, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -117,8 +72,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export function useAuth(): AuthContextData {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 }

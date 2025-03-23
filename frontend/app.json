@@ -34,6 +34,17 @@
           "photosPermission": "The app accesses your photos to let you share them with your friends."
         }
       ]
+    ],
+    "fonts": [
+      {
+        "asset": "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf"
+      },
+      {
+        "asset": "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf"
+      },
+      {
+        "asset": "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.ttf"
+      }
     ]
   }
 }
