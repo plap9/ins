@@ -1,6 +1,8 @@
-import { Text } from "react-native";
-import { Link, Redirect } from "expo-router";
+import { Redirect } from "expo-router";
+import { useAuth } from "../app/context/AuthContext";
 
-export default function Home() {
-    return <Redirect href="/(tabs)"/>;
-} 
+export default function Index() {
+  const { authData } = useAuth();
+  
+  return <Redirect href={"/auth/login"} />;
+}
