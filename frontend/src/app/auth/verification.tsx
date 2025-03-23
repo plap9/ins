@@ -6,34 +6,32 @@ import axios from 'axios';
 
 export default function VerificationScreen() {
   const params = useLocalSearchParams();
-  const [phone, setPhone] = useState(params.phone as string || '');
-  const [otp, setOtp] = useState('');
+  const [contact, setContact] = useState(params.contact as string || '');
+  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const verificationType = params.verificationType as 'email' | 'phone';
 
   useEffect(() => {
-    if (!phone) {
-      Alert.alert('Lỗi', 'Không tìm thấy số điện thoại', [
+    if (!contact || !verificationType) {
+      Alert.alert('Lỗi', 'Thiếu thông tin xác thực', [
         { text: 'OK', onPress: () => router.push('/auth/login') }
       ]);
     }
-  }, [phone]);
+  }, []);
 
   const handleVerify = async () => {
-    if (!phone || !otp) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
-      return;
-    }
-
     try {
       setLoading(true);
-      const response = await axios.post('/auth/verify-phone', {
-        phone,
-        otp
+      const endpoint = verificationType === 'email' 
+        ? '/auth/verify-email' 
+        : '/auth/verify-phone';
+
+      const response = await axios.post(endpoint, {
+        [verificationType]: contact,
+        code
       });
 
-      Alert.alert('Thành công', response.data.message, [
-        { text: 'OK', onPress: () => router.push('/auth/login') }
-      ]);
+      router.replace('/auth/login');
     } catch (error: any) {
       const message = error.response?.data?.message || 'Xác thực thất bại';
       Alert.alert('Lỗi', message);
@@ -42,23 +40,23 @@ export default function VerificationScreen() {
     }
   };
 
-  const handleResendOTP = async () => {
-    if (!phone) {
-      Alert.alert('Lỗi', 'Không tìm thấy số điện thoại');
-      return;
-    }
-
+  const handleResendCode = async () => {
     try {
       setLoading(true);
-      await axios.post('/auth/resend-otp', { phone });
-      Alert.alert('Thành công', 'Mã OTP đã được gửi lại');
+      const endpoint = verificationType === 'email' 
+        ? '/auth/resend-email' 
+        : '/auth/resend-otp';
+
+      await axios.post(endpoint, { [verificationType]: contact });
+      Alert.alert('Thành công', 'Mã xác thực đã được gửi lại');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Gửi lại OTP thất bại';
+      const message = error.response?.data?.message || 'Gửi lại thất bại';
       Alert.alert('Lỗi', message);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -76,18 +74,17 @@ export default function VerificationScreen() {
         <View className="w-full">
           <TextInput
             className="border border-gray-300 rounded-sm px-4 py-2 mb-3 w-full"
-            placeholder="Số điện thoại"
-            value={phone}
-            onChangeText={setPhone}
+            placeholder={verificationType === 'email' ? 'Email' : 'Số điện thoại'}
+            value={contact}
             keyboardType="phone-pad"
             editable={!params.phone}
           />
           
           <TextInput
             className="border border-gray-300 rounded-sm px-4 py-2 mb-3 w-full"
-            placeholder="Mã OTP"
-            value={otp}
-            onChangeText={setOtp}
+            placeholder={verificationType === 'email' ? 'Mã xác thực email' : 'Mã OTP'}
+            value={code}
+            onChangeText={setCode}
             keyboardType="number-pad"
           />
           
@@ -105,7 +102,7 @@ export default function VerificationScreen() {
           
           <TouchableOpacity 
             className="items-center my-3"
-            onPress={handleResendOTP}
+            onPress={handleResendCode}
             disabled={loading}
           >
             <Text className="text-blue-500 text-sm">Gửi lại mã OTP</Text>

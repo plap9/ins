@@ -26,13 +26,20 @@ export const registerSchema: ObjectSchema = Joi.object({
 });
 
 export const verifyPhoneSchema: ObjectSchema = Joi.object({
-    phone: Joi.string().pattern(/^\+?[84]\d{1,14}$/).required().messages({
-        "string.empty": "Số điện thoại không được để trống",
-        "string.pattern.base": "Số điện thoại không hợp lệ",
-    }),
-    otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
-        "string.empty": "Mã OTP không được để trống",
-        "string.length": "Mã OTP phải có 6 ký tự",
-        "string.pattern.base": "Mã OTP chỉ được chứa số",
-    }),
+    phone: Joi.string()
+        .pattern(/^\+84[3|5|7|8|9]\d{8}$/)
+        .required()
+        .messages({
+            "string.empty": "Số điện thoại không được để trống",
+            "string.pattern.base": "Số điện thoại phải có định dạng +84xxxxxxxxx"
+        }),
+    code: Joi.string()
+        .length(6)
+        .pattern(/^\d+$/)
+        .required()
+        .messages({
+            "string.empty": "Mã OTP không được để trống",
+            "string.length": "Mã OTP phải có đúng 6 chữ số",
+            "string.pattern.base": "Mã OTP chỉ được chứa số từ 0-9"
+        }),
 });

@@ -486,6 +486,128 @@ export const mapMediaError = (
     : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
 };
 
+export const mapLikeError = (message: string, statusCode: number): AppError => {
+  const errorMap: { [key: string] : { errorCode: ErrorCode; field?: string}} = {
+    'Người dùng chưa xác thực': {
+      errorCode: ErrorCode.USER_NOT_AUTHENTICATED,
+    },
+    'ID bài viết không hợp lệ': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'post_id'
+    },
+    'Bài viết không tồn tại': {
+      errorCode: ErrorCode.NOT_FOUND,
+      field: 'post_id'
+    },
+    'Bài viết đã được thích': {
+      errorCode: ErrorCode.INVALID_OPERATION,
+      field: 'post_id'
+    },
+    'Bài viết chưa được thích': {
+      errorCode: ErrorCode.INVALID_OPERATION,
+      field: 'post_id'
+    },
+    'Lỗi cơ sở dữ liệu': {
+      errorCode: ErrorCode.SERVER_ERROR
+    }
+  };
+
+  const error = errorMap[message];
+  return error 
+    ? new AppError(message, statusCode, error.errorCode, error.field)
+    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
+};
+
+export const mapCommentError = (message: string, statusCode: number): AppError => {
+  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string } } = {
+    'Người dùng chưa xác thực': {
+      errorCode: ErrorCode.USER_NOT_AUTHENTICATED,
+    },
+    'ID bài viết không hợp lệ': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'post_id'
+    },
+    'ID bình luận không hợp lệ': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'comment_id'
+    },
+    'Bài viết không tồn tại': {
+      errorCode: ErrorCode.NOT_FOUND,
+      field: 'post_id'
+    },
+    'Bình luận không tồn tại': {
+      errorCode: ErrorCode.NOT_FOUND,
+      field: 'comment_id'
+    },
+    "Bình luận cha không tồn tại": {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'parent_id'
+    },
+    'Nội dung bình luận không được để trống': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'content'
+    },
+    'Bạn không có quyền xóa bình luận này': {
+      errorCode: ErrorCode.INVALID_PERMISSIONS,
+      field: 'comment_id'
+    },
+    "Lỗi khi thêm bình luận" : {
+      errorCode: ErrorCode.SERVER_ERROR
+    },
+    "Banj chưa thích bình luận này" : {
+      errorCode: ErrorCode.INVALID_OPERATION,
+      field: 'comment_id'
+    },
+    "Lỗi khi bỏ bình luận": {
+      errorCode: ErrorCode.SERVER_ERROR
+    },
+    'Lỗi cơ sở dữ liệu': {
+      errorCode: ErrorCode.SERVER_ERROR
+    }
+  };
+
+  const error = errorMap[message];
+  return error 
+    ? new AppError(message, statusCode, error.errorCode, error.field)
+    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
+};
+
+export const mapPostError = (message: string, statusCode: number): AppError => {
+  const errorMap: { [key: string]: { errorCode: ErrorCode, field?: string } } = {
+    'Người dùng chưa xác thực': {
+      errorCode: ErrorCode.USER_NOT_AUTHENTICATED
+    },
+    'Bài viết phải có nội dung hoặc ít nhất một ảnh/video': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'content'
+    },
+    'Chỉ hỗ trợ ảnh và video': {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'media'
+    },
+    'Lỗi cơ sở dữ liệu': {
+      errorCode: ErrorCode.SERVER_ERROR
+    },
+    "Tham số 'page' không hợp lệ": {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'page'
+    },
+    "Tham số 'limit' không hợp lệ": {
+      errorCode: ErrorCode.VALIDATION_ERROR,
+      field: 'limit'
+    },
+    "Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại": {
+      errorCode: ErrorCode.INVALID_PERMISSIONS,
+      field: 'post_id'
+    }
+  };
+
+  const error = errorMap[message];
+  return error 
+    ? new AppError(message, statusCode, error.errorCode, error.field)
+    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
+}
+
 export const errorHandler = (
   err: any,
   req: Request,

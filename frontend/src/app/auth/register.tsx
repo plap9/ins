@@ -24,23 +24,24 @@ export default function RegisterScreen() {
         password
       });
 
-      Alert.alert('Thành công', response.data.message, [
-        { 
-          text: 'OK', 
-          onPress: () => {
-            const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-            if (isEmail) {
-              Alert.alert('Thông báo', 'Vui lòng kiểm tra email để xác thực tài khoản');
-              router.push('/auth/login');
-            } else {
-              router.push({
-                pathname: '/auth/verification',
-                params: { phone: contact }
-              });
-            }
-          } 
-        }
-      ]);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+      if (isEmail) {
+        router.push({
+          pathname: '/auth/verification',
+          params: { 
+            contact: contact,
+            verificationType: 'email' 
+          }
+        });
+      } else {
+        router.push({
+          pathname: '/auth/verification',
+          params: { 
+            contact: contact,
+            verificationType: 'phone' 
+          }
+        });
+      }
     } catch (error: any) {
       const message = error.response?.data?.message || 'Đăng ký thất bại';
       Alert.alert('Lỗi', message);

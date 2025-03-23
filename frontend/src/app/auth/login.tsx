@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import  { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '~/context/AuthContext';
 import axios from 'axios';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 axios.defaults.baseURL = 'http://192.168.1.31:5000';
 axios.defaults.headers.post['Content-Type'] = 'application/json';
@@ -62,17 +63,18 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <View className="flex-1 items-center justify-center px-5">
+      <View className="flex-1 items-center px-5 mt-20">
         <Image 
           source={require('../../../assets/instagram-logo.png')} 
-          className="w-48 h-16 mb-10" 
+          className="w-48 h-48 mb-16" 
           resizeMode="contain"
         />
         
-        <View className="w-full">
+        <View className="w-full space-y-2">
           <TextInput
-            className="border border-gray-300 rounded-sm px-4 py-2 mb-3 w-full"
-            placeholder="Email hoặc số điện thoại"
+            className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm"
+            placeholder="Số điện thoại, tên người dùng hoặc email"
+            placeholderTextColor="#8e8e8e"
             value={login}
             onChangeText={setLogin}
             autoCapitalize="none"
@@ -81,8 +83,9 @@ export default function LoginScreen() {
           />
           
           <TextInput
-            className="border border-gray-300 rounded-sm px-4 py-2 mb-3 w-full"
+            className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm"
             placeholder="Mật khẩu"
+            placeholderTextColor="#8e8e8e"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -90,33 +93,38 @@ export default function LoginScreen() {
           />
           
           <TouchableOpacity 
-            className="bg-blue-500 rounded-sm py-3 items-center mb-3 w-full"
+            className="bg-blue-500 rounded-lg py-3 items-center mt-4"
             onPress={handleLogin}
             disabled={loading}
-            accessibilityLabel="Đăng nhập"
           >
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-semibold">Đăng nhập</Text>
+              <Text className="text-white font-semibold text-sm">Đăng nhập</Text>
             )}
           </TouchableOpacity>
           
-          <TouchableOpacity 
-            className="items-center my-3"
-            onPress={() => Alert.alert('Thông báo', 'Chức năng đang phát triển')}
-          >
-            <Text className="text-blue-500 text-sm">Quên mật khẩu?</Text>
+          <View className="flex-row items-center justify-center space-x-2 my-6">
+            <View className="flex-1 h-px bg-gray-200" />
+            <Text className="text-gray-500 text-sm font-semibold">HOẶC</Text>
+            <View className="flex-1 h-px bg-gray-200" />
+          </View>
+
+          <TouchableOpacity className="items-center mb-6">
+            <Text className="text-blue-900 text-sm font-semibold">Đăng nhập bằng Facebook</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity className="items-center">
+            <Text className="text-gray-500 text-xs">Quên mật khẩu?</Text>
           </TouchableOpacity>
         </View>
         
-        <View className="absolute bottom-10 w-full border-t border-gray-300 pt-5">
+        <View className="absolute bottom-10 w-full border-t border-gray-200 pt-5">
           <TouchableOpacity 
             className="flex-row justify-center items-center"
             onPress={() => router.push('/auth/register')}
-            accessibilityLabel="Chuyển đến đăng ký"
           >
-            <Text className="text-sm">Bạn chưa có tài khoản? </Text>
+            <Text className="text-sm text-gray-500">Bạn không có tài khoản? </Text>
             <Text className="text-blue-500 font-semibold text-sm">Đăng ký</Text>
           </TouchableOpacity>
         </View>

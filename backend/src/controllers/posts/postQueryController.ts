@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { cachePostList, getCachePostsList } from "../../utils/cacheUtils";
 
@@ -18,9 +18,9 @@ export const getPosts = async (req: Request, res: Response, next: NextFunction):
             return;
         }
 
-        if (isNaN(page) || page < 1) return next(new AppError("Tham số 'page' không hợp lệ.", 400));
-        if (isNaN(limit) || limit < 1 || limit > 100) return next(new AppError("Tham số 'limit' không hợp lệ (phải từ 1 đến 100).", 400));
-        if (user_id !== undefined && isNaN(user_id)) return next(new AppError("Tham số 'user_id' không hợp lệ.", 400));
+        if (isNaN(page) || page < 1) return next(new AppError("Tham số 'page' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR, "page"));
+        if (isNaN(limit) || limit < 1 || limit > 100) return next(new AppError("Tham số 'limit' không hợp lệ (phải từ 1 đến 100).", 400, ErrorCode.VALIDATION_ERROR, "limit"));
+        if (user_id !== undefined && isNaN(user_id)) return next(new AppError("Tham số 'user_id' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
 
         let sqlQuery = `
             SELECT
@@ -71,10 +71,10 @@ export const deletePost = async (req: AuthRequest, res: Response, next: NextFunc
     const connection = await pool.getConnection();
     try {
         const post_id = parseInt(req.params.id, 10);
-        if (isNaN(post_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400));
+        if (isNaN(post_id)) return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
 
         const user_id = req.user?.user_id;
-        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401));
+        if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [checkRows] = await connection.query<RowDataPacket[]>(
             "SELECT post_id FROM posts WHERE post_id = ? AND user_id = ?",
@@ -82,7 +82,7 @@ export const deletePost = async (req: AuthRequest, res: Response, next: NextFunc
         );
 
         if (checkRows.length === 0) {
-            return next(new AppError("Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại.", 403));
+            return next(new AppError("Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại.", 403, ErrorCode.INVALID_PERMISSIONS));
         }
 
         await connection.beginTransaction();
