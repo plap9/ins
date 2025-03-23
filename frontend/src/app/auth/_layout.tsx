@@ -9,6 +9,8 @@ export default function AuthLayout() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="verification" />
+      <Stack.Screen name="forgotPassword" />
+      <Stack.Screen name="resendVerification" />
     </Stack>
   );
 }

@@ -3,82 +3,63 @@ import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
 import { AppError, ErrorCode } from "../../middlewares/errorHandler";
 
-export const verifyEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const verifyAccount = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction(); 
+        await connection.beginTransaction();
 
-        const { code } = req.body;
-        if (!code) {
-            throw new AppError("Thiếu token xác thực", 400, ErrorCode.MISSING_TOKEN);
+        const { contact, code, verificationType } = req.body;
+        
+        if (!contact || !code || !verificationType) {
+            throw new AppError("Thiếu thông tin xác thực", 400, ErrorCode.MISSING_CREDENTIALS);
         }
 
+        if (!['email', 'phone'].includes(verificationType)) {
+            throw new AppError("Loại xác thực không hợp lệ", 400, ErrorCode.INVALID_OTP);
+        }
+
+        const verificationConfig = {
+            email: {
+                codeField: 'email_verification_code',
+                expiresField: 'email_verification_expires',
+                verifiedField: 'email_verified',
+                contactField: 'email'
+            },
+            phone: {
+                codeField: 'phone_verification_code',
+                expiresField: 'phone_verification_expires',
+                verifiedField: 'phone_verified',
+                contactField: 'phone_number'
+            }
+        }[verificationType as 'email' | 'phone'];
+
         const [users]: any = await connection.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE email_verification_code = ? AND email_verification_expires > NOW() FOR UPDATE",
-            [code]
+            `SELECT user_id FROM users 
+            WHERE ${verificationConfig.contactField} = ? 
+            AND ${verificationConfig.codeField} = ? 
+            AND ${verificationConfig.expiresField} > NOW() 
+            FOR UPDATE`,
+            [contact, code]
         );
 
         if (users.length === 0) {
-            throw new AppError("Token không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
+            throw new AppError("Mã xác thực không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
         }
 
         const userId = users[0].user_id;
 
         await connection.query(
             `UPDATE users 
-             SET email_verified = 1, 
-                 email_verification_code = NULL, 
-                 email_verification_expires = NULL, 
-                 is_verified = 1
-             WHERE user_id = ?`,
+            SET ${verificationConfig.verifiedField} = 1,
+                ${verificationConfig.codeField} = NULL,
+                ${verificationConfig.expiresField} = NULL,
+                is_verified = 1 
+            WHERE user_id = ?`,
             [userId]
         );
 
-        await connection.commit(); 
-
-        res.json({ message: "Xác thực email thành công!" });
-    } catch (error) {
-        await connection.rollback(); 
-        next(error);
-    } finally {
-        connection.release();
-    }
-};
-
-export const verifyPhone = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction(); 
-
-        const { phone, code } = req.body;
-        if (!phone || !code) {
-            throw new AppError("Thiếu số điện thoại hoặc mã OTP", 400, ErrorCode.MISSING_CREDENTIALS);
-        }
-
-        const [users]: any = await connection.query<RowDataPacket[]>(
-            "SELECT user_id FROM users WHERE phone_number = ? AND phone_verification_code = ? AND phone_verification_expires > NOW() FOR UPDATE",
-            [phone, code]
-        );
-
-        if (users.length === 0) {
-            throw new AppError("Mã OTP không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
-        }
-
-        const userId = users[0].user_id;
-
-        await connection.query(
-            `UPDATE users 
-             SET phone_verified = 1, 
-                 phone_verification_code = NULL, 
-                 phone_verification_expires = NULL, 
-                 is_verified = 1
-             WHERE user_id = ?`,
-            [userId]
-        );
-
-        await connection.commit(); 
-
-        res.json({ message: "Xác thực số điện thoại thành công!" });
+        await connection.commit();
+        res.json({ message: `Xác thực ${verificationType} thành công!` });
     } catch (error) {
         await connection.rollback();
         next(error);
