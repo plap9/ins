@@ -1,14 +1,10 @@
-
-import { View, SafeAreaView } from "react-native";
+import { View } from "react-native";
 import ReelsScreen from "../reels";
 
 export default function Reels() {
     return (
-    <SafeAreaView className="">
-        <View>
+        <View className="flex-1">
             <ReelsScreen/>
         </View>
-    </SafeAreaView>
     );
 }
-

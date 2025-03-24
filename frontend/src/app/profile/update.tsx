@@ -2,6 +2,7 @@ import { View, Text, TextInput, Image, TouchableOpacity, Pressable, SafeAreaView
 import { useState } from "react";
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from "expo-router";
+import { MaterialIcons } from '@expo/vector-icons';
 
 
 export default function UpdateProfile() {
@@ -33,9 +34,9 @@ export default function UpdateProfile() {
             {/* Nút quay về Profile */}
             <Pressable
                   onPress={() => router.back()}
-                  className="mt-4 bg-gray-500 p-3 rounded-lg"
+                  className="py-2"
               >
-                  <Text className="text-white font-semibold">Go Back</Text>
+                  <MaterialIcons name="arrow-back-ios" size={24} color="black" />
               </Pressable>
         {/* Avatar Image Picker */}
           <View className="items-center mb-4">
@@ -53,7 +54,7 @@ export default function UpdateProfile() {
         </View>
 
         {/* Form */}
-        <View className="border-t border-gray-200 py-4">
+        <View className="py-4">
           {/* Hàng Form */}
           <View className="flex-row py-2">
             <Text className="w-1/3 text-gray-600 font-medium">Username</Text>
@@ -85,15 +86,14 @@ export default function UpdateProfile() {
               className="flex-1 p-2 border-b border-gray-200"
             />
           </View>
-
           <View className="flex-row border-b border-gray-200 py-2 pb-6">
             <Text className="w-1/3 text-gray-600 font-medium">Gender</Text>
-            <TextInput
-              placeholder="Enter gender"
-              value={gender}
-              onChangeText={setGender}
+            <Pressable
+              onPress={() => router.push("/profile/gender")}
               className="flex-1 p-2 border-b border-gray-200"
-            />
+            >
+            <Text className="text-gray-500">{gender|| "Select gender"}</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -105,5 +105,3 @@ export default function UpdateProfile() {
     </SafeAreaView>
   );
 }
-
-

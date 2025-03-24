@@ -1,4 +1,4 @@
-import { FlatList, SafeAreaView } from "react-native";
+import { FlatList, SafeAreaView, Alert, Image, ScrollView, Dimensions } from "react-native";
 import PostListItem from "../../components/PostListItem";
 import posts from "../../../assets/data/posts.json";
 import React, { useState } from "react";
@@ -7,85 +7,155 @@ import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5 } from '@expo
 
 import { useRouter } from "expo-router";
 
+// Define interface for story items
+interface StoryItemType {
+  id: string;
+  username: string;
+  image: string;
+  hasStory: boolean;
+  isYourStory?: boolean;
+  isOpened?: boolean;
+}
+
+// Sample story data
+const storyData: StoryItemType[] = [
+  { id: '1', username: 'Your Story', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: false, isYourStory: true, isOpened: false },
+  { id: '2', username: 'doanthang', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: true },
+  { id: '3', username: 'lappham', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: true },
+  { id: '4', username: 'vuong.quoc_echs', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '5', username: 'echxanh', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '6', username: 'jes.ech', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '7', username: 'pepefrog', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+];
+
+// Story Item Component
+const StoryItem = ({ item }: { item: StoryItemType }) => {
+  const handleStoryPress = () => {
+    Alert.alert('Story Opened', `Opening ${item.username}'s story`);
+  };
+
+  return (
+    <TouchableOpacity 
+      className="items-center mx-2" 
+      onPress={handleStoryPress}
+    >
+      <View className={`w-24 aspect-square rounded-full  ${item.hasStory ? (item.isOpened ? 'border-pink-500 border-2' : 'border-gray-300 border-2') : ''} p-[2px]`}>
+        <Image 
+          source={{ uri: item.image }} 
+          className="h-full w-full rounded-full" 
+        />
+        {item.isYourStory && (
+          <View className="absolute bottom-0 right-0 bg-blue-500 rounded-full h-5 w-5 items-center justify-center border-2 border-white">
+            <AntDesign name="plus" size={12} color="white" />
+          </View>
+        )}
+      </View>
+      <Text className="text-xs mt-1 max-w-16 text-center" numberOfLines={1}>
+        {item.username}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
 export default function FeedScreen() {
     const router = useRouter();
     const [modalVisible, setModalVisible] = useState<boolean>(false);
+    const screenWidth = Dimensions.get('window').width;
+    
     return (
-    <SafeAreaView>
+    <View className="flex-1 bg-white">
+        <View className="flex-1">
             {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-200">
-            {/* Nút bên trái: chữ Instagram */}
-            <TouchableOpacity onPress={() => setModalVisible(true)}>
-                <View className="flex-row items-center gap-1">
-                    <Text className="text-3xl font-bold">Instagram</Text>
-                    <Entypo name="chevron-small-down" size={24} color="black" className="mt-1"/>
+            <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">
+                {/* Nút bên trái: chữ Instagram */}
+                <TouchableOpacity onPress={() => setModalVisible(true)}>
+                    <View className="flex-row items-center">
+                        <Text className="text-2xl font-bold">Instagram</Text>
+                        <Entypo name="chevron-small-down" size={20} color="black" style={{ marginTop: 2 }} />
+                    </View>
+                </TouchableOpacity>
+
+                {/* Nút bên phải: Notifications và Messages */}
+                <View className="flex-row">
+                    <TouchableOpacity 
+                        className="px-3"
+                        onPress={() => router.push("/feed/notification")}
+                    >
+                        <Feather name="heart" size={24} color="black" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={() => router.push("/feed/listmessage")}
+                    >
+                        <AntDesign name="message1" size={24} color="black" />
+                    </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
-
-            {/* Nút bên phải: Notifications và Messages */}
-            <View className="flex-row gap-8">
-            <TouchableOpacity onPress={() => router.push("/feed/notification")}>
-                <Feather name="heart" size={24} color="black" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/feed/listmessage")}>
-                <AntDesign name="message1" size={24} color="black" />
-            </TouchableOpacity>
             </View>
-        </View>
 
-        {/* Modal hiển thị khi bấm vào chữ "Instagram" */}
-        <Modal
-            visible={modalVisible}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setModalVisible(false)}
-        >
-            {/* Nút bấm ngoài modal để đóng */}
-            <TouchableOpacity
-            className="flex-1"
-            onPress={() => setModalVisible(false)}
+            {/* Stories Section */}
+            <View className="py-2 border-b border-gray-100">
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 8 }}
+                >
+                    {storyData.map(item => (
+                        <StoryItem key={item.id} item={item} />
+                    ))}
+                </ScrollView>
+            </View>
+
+            {/* Modal hiển thị khi bấm vào chữ "Instagram" */}
+            <Modal
+                visible={modalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setModalVisible(false)}
             >
-            {/* Nội dung modal */}
-            <View className="absolute mt-28 left-4 bg-white p-4 rounded-lg shadow-lg">
+                {/* Nút bấm ngoài modal để đóng */}
                 <TouchableOpacity
-                onPress={() => {
-                    // Xử lý "Đang theo dõi"
-                    setModalVisible(false);
-                }}
+                    style={{ flex: 1 }}
+                    activeOpacity={1}
+                    onPress={() => setModalVisible(false)}
                 >
-                <View className="flex-row items-center gap-3">
-                    <SimpleLineIcons name="user-following" size={20} color="black" />
-                    <Text className="text-lg">Đang theo dõi</Text>
-                </View>
+                    {/* Nội dung modal */}
+                    <View className="absolute mt-28 left-4 bg-white p-4 rounded-lg shadow-lg" style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 }}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                // Xử lý "Đang theo dõi"
+                                setModalVisible(false);
+                            }}
+                        >
+                            <View className="flex-row items-center gap-3">
+                                <SimpleLineIcons name="user-following" size={20} color="black" />
+                                <Text className="text-lg">Đang theo dõi</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => {
+                                // Xử lý "Yêu thích"
+                                setModalVisible(false);
+                            }}
+                            className="mt-2"
+                        >
+                            <View className="flex-row items-center gap-3">
+                                <FontAwesome5 name="star" size={22} color="black" />
+                                <Text className="text-lg">Yêu thích</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 </TouchableOpacity>
-                <TouchableOpacity
-                onPress={() => {
-                    // Xử lý "Yêu thích"
-                    setModalVisible(false);
+            </Modal>
+            
+            {/* Danh sách bài post */}
+            <FlatList
+                data={posts}
+                renderItem={({item}) => <PostListItem posts={item} />}
+                contentContainerStyle={{
+                    gap: 10,
                 }}
-                className="mt-2"
-                >
-                <View className="flex-row items-center gap-3">
-                    <FontAwesome5 name="star" size={22} color="black" />
-                    <Text className="text-lg">Yêu thích</Text>
-                </View>
-                </TouchableOpacity>
-            </View>
-            </TouchableOpacity>
-        </Modal>
-        {/* Danh sách bài post */}
-        <FlatList
-            data={posts}
-            className="bg-white "
-            renderItem={({item}) => <PostListItem posts={item} />}
-            contentContainerStyle={{
-                gap: 10,
-                alignItems: "center",
-                width: "100%",
-            }}
-            showsVerticalScrollIndicator={false}
-        />
-    </SafeAreaView>
+                showsVerticalScrollIndicator={false}
+            />
+        </View>
+    </View>
     );
 }
-

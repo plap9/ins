@@ -35,6 +35,9 @@ const NewMessage = () => {
     user.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Check if we should show the create group button (2 or more users selected)
+  const showCreateGroupButton = selectedUsers.length >= 2;
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
@@ -42,7 +45,7 @@ const NewMessage = () => {
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialIcons name="keyboard-arrow-left" size={24} color="black" />
         </TouchableOpacity>
-        <Text className="text-lg font-bold">New Message</Text>
+        <Text className="text-lg font-bold">New Group</Text>
         <View style={{ width: 24 }} /> {/* Để căn giữa title */}
       </View>
 
@@ -99,15 +102,17 @@ const NewMessage = () => {
         }}
       />
 
-      {/* Nút tạo nhóm */}
-      <View className="p-4">
-        <TouchableOpacity
-          className="bg-blue-500 p-4 rounded-full items-center"
-          onPress={() => alert("Create Group Succesfully")}
-        >
-          <Text className="text-white font-bold">Create Group</Text>
-        </TouchableOpacity>
-      </View>      
+      {/* Nút tạo nhóm - chỉ hiển thị khi chọn từ 2 người trở lên */}
+      {showCreateGroupButton && (
+        <View className="p-4">
+          <TouchableOpacity
+            className="bg-blue-500 p-4 rounded-full items-center"
+            onPress={() => alert("Create Group Successfully")}
+          >
+            <Text className="text-white font-bold">Create Group</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
