@@ -130,7 +130,7 @@ export default function ProfileScreen() {
             <Feather name="plus-square" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity 
-            onPress={() => router.push("/profile/settings")}
+            onPress={() => router.push("/profile/settingsscreen")}
           >
             <Feather name="menu" size={24} color="black" />
           </TouchableOpacity>

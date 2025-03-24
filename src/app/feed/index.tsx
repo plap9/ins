@@ -19,13 +19,13 @@ interface StoryItemType {
 
 // Sample story data
 const storyData: StoryItemType[] = [
-  { id: '1', username: 'Your Story', image: 'https://randomuser.me/api/portraits/men/32.jpg', hasStory: false, isYourStory: true, isOpened: false },
-  { id: '2', username: 'john_doe', image: 'https://randomuser.me/api/portraits/men/43.jpg', hasStory: true, isOpened: true },
-  { id: '3', username: 'jane_smith', image: 'https://randomuser.me/api/portraits/women/45.jpg', hasStory: true, isOpened: true },
-  { id: '4', username: 'mike_jones', image: 'https://randomuser.me/api/portraits/men/29.jpg', hasStory: true, isOpened: false },
-  { id: '5', username: 'sara_lee', image: 'https://randomuser.me/api/portraits/women/30.jpg', hasStory: true, isOpened: false },
-  { id: '6', username: 'alex_wong', image: 'https://randomuser.me/api/portraits/men/36.jpg', hasStory: true, isOpened: false },
-  { id: '7', username: 'emma_clark', image: 'https://randomuser.me/api/portraits/women/33.jpg', hasStory: true, isOpened: false },
+  { id: '1', username: 'Your Story', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: false, isYourStory: true, isOpened: false },
+  { id: '2', username: 'doanthang', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: true },
+  { id: '3', username: 'lappham', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: true },
+  { id: '4', username: 'vuong.quoc_echs', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '5', username: 'echxanh', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '6', username: 'jes.ech', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
+  { id: '7', username: 'pepefrog', image: 'https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp', hasStory: true, isOpened: false },
 ];
 
 // Story Item Component

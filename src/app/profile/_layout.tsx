@@ -12,16 +12,16 @@ export default function LayoutProfile() {
         options={{ title: "Update Profile", headerShown: false }} 
       />
       <Stack.Screen 
-        name="settings" 
-        options={{ title: "Settings", headerShown: true }} 
-      />
-      <Stack.Screen 
         name="create" 
         options={{ title: "Create New Post", headerShown: true }} 
       />
       <Stack.Screen
         name="gender"
         options={{ title: "Gender", headerShown: false }}
+      />
+      <Stack.Screen
+        name="settingsscreen"
+        options={{ title: "Settings", headerShown: false }}
       />
     </Stack>
   );

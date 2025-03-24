@@ -21,7 +21,19 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      {/* Set all headers to hidden by default */}
+      <Stack 
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right"
+        }}
+      >
+        {/* Explicitly set all profile routes to have no header */}
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/index" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/settingsscreen" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/settingsscreen/index" options={{ headerShown: false }} />
+      </Stack>
       <StatusBar style="auto" />
     </SafeAreaProvider>
   );
