@@ -13,9 +13,7 @@ import { router } from "expo-router";
 import axios from "axios";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Animated, Easing } from "react-native";
-
-axios.defaults.baseURL = "http://192.168.1.31:5000";
-axios.defaults.headers.post["Content-Type"] = "application/json";
+import apiClient from "~/services/apiClient";
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState("");
@@ -43,7 +41,7 @@ export default function RegisterScreen() {
 
     try {
       setLoading(true);
-      await axios.post("/auth/register", {
+      await apiClient.post("/auth/register", {
         username,
         contact,
         password,

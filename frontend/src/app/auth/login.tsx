@@ -14,9 +14,8 @@ import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Animated, Easing } from "react-native";
-
-axios.defaults.baseURL = "http://192.168.1.31:5000";
-axios.defaults.headers.post["Content-Type"] = "application/json";
+import apiClient from "~/services/apiClient";
+import { ErrorCode } from "@backend-types/errorCode"
 
 export default function LoginScreen() {
   const [login, setLogin] = useState("");
@@ -42,7 +41,7 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
-      const response = await axios.post<{
+      const response = await apiClient.post<{
         token?: string;
         refreshToken?: string;
         user?: any;

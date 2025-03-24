@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import pool from "../../config/db";
-import { AppError,ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 import { cacheUtils } from "../../config/redis";
 
 export const refreshToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

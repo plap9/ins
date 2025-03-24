@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError, ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 
 export const verifyAccount = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();

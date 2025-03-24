@@ -2,7 +2,8 @@ import { NextFunction, Response } from 'express';
 import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { AppError, ErrorCode } from '../../../middlewares/errorHandler';
+import { AppError } from '../../../middlewares/errorHandler';
+import { ErrorCode } from '../../../types/errorCode';
 import { Pool, PoolConnection} from 'mysql2/promise';
 import { getCachedCommentLikes, getCachedComments, invalidateCommentCache, invalidateCommentsCache, cacheComments, invalidateCommentLikesCache, cacheCommentLikes} from '../../../utils/cacheUtils';
 

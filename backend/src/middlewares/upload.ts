@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { Request } from "express";
 import { AppError } from "./errorHandler";
+import { ErrorCode } from "../types/errorCode";
 
 dotenv.config();
 
@@ -23,7 +24,7 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallb
     if (allowedTypes.includes(fileExt)) {
         cb(null, true);
     } else {
-        cb(new AppError("Chỉ hỗ trợ các định dạng JPG, JPEG, PNG, MP4, MOV", 400));
+        cb(new AppError("Chỉ hỗ trợ các định dạng JPG, JPEG, PNG, MP4, MOV", 400, ErrorCode.VALIDATION_ERROR));
     }
 };
 

@@ -2,7 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../../config/db";
-import { AppError, ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 import { redisClient, cacheUtils } from "../../config/redis";
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
