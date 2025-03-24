@@ -2,7 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import pool from "../../config/db";
-import { AppError, ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 import { emailQueue, redisClient, smsQueue } from "../../config/redis";
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

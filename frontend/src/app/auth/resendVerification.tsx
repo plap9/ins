@@ -13,15 +13,12 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { Animated, Easing } from 'react-native';
-
-axios.defaults.baseURL = 'http://192.168.1.31:5000';
-axios.defaults.headers.post['Content-Type'] = 'application/json';
+import apiClient from '~/services/apiClient';
 
 export default function ResendVerificationScreen() {
   const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Animation refs
   const contactLabelPosition = useRef(new Animated.Value(0)).current;
   const contactLabelSize = useRef(new Animated.Value(1)).current;
   const [isFocusedContact, setIsFocusedContact] = useState(false);
@@ -34,7 +31,7 @@ export default function ResendVerificationScreen() {
 
     try {
       setLoading(true);
-      const response = await axios.post<{ 
+      const response = await apiClient.post<{ 
         message: string;
         verificationType: string;
       }>('/auth/resend-verification', { contact });
@@ -63,7 +60,6 @@ export default function ResendVerificationScreen() {
     }
   };
 
-  // Animation handlers
   const handleContactFocus = () => {
     setIsFocusedContact(true);
     Animated.parallel([
@@ -121,7 +117,6 @@ export default function ResendVerificationScreen() {
     <SafeAreaView className="flex-1 bg-[#132026]">
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
       <View className="flex-row items-center px-4 py-2">
         <TouchableOpacity onPress={() => router.back()}>
           <Text className="text-white text-2xl">&larr;</Text>
@@ -134,7 +129,6 @@ export default function ResendVerificationScreen() {
         </View>
       </View>
 
-      {/* Main Content */}
       <View className="flex-1 justify-center items-center px-8">
         <Image
           source={{ uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Instagram_logo_2022.svg/1200px-Instagram_logo_2022.svg.png" }}
@@ -150,7 +144,6 @@ export default function ResendVerificationScreen() {
           Nhập email hoặc số điện thoại đã đăng ký để nhận mã mới
         </Text>
 
-        {/* Contact Input */}
         <View className="w-full mb-6">
           <View className="rounded-[20px] border border-[#363636] px-4 pt-5 pb-2 relative">
             <Animated.View
@@ -182,7 +175,6 @@ export default function ResendVerificationScreen() {
           </View>
         </View>
 
-        {/* Resend Button */}
         <TouchableOpacity
           className={`w-full bg-[#0095f6] rounded-[40px] py-3 items-center mb-4 ${loading ? 'opacity-50' : ''}`}
           onPress={handleResend}
@@ -205,7 +197,6 @@ export default function ResendVerificationScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Footer */}
       <View className="pb-5 border-t border-[#262626]">
         <View className="py-4 items-center px-8">
           <TouchableOpacity

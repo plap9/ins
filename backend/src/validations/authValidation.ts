@@ -86,10 +86,18 @@ export const verifySchema: ObjectSchema = Joi.object({
   });
   
   export const resetPasswordSchema = Joi.object({
-    contact: Joi.string().required(),
-    code: Joi.string().length(6).required(),
+    contact: Joi.string().required().messages({
+      "string.empty": "Email/số điện thoại không được để trống"
+    }),
+    code: Joi.string().length(6).required().messages({
+      "string.empty": "Mã xác thực không được để trống",
+      "string.length": "Mã xác thực phải có 6 chữ số"
+    }),
     newPassword: Joi.string()
       .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
-      .required(),
-    verificationType: Joi.string().valid('email', 'phone').required()
+      .required()
+      .messages({
+        "string.pattern.base": "Mật khẩu phải chứa ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt",
+        "string.empty": "Mật khẩu không được để trống"
+      })
   });

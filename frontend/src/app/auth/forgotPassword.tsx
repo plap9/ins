@@ -13,9 +13,7 @@ import { router } from "expo-router";
 import axios from "axios";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Animated, Easing } from "react-native";
-
-axios.defaults.baseURL = 'http://192.168.1.31:5000';
-axios.defaults.headers.post['Content-Type'] = 'application/json';
+import apiClient from "~/services/apiClient";
 
 export default function ForgotPasswordScreen() {
   const [contact, setContact] = useState("");
@@ -45,7 +43,7 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
       
-      const response = await axios.post<{ message: string }>("/auth/forgot-password", { contact: contact});
+      const response = await apiClient.post<{ message: string }>("/auth/forgot-password", { contact: contact});
       
       Alert.alert("Thành công", response.data.message);
       setStep(2);
@@ -63,6 +61,9 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleResetPassword = async () => {
+
+    console.log("[DEBUG] Bắt đầu xử lý reset password...");
+    console.log("[DEBUG] Dữ liệu đầu vào:", { contact, code, newPassword });
     if (!code || !newPassword) {
       Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
       return;
@@ -74,14 +75,22 @@ export default function ForgotPasswordScreen() {
       );
       return;
     }
+
+    console.log('Reset Password Payload:', { 
+      contact, 
+      code, 
+      newPassword: '****', 
+      verificationType: isEmail ? 'email' : 'phone' 
+    });
     try {
       setLoading(true);
-      const response = await axios.post<{ message: string}>("/auth/reset-password", {
+      const response = await apiClient.post<{ message: string}>("/auth/reset-password", {
         contact,
         code,
         newPassword,
-        verificationType: isEmail ? 'email' : 'phone'
       });
+
+      console.log('Reset Password Response:', response.data);
 
       Alert.alert("Thành công", response.data.message, [
         { text: "Đăng nhập", onPress: () => router.replace("/auth/login") }

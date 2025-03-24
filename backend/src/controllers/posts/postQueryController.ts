@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError, ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { cachePostList, getCachePostsList } from "../../utils/cacheUtils";
 

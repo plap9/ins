@@ -13,9 +13,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { Animated, Easing } from 'react-native';
-
-axios.defaults.baseURL = 'http://192.168.1.31:5000';
-axios.defaults.headers.post['Content-Type'] = 'application/json';
+import apiClient from '~/services/apiClient';
 
 export default function VerificationScreen() {
   const params = useLocalSearchParams();
@@ -24,7 +22,6 @@ export default function VerificationScreen() {
   const contact = params.contact as string;
   const verificationType = params.verificationType as 'email' | 'phone';
 
-  // Animation refs
   const codeLabelPosition = useRef(new Animated.Value(0)).current;
   const codeLabelSize = useRef(new Animated.Value(1)).current;
   const [isFocusedCode, setIsFocusedCode] = useState(false);
@@ -40,7 +37,7 @@ export default function VerificationScreen() {
   const handleVerify = async () => {
     try {
       setLoading(true);
-      const response = await axios.post('/auth/verify', {
+      const response = await apiClient.post('/auth/verify', {
         contact,
         code,
         verificationType
@@ -68,7 +65,7 @@ export default function VerificationScreen() {
   const handleResendCode = async () => {
     try {
       setLoading(true);
-      const response = await axios.post('/auth/resend-verification', { 
+      const response = await apiClient.post('/auth/resend-verification', { 
         contact,
         verificationType 
       });

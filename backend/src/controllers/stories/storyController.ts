@@ -2,7 +2,8 @@ import { NextFunction, Response } from "express";
 import pool from "../../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError, ErrorCode } from "../../middlewares/errorHandler";
+import { AppError } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
 
 export const createStory = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
