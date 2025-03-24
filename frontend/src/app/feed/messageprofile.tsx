@@ -1,136 +1,38 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Modal,
-  Pressable,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Pressable, } from "react-native";
 import { Avatar } from "react-native-elements";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  MaterialIcons,
-  Ionicons,
-  Feather,
-  FontAwesome,
-} from "@expo/vector-icons";
+import { FontAwesome5, Ionicons, Feather, FontAwesome, MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+
+// Import modal components
+import NotificationModal from "~/components/NotificationModal";
+import OptionsModal from "~/components/OptionsModal";
+
 
 const ProfileScreen = () => {
+
+  const router = useRouter();
+
   // State cho modal Thông báo và Tùy chọn
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
 
   // State cho các toggle trong modal Thông báo
-  const [messageNotification, setMessageNotification] = useState(true);
-  const [callNotification, setCallNotification] = useState(true);
-  const [previewNotification, setPreviewNotification] = useState(true);
+  const [messageNotification, setMessageNotification] = useState(false);
+  const [callNotification, setCallNotification] = useState(false);
+  const [previewNotification, setPreviewNotification] = useState(false);
 
   // State cho pagination
   const [selectedTab, setSelectedTab] = useState<"shared" | "sent">("shared");
 
-  // Modal Thông báo
-  const renderNotificationModal = () => (
-    <Modal
-      transparent
-      animationType="none"
-      visible={showNotificationModal}
-      onRequestClose={() => setShowNotificationModal(false)}
-    >
-      <Pressable
-        className="flex-1 justify-end bg-black/30"
-        onPress={() => setShowNotificationModal(false)}
-      >
-        <View className="bg-white p-5 rounded-t-lg">
-          <Text className="text-lg font-bold mb-5">Thông báo</Text>
-          {/* Tác vụ: Tắt thông báo về tin nhắn */}
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-300">
-            <Text className="text-base">Tắt thông báo về tin nhắn</Text>
-            <TouchableOpacity
-              onPress={() => setMessageNotification(!messageNotification)}
-            >
-              {messageNotification ? (
-                <MaterialIcons name="toggle-on" size={24} color="black" />
-              ) : (
-                <MaterialIcons name="toggle-off" size={24} color="black" />
-              )}
-            </TouchableOpacity>
-          </View>
-          {/* Tác vụ: Tắt thông báo về cuộc gọi */}
-          <View className="flex-row justify-between items-center py-2 border-b border-gray-300">
-            <Text className="text-base">Tắt thông báo về cuộc gọi</Text>
-            <TouchableOpacity
-              onPress={() => setCallNotification(!callNotification)}
-            >
-              {callNotification ? (
-                <MaterialIcons name="toggle-on" size={24} color="black" />
-              ) : (
-                <MaterialIcons name="toggle-off" size={24} color="black" />
-              )}
-            </TouchableOpacity>
-          </View>
-          {/* Tác vụ: Ẩn bản xem trước tin nhắn */}
-          <View className="flex-row justify-between items-center py-2">
-            <View>
-              <Text className="text-base">Ẩn bản xem trước tin nhắn</Text>
-              <Text className="text-xs text-gray-500">
-                Không hiển thị bản xem trước trong thông báo đẩy
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setPreviewNotification(!previewNotification)}
-            >
-              {previewNotification ? (
-                <MaterialIcons name="toggle-on" size={24} color="black" />
-              ) : (
-                <MaterialIcons name="toggle-off" size={24} color="black" />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
-  );
-
-  // Modal Tùy chọn
-  const renderOptionsModal = () => (
-    <Modal
-      transparent
-      animationType="none"
-      visible={showOptionsModal}
-      onRequestClose={() => setShowOptionsModal(false)}
-    >
-      <Pressable
-        className="flex-1 justify-end bg-black/30"
-        onPress={() => setShowOptionsModal(false)}
-      >
-        <View className="bg-white p-5 rounded-t-lg">
-          <Text className="text-lg font-bold mb-5">Tùy chọn</Text>
-          <TouchableOpacity
-            onPress={() => alert("Hạn Chế")}
-            className="py-2 border-b border-gray-300"
-          >
-            <Text className="text-base">Hạn Chế</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => alert("Chặn")}
-            className="py-2 border-b border-gray-300"
-          >
-            <Text className="text-base">Chặn</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => alert("Báo Cáo")} className="py-2">
-            <Text className="text-base">Báo Cáo</Text>
-          </TouchableOpacity>
-        </View>
-      </Pressable>
-    </Modal>
-  );
+  
 
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-300 bg-white">
-        <TouchableOpacity onPress={() => alert("Go back")}>
+        <TouchableOpacity onPress={() => router.back()}>
           <MaterialIcons name="keyboard-arrow-left" size={24} color="black" />
         </TouchableOpacity>
         <Text className="text-lg font-bold">Chat Details</Text>
@@ -253,10 +155,32 @@ const ProfileScreen = () => {
       </ScrollView>
 
       {/* Render Modal */}
-      {renderNotificationModal()}
-      {renderOptionsModal()}
+      <NotificationModal
+        visible={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+        messageNotification={messageNotification}
+        setMessageNotification={setMessageNotification}
+        callNotification={callNotification}
+        setCallNotification={setCallNotification}
+        previewNotification={previewNotification}
+        setPreviewNotification={setPreviewNotification}
+      />
+      <OptionsModal visible={showOptionsModal} onClose={() => setShowOptionsModal(false)} />
     </SafeAreaView>
   );
 };
 
 export default ProfileScreen;
+
+{/* <NotificationModal
+visible={showNotificationModal}
+onClose={() => setShowNotificationModal(false)}
+messageNotification={messageNotification}
+setMessageNotification={setMessageNotification}
+callNotification={callNotification}
+setCallNotification={setCallNotification}
+previewNotification={previewNotification}
+setPreviewNotification={setPreviewNotification}
+/>
+
+<OptionsModal visible={showOptionsModal} onClose={() => setShowOptionsModal(false)} /> */}

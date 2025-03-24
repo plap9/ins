@@ -1,23 +1,25 @@
 import React from "react";
-import { View, Text, TouchableOpacity, Dimensions, Image } from "react-native";
+import { View, Text, TouchableOpacity, Dimensions, Image, StyleSheet, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Heart, MessageCircle, Share2 } from "lucide-react-native";
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import Feather from '@expo/vector-icons/Feather';
 import Entypo from '@expo/vector-icons/Entypo';
 
-const { height } = Dimensions.get("window");
+const { height, width } = Dimensions.get("window");
 
 const ReelsScreen: React.FC = (): JSX.Element => {
   return (
-    <SafeAreaView className=" bg-gray-300">
-        <View className="w-full h-full relative">
+    <View style={styles.outerContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <SafeAreaView style={styles.container} edges={['right', 'left', 'bottom']}>
+        <View style={styles.fullWidthContainer}>
             
             {/* Phần nền Reels */}
-            <View className="w-full h-full bg-gray-800 relative" />
+            <View style={styles.backgroundContainer} className="bg-gray-800" />
 
             {/*thông tin phía dưới */}
-            <View className="absolute bottom-0 left-0 right-12 p-4">
+            <View style={styles.bottomInfoContainer} className="p-4">
                 <View className="flex-row items-center justify-between">
                     {/* Row chứa avatar và username */}
                     <View className="flex-row items-center">
@@ -28,7 +30,7 @@ const ReelsScreen: React.FC = (): JSX.Element => {
                     <Text className="text-white font-bold text-lg">Username</Text>
                 {/* Nút theo dõi */}
                     <TouchableOpacity className="bg-white px-3 py-1 rounded-full ml-5">
-                        <Text className="text-black text-sm font-semibold ml-">Follow</Text>
+                        <Text className="text-black text-sm font-semibold">Follow</Text>
                     </TouchableOpacity>
                     </View>
                 </View>
@@ -38,7 +40,7 @@ const ReelsScreen: React.FC = (): JSX.Element => {
             </View>
 
             {/* Cột icon tương tác bên phải */}
-            <View className="absolute bottom-10 right-4 gap-5 items-center">
+            <View style={styles.interactionContainer} className="gap-5 items-center">
                 <TouchableOpacity className="items-center">
                 <SimpleLineIcons name="heart" size={24} color="white" />
                 <Text className="text-white text-xs mt-1">1.2K</Text>
@@ -56,8 +58,56 @@ const ReelsScreen: React.FC = (): JSX.Element => {
             </View>
 
         </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    width: width,
+    height: height,
+    backgroundColor: '#000000',
+  },
+  container: {
+    flex: 1,
+    width: width,
+    height: height,
+  },
+  fullWidthContainer: {
+    flex: 1,
+    width: width,
+    height: height,
+    position: 'relative',
+    backgroundColor: '#000000',
+  },
+  backgroundContainer: {
+    flex: 1,
+    width: width,
+    height: height,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
+  },
+  bottomInfoContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: width,
+    padding: 16,
+    paddingRight: 60,
+  },
+  interactionContainer: {
+    position: 'absolute',
+    bottom: 40,
+    right: 4,
+    alignItems: 'center',
+    gap: 20,
+  }
+});
 
 export default ReelsScreen;
