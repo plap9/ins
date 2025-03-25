@@ -37,7 +37,7 @@ export default function LoginScreen() {
       Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
       return;
     }
-
+    console.log("Đang gửi yêu cầu đăng nhập với dữ liệu:", { login, password });
     try {
       setLoading(true);
 
