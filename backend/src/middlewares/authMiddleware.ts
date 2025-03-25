@@ -7,6 +7,8 @@ export interface AuthRequest extends Request {
 }
 
 export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+    
+    console.log("Request Headers:", req.headers);
     const token = req.header("Authorization")?.split(" ")[1];
 
     if (!token) {
