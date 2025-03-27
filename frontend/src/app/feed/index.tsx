@@ -3,12 +3,10 @@ import {
   FlatList,
   SafeAreaView,
   Alert,
-  Image,
   ScrollView,
   Dimensions,
 } from "react-native";
 import PostListItem from "../../components/PostListItem";
-import posts from "../../../assets/data/posts.json";
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Modal } from "react-native";
 import {
@@ -21,6 +19,8 @@ import {
 import { useRouter } from "expo-router";
 import apiClient from "~/services/apiClient";
 import AllCaughtUpScreen from "./allCaughtUp";
+
+import StoryList from "~/components/StoryList";
 
 interface Post {
   post_id: number;
@@ -39,17 +39,19 @@ interface Post {
 }
 
 // Define interface for story items
-interface StoryItemType {
+// interface StoryItemType {
+  interface Story {
   id: string;
-  username: string;
+  username?: string;
   image: string;
-  hasStory: boolean;
+  hasStory?: boolean;
   isYourStory?: boolean;
   isOpened?: boolean;
 }
 
 // Sample story data
-const storyData: StoryItemType[] = [
+// const storyData: StoryItemType[] = [
+  const stories = [
   {
     id: "1",
     username: "Your Story",
@@ -109,33 +111,6 @@ const storyData: StoryItemType[] = [
   },
 ];
 
-// Story Item Component
-const StoryItem = ({ item }: { item: StoryItemType }) => {
-  const handleStoryPress = () => {
-    Alert.alert("Story Opened", `Opening ${item.username}'s story`);
-  };
-
-  return (
-    <TouchableOpacity className="items-center mx-2" onPress={handleStoryPress}>
-      <View
-        className={`w-24 aspect-square rounded-full  ${item.hasStory ? (item.isOpened ? "border-pink-500 border-2" : "border-gray-300 border-2") : ""} p-[2px]`}
-      >
-        <Image
-          source={{ uri: item.image }}
-          className="h-full w-full rounded-full"
-        />
-        {item.isYourStory && (
-          <View className="absolute bottom-0 right-0 bg-blue-500 rounded-full h-5 w-5 items-center justify-center border-2 border-white">
-            <AntDesign name="plus" size={12} color="white" />
-          </View>
-        )}
-      </View>
-      <Text className="text-xs mt-1 max-w-16 text-center" numberOfLines={1}>
-        {item.username}
-      </Text>
-    </TouchableOpacity>
-  );
-};
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -243,9 +218,12 @@ export default function FeedScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 8 }}
           >
-            {storyData.map((item) => (
+            {/* {storyData.map((item) => (
               <StoryItem key={item.id} item={item} />
-            ))}
+            ))} */}
+         
+              <StoryList stories = {stories} />
+     
           </ScrollView>
         </View>
 
