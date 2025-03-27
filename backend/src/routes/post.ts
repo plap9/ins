@@ -11,7 +11,7 @@ import comment from "./comment";
 const router: Router = express.Router();
 
 router.use("/:id/comments", comment);
-router.post("/", authMiddleware, validate(postSchema), upload.array("media", 10), createPost);
+router.post("/", authMiddleware, validate(postSchema), upload.array("files", 10), createPost);
 router.get("/", authMiddleware, getPosts);
 router.delete("/:id", authMiddleware, deletePost);
 

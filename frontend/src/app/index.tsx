@@ -13,5 +13,5 @@ export default function Index() {
     ); 
   }
   
-  return authData ? <Redirect href="/(tabs)" /> : <Redirect href="/auth/login" />;
+  return <Redirect href="/auth/login" />;
 }
