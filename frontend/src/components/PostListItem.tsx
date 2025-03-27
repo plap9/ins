@@ -14,7 +14,7 @@ export default function PostListItem ({posts}: {posts: any}) {
                     source={{uri: posts.image_url}}
                     className="w-12 aspect-square rounded-full"
                 />
-                <Text className="font-semibold text-l">{posts.user.username}</Text>
+                <Text className="font-semibold text-l">{posts.user?.user_username}</Text>
             </View>
 
             {/* Posts */}

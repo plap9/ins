@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import apiClient from '~/services/apiClient';
 
 const filters = [
   { id: 1, name: 'Fade', color: '#E8DCD8' },
@@ -46,23 +47,54 @@ export default function CreatePostScreen() {
     }
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!selectedImage) {
-      Alert.alert('Error', 'Please select an image first');
+      Alert.alert('Lỗi', 'Vui lòng chọn ảnh');
       return;
     }
 
     setIsUploading(true);
-    
-    // Simulate upload delay
-    setTimeout(() => {
-      setIsUploading(false);
+
+    try {
+      const formData = new FormData();
+      
+      if (caption.trim()) {
+        formData.append('content', caption);
+      }
+
+      if (location.trim()) {
+        formData.append('location', location);
+      }
+
+      const fileExtension = selectedImage.split('.').pop();
+      const fileName = `image_${Date.now()}.${fileExtension}`;
+
+      formData.append('files', {
+        uri: selectedImage,
+        type: `image/${fileExtension}`,
+        name: fileName
+      } as any);
+
+      const response = await apiClient.post('/posts', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
       Alert.alert(
-        'Success', 
-        'Your post has been uploaded successfully!',
+        'Thành công', 
+        'Bài post của bạn đã được đăng!',
         [{ text: 'OK', onPress: () => router.back() }]
       );
-    }, 2000);
+    } catch (error) {
+      console.error('Lỗi khi đăng bài:', error);
+      Alert.alert(
+        'Lỗi', 
+        'Không thể đăng bài. Vui lòng thử lại.'
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -104,7 +136,6 @@ export default function CreatePostScreen() {
                 </View>
               ) : (
                 <TouchableOpacity 
-                  
                   className="border-2 border-dashed border-gray-300 items-center justify-center w-full h-80 rounded-lg"
                   onPress={pickImage}
                 >
@@ -206,7 +237,7 @@ export default function CreatePostScreen() {
               disabled={isUploading || !selectedImage}
             >
               <Text className="text-white font-semibold text-base">
-                {isUploading ? 'Posting...' : 'Share Post'}
+                {isUploading ? 'Đang đăng...' : 'Chia sẻ bài viết'}
               </Text>
             </TouchableOpacity>
           </View>
