@@ -1,25 +1,13 @@
-import {
-  ActivityIndicator,
-  FlatList,
-  SafeAreaView,
-  Alert,
-  ScrollView,
-  Dimensions,
-} from "react-native";
-import PostListItem from "../../components/PostListItem";
+import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, } from "react-native";
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Modal } from "react-native";
-import {
-  Feather,
-  AntDesign,
-  Entypo,
-  SimpleLineIcons,
-  FontAwesome5,
-} from "@expo/vector-icons";
+import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5, } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "~/services/apiClient";
-import AllCaughtUpScreen from "./allCaughtUp";
 
+// Import components 
+import AllCaughtUpScreen from "./allCaughtUp";
+import PostListItem from "../../components/PostListItem";
 import StoryList from "~/components/StoryList";
 
 interface Post {
@@ -38,19 +26,7 @@ interface Post {
   media_types: string[];
 }
 
-// Define interface for story items
-// interface StoryItemType {
-  interface Story {
-  id: string;
-  username?: string;
-  image: string;
-  hasStory?: boolean;
-  isYourStory?: boolean;
-  isOpened?: boolean;
-}
-
 // Sample story data
-// const storyData: StoryItemType[] = [
   const stories = [
   {
     id: "1",
@@ -217,13 +193,8 @@ export default function FeedScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 8 }}
-          >
-            {/* {storyData.map((item) => (
-              <StoryItem key={item.id} item={item} />
-            ))} */}
-         
-              <StoryList stories = {stories} />
-     
+          >   
+              <StoryList stories = {stories} /> 
           </ScrollView>
         </View>
 
