@@ -1,11 +1,9 @@
-import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, } from "react-native";
-import React, { useState, useEffect } from "react";
+import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, RefreshControl } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, Modal } from "react-native";
 import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5, } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "~/services/apiClient";
-
-// Import components 
 import AllCaughtUpScreen from "./allCaughtUp";
 import PostListItem from "../../components/PostListItem";
 import StoryList from "~/components/StoryList";
@@ -26,7 +24,6 @@ interface Post {
   media_types: string[];
 }
 
-// Sample story data
   const stories = [
   {
     id: "1",
@@ -94,60 +91,68 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [page, setPage] = useState<number>(1);
-  const screenWidth = Dimensions.get("window").width;
   const [allCaughtUp, setAllCaughtUp] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async (fetchPage = 1, isRefreshAction = false) => {
+    if (!isRefreshAction && allCaughtUp) return;
+
     try {
-      setLoading(true);
-      console.log("Fetching page:", page); // Thêm dòng này
+      if (isRefreshAction) {
+        setIsRefreshing(true);
+        setAllCaughtUp(false); 
+      } else {
+        setLoading(true);
+      }
+
       const response = await apiClient.get<{ message: string; posts: Post[] }>(
-        `/posts?page=${page}&limit=10`
+        `/posts?page=${fetchPage}&limit=10`
       );
 
-      console.log("API Response:", response.data); // Thêm dòng này
+      const fetchedPosts = response.data.posts || [];
 
-      if (response.data.posts.length === 0) {
-        console.log("No posts found");
+      if (fetchedPosts.length === 0) {
         setAllCaughtUp(true);
-        setPosts((prev) => (page === 1 ? [] : prev)); // Giữ nguyên data nếu đang load more
+        setPosts(prev => (fetchPage === 1 ? [] : prev));
         return;
       }
 
-      if (response.data.posts.length < 10) {
-        console.log("Last page detected");
-        setAllCaughtUp(true);
-      }
-
-      setPosts((prev) =>
-        page === 1 ? response.data.posts : [...prev, ...response.data.posts]
+      setPosts(prev => 
+        fetchPage === 1 ? fetchedPosts : [...prev, ...fetchedPosts]
       );
+
+      setAllCaughtUp(fetchedPosts.length < 10);
+
     } catch (error) {
-      console.error("API Error:", (error as any).response?.data);
+      console.error("API error:", error);
+      Alert.alert("Lỗi", "Không thể tải bài viết");
       setAllCaughtUp(true);
-      if ((error as any).response) {
-        console.log("Status:", (error as any).response.status);
-      }
-      Alert.alert("Lỗi", (error as Error).message || "Không thể tải bài viết");
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [allCaughtUp]); 
 
   useEffect(() => {
-    fetchPosts();
-  }, [page]);
+    fetchPosts(1, false);
+  }, []); 
 
-  const loadMorePosts = () => {
-    if (!loading && !allCaughtUp) {
-      // Thêm điều kiện này
-      console.log("Loading more posts...");
-      setPage((prev) => prev + 1);
+  const onRefresh = useCallback(() => {
+    if (!isRefreshing) {
+      setPage(1);
+      fetchPosts(1, true);
     }
-  };
+  }, [fetchPosts, isRefreshing]);
+
+  const loadMorePosts = useCallback(() => {
+    if (!loading && !allCaughtUp && !isRefreshing) {
+      setPage(prev => prev + 1);
+      fetchPosts(page + 1, false);
+    }
+  }, [loading, allCaughtUp, isRefreshing, page]);
 
   const renderFooter = () => {
-    if (!loading) return null;
+    if (!loading || isRefreshing) return null;
     return (
       <View style={{ paddingVertical: 20 }}>
         <ActivityIndicator size="large" color="#0000ff" />
@@ -254,9 +259,6 @@ export default function FeedScreen() {
         </Modal>
 
         {/* Danh sách bài post */}
-        {posts.length === 0 && allCaughtUp ? (
-          <AllCaughtUpScreen />
-        ) : (
           <FlatList
             data={posts}
             renderItem={({ item }) => <PostListItem posts={item} />}
@@ -269,12 +271,23 @@ export default function FeedScreen() {
             }}
             keyExtractor={(item) => item.post_id.toString()}
             ListEmptyComponent={
-              <View className="py-20 items-center">
-                <ActivityIndicator size="large" />
-              </View>
+              !loading && !isRefreshing && allCaughtUp ? (
+                allCaughtUp ? <AllCaughtUpScreen /> : (
+                  <View className="flex-1 justify-center items-center">
+                    <Text className="text-gray-500">Chưa có bài viết nào để hiển thị</Text>
+                  </View>
+                )
+              ) : null
+            }
+            refreshControl={
+              <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={["#007AFF", "#FF3B30"]}
+              tintColor={"#007AFF"}
+              />
             }
           />
-        )}
       </View>
     </View>
   );
