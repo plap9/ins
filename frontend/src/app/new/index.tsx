@@ -73,71 +73,61 @@ export default function CreatePostScreen() {
     }
 
     setIsUploading(true);
-    let temporaryFileUri: string | null = null; // Biến lưu URI file tạm nếu có
+    let temporaryFileUri: string | null = null; 
 
     try {
-        let fileUriForUpload = selectedImage; // URI sẽ dùng để upload
+        let fileUriForUpload = selectedImage; 
         let base64Data: string | null = null;
-        let actualMimeType: string = 'application/octet-stream'; // Mặc định
-        let uploadFileName: string = `upload_${Date.now()}.tmp`; // Tên file mặc định
+        let actualMimeType: string = 'application/octet-stream'; 
+        let uploadFileName: string = `upload_${Date.now()}.tmp`;
 
-        // 1. Kiểm tra nếu là data URI và thực hiện chuyển đổi
         if (selectedImage.startsWith('data:')) {
             console.log("Phát hiện data URI, đang chuyển đổi sang file URI...");
             const uriParts = selectedImage.split(',');
-            const headerParts = uriParts[0].split(/[:;]/); // Tách phần header data:image/png;base64
+            const headerParts = uriParts[0].split(/[:;]/); 
 
-            // Lấy mimeType từ header
             if (headerParts.length >= 2 && headerParts[1].includes('/')) {
-               actualMimeType = headerParts[1]; // ví dụ: image/png
+               actualMimeType = headerParts[1]; 
                console.log(`Extracted MIME type: ${actualMimeType}`);
             } else {
                console.warn("Could not extract MIME type from data URI header.");
             }
 
-            // Lấy phần dữ liệu base64
             base64Data = uriParts[1];
             if (!base64Data) {
                 throw new Error("Không thể trích xuất dữ liệu Base64 từ URI.");
             }
 
-            // Tạo tên file tạm dựa trên mimeType
             const extension = actualMimeType.split('/')[1] || 'tmp';
             uploadFileName = `upload_${Date.now()}.${extension}`;
-            temporaryFileUri = `<span class="math-inline">\{FileSystem\.cacheDirectory\}</span>{uploadFileName}`; // Lưu vào thư mục cache
+            temporaryFileUri = `<span class="math-inline">\{FileSystem\.cacheDirectory\}</span>{uploadFileName}`;
 
             console.log(`Đang ghi Base64 vào file tạm: ${temporaryFileUri}`);
             await FileSystem.writeAsStringAsync(temporaryFileUri, base64Data, {
                 encoding: FileSystem.EncodingType.Base64,
             });
 
-            fileUriForUpload = temporaryFileUri; // Sử dụng URI file tạm để upload
+            fileUriForUpload = temporaryFileUri; 
             console.log(`Đã tạo URI file tạm thành công: ${fileUriForUpload}`);
 
         } else if (selectedImage.startsWith('file://')) {
-             // 2. Nếu đã là file URI, lấy thông tin cần thiết
             console.log("Phát hiện file URI:", selectedImage);
-            fileUriForUpload = selectedImage; // URI đã đúng
-            // Cố gắng lấy tên file gốc và suy ra mimeType
+            fileUriForUpload = selectedImage; 
             uploadFileName = fileUriForUpload.split('/').pop() || `upload_${Date.now()}.tmp`;
             const fileExtension = uploadFileName.split('.').pop()?.toLowerCase();
             actualMimeType =
                  fileExtension === "jpg" || fileExtension === "jpeg" ? "image/jpeg" :
                  fileExtension === "png" ? "image/png" :
-                 // Thêm các kiểu video nếu cần
-                 // fileExtension === "mp4" ? "video/mp4" :
-                 // fileExtension === "mov" ? "video/quicktime" :
-                 'application/octet-stream'; // Mặc định
+                 'application/octet-stream'; 
             console.log(`Thông tin file URI: Name=<span class="math-inline">\{uploadFileName\}, Type\=</span>{actualMimeType}`);
 
         } else {
             throw new Error(`Lược đồ URI không được hỗ trợ: ${selectedImage.substring(0, 30)}`);
         }
 
-        // 3. Tạo FormData với URI file (tạm hoặc gốc)
         const formData = new FormData();
         const fileToAppend = {
-            uri: fileUriForUpload, // QUAN TRỌNG: Dùng file:// URI
+            uri: fileUriForUpload, 
             type: actualMimeType,
             name: uploadFileName,
         };
@@ -146,10 +136,8 @@ export default function CreatePostScreen() {
         console.log(JSON.stringify(fileToAppend, null, 2));
         console.log("----------------------------------");
 
-        // Đảm bảo tên key là "files" khớp với upload.single("files") backend
         formData.append('files', fileToAppend as any);
 
-        // Thêm các trường khác
         if (caption.trim()) {
             formData.append('content', caption);
         }
@@ -157,10 +145,9 @@ export default function CreatePostScreen() {
             formData.append('location', location);
         }
 
-        // 4. Gửi request
         console.log("Đang gửi POST /posts với FormData...");
         const response = await apiClient.post('/posts', formData, {
-            headers: {}, // Interceptor sẽ xử lý Content-Type
+            headers: {}, 
         });
 
         Alert.alert("Thành công", "Bài post của bạn đã được đăng!", [
@@ -175,7 +162,6 @@ export default function CreatePostScreen() {
         );
     } finally {
         setIsUploading(false);
-        // 5. (Tùy chọn) Xóa file tạm sau khi upload xong hoặc thất bại
         if (temporaryFileUri) {
            console.log(`Attempting to delete temporary file: ${temporaryFileUri}`);
            FileSystem.deleteAsync(temporaryFileUri, { idempotent: true })

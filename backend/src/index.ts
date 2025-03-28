@@ -23,18 +23,18 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   console.log('Headers:', req.headers);
   console.log('Body:', req.body);
   next();
 });
-
-app.use("/auth", authRouter);  
 app.use("/posts", post);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use("/auth", authRouter);
 app.use("/users", user);
 app.use("/comments", comment);
 
