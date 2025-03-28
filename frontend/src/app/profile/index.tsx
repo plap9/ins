@@ -2,7 +2,7 @@ import { View, Text, Image, FlatList, TouchableOpacity, ScrollView } from "react
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
-import HighlightsStory from "~/components/StoryList";
+import StoryList from "~/components/StoryList";
 import { useState } from "react";
 import ProfilePostList from "~/components/ProfilePostList";
 import { Feather, Ionicons, MaterialIcons, Fontisto, AntDesign } from '@expo/vector-icons';
@@ -14,11 +14,13 @@ const stories = [
     id: "1",
     image: "https://www.atakinteractive.com/hubfs/react-native%20%281%29.png",
     title: "React-Native",
+    isHighlight: true,
   },
   {
     id: "2",
     image: "https://nativewind.dev/img/og-image.png",
     title: "Nativewind",
+    isHighlight: true,
   },
 ];
 
@@ -173,7 +175,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Story */}
-        <HighlightsStory stories={stories}/>
+        <StoryList stories={stories} />
         
         {/* Buttons */}
         <View className="flex-row justify-between mb-4">
