@@ -37,13 +37,7 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router",
-      [
-        "react-native-blob-util",
-        {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
-        }
-      ]
+      "expo-router"
     ],
     "fonts": [
       {
