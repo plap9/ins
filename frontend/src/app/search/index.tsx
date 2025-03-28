@@ -41,6 +41,7 @@ const SearchScreen = () => {
       {/* Lưới ảnh */}
       <View style={{flexDirection:"row", flexWrap:"wrap", justifyContent:"space-between"}}>
         <FlatList
+        
           data={exploreImages}
           numColumns={3}
           keyExtractor={(_, index) => index.toString()}
