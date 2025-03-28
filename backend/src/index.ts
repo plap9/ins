@@ -20,23 +20,9 @@ app.use(cors({
     'exp://192.168.1.31:19000'      
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'multipart/form-data', 'Content-Disposition'],
-  credentials: true,
-  exposedHeaders: ['Content-Disposition']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
-
-app.use(upload.array('files'));
-app.post('/posts', (req, res) => {
-  console.log('✅ Nhận được file:', req.file);
-  console.log('📝 Caption:', req.body.content);
-  console.log('📍 Location:', req.body.location);
-  
-  res.status(200).json({
-    message: 'Upload thành công!',
-    file: req.file,
-    ...req.body
-  });
-})
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -44,12 +30,9 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   next();
 });
+
+app.use("/auth", authRouter);  
 app.use("/posts", post);
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use("/auth", authRouter);
 app.use("/users", user);
 app.use("/comments", comment);
 
