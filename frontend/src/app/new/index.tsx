@@ -17,6 +17,8 @@ import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import apiClient from "~/services/apiClient";
 import * as FileSystem from "expo-file-system";
+import RNFetchBlob from 'react-native-blob-util';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const filters = [
   { id: 1, name: "Fade", color: "#E8DCD8" },
@@ -52,124 +54,85 @@ export default function CreatePostScreen() {
       Alert.alert("Cần cấp quyền", "Bạn cần cấp quyền truy cập thư viện");
       return;
     }
+    
+    // Sửa mediaTypes thành phiên bản mới
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Thay Options bằng MediaType
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 0.8, // Giảm chất lượng ảnh
     });
-
+  
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      console.log("ImagePicker Result Asset:", JSON.stringify(result.assets[0], null, 2));
-      setSelectedImage(asset.uri);
+      let processedUri = asset.uri;
+  
+      // Xử lý đặc biệt cho Android
+      if (Platform.OS === 'android') {
+        // Copy file sang cache directory
+        const newUri = `${FileSystem.cacheDirectory}${Date.now()}.jpg`;
+        await FileSystem.copyAsync({
+          from: asset.uri,
+          to: newUri,
+        });
+        processedUri = newUri;
+      }
+  
+      console.log("Processed URI:", processedUri);
+      setSelectedImage(processedUri);
     }
   };
-
+  
   const handlePost = async () => {
     if (!selectedImage) {
-        Alert.alert('Lỗi', 'Vui lòng chọn ảnh');
-        return;
+      Alert.alert('Lỗi', 'Vui lòng chọn ảnh');
+      return;
     }
-
+  
     setIsUploading(true);
-    let temporaryFileUri: string | null = null; 
-
+  
     try {
-        let fileUriForUpload = selectedImage; 
-        let base64Data: string | null = null;
-        let actualMimeType: string = 'application/octet-stream'; 
-        let uploadFileName: string = `upload_${Date.now()}.tmp`;
-
-        if (selectedImage.startsWith('data:')) {
-            console.log("Phát hiện data URI, đang chuyển đổi sang file URI...");
-            const uriParts = selectedImage.split(',');
-            const headerParts = uriParts[0].split(/[:;]/); 
-
-            if (headerParts.length >= 2 && headerParts[1].includes('/')) {
-               actualMimeType = headerParts[1]; 
-               console.log(`Extracted MIME type: ${actualMimeType}`);
-            } else {
-               console.warn("Could not extract MIME type from data URI header.");
-            }
-
-            base64Data = uriParts[1];
-            if (!base64Data) {
-                throw new Error("Không thể trích xuất dữ liệu Base64 từ URI.");
-            }
-
-            const extension = actualMimeType.split('/')[1] || 'tmp';
-            uploadFileName = `upload_${Date.now()}.${extension}`;
-            temporaryFileUri = `<span class="math-inline">\{FileSystem\.cacheDirectory\}</span>{uploadFileName}`;
-
-            console.log(`Đang ghi Base64 vào file tạm: ${temporaryFileUri}`);
-            await FileSystem.writeAsStringAsync(temporaryFileUri, base64Data, {
-                encoding: FileSystem.EncodingType.Base64,
-            });
-
-            fileUriForUpload = temporaryFileUri; 
-            console.log(`Đã tạo URI file tạm thành công: ${fileUriForUpload}`);
-
-        } else if (selectedImage.startsWith('file://')) {
-            console.log("Phát hiện file URI:", selectedImage);
-            fileUriForUpload = selectedImage; 
-            uploadFileName = fileUriForUpload.split('/').pop() || `upload_${Date.now()}.tmp`;
-            const fileExtension = uploadFileName.split('.').pop()?.toLowerCase();
-            actualMimeType =
-                 fileExtension === "jpg" || fileExtension === "jpeg" ? "image/jpeg" :
-                 fileExtension === "png" ? "image/png" :
-                 'application/octet-stream'; 
-            console.log(`Thông tin file URI: Name=<span class="math-inline">\{uploadFileName\}, Type\=</span>{actualMimeType}`);
-
-        } else {
-            throw new Error(`Lược đồ URI không được hỗ trợ: ${selectedImage.substring(0, 30)}`);
-        }
-
-        const formData = new FormData();
-        const fileToAppend = {
-            uri: fileUriForUpload, 
-            type: actualMimeType,
-            name: uploadFileName,
-        };
-
-        console.log("--- Appending File to FormData ---");
-        console.log(JSON.stringify(fileToAppend, null, 2));
-        console.log("----------------------------------");
-
-        formData.append('files', fileToAppend as any);
-
-        if (caption.trim()) {
-            formData.append('content', caption);
-        }
-        if (location.trim()) {
-            formData.append('location', location);
-        }
-
-        console.log("Đang gửi POST /posts với FormData...");
-        const response = await apiClient.post('/posts', formData, {
-            headers: {}, 
-        });
-
-        Alert.alert("Thành công", "Bài post của bạn đã được đăng!", [
-            { text: "OK", onPress: () => router.back() },
+      // Lấy token từ AsyncStorage
+      const authData = await AsyncStorage.getItem('@AuthData');
+      const { token } = JSON.parse(authData || '{}');
+  
+      // Tạo FormData với react-native-blob-util
+      const response = await RNFetchBlob.fetch(
+        'POST',
+        'http://192.168.1.31:5000/posts',
+        {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        [
+          {
+            name: 'files',
+            filename: 'image.jpg',
+            type: 'image/jpeg',
+            data: RNFetchBlob.wrap(selectedImage),
+          },
+          { name: 'content', data: caption },
+          { name: 'location', data: location },
+        ]
+      );
+  
+      if (response.info().status === 200) {
+        Alert.alert("Thành công", "Đăng bài thành công!", [
+          { text: "OK", onPress: () => router.back() },
         ]);
-
+      } else {
+        throw new Error(await response.json());
+      }
     } catch (error: any) {
-        console.error("Lỗi khi đăng bài:", error.response?.data || error.message || error);
-        Alert.alert(
-            "Lỗi",
-            error.response?.data?.message || "Không thể đăng bài. Vui lòng thử lại."
-        );
+      console.error("🛑 Lỗi upload:", error);
+      Alert.alert(
+        "Lỗi", 
+        error.message || "Lỗi kết nối, vui lòng kiểm tra mạng"
+      );
     } finally {
-        setIsUploading(false);
-        if (temporaryFileUri) {
-           console.log(`Attempting to delete temporary file: ${temporaryFileUri}`);
-           FileSystem.deleteAsync(temporaryFileUri, { idempotent: true })
-               .then(() => console.log("Deleted temporary file."))
-               .catch(delError => console.error("Error deleting temp file:", delError));
-        }
+      setIsUploading(false);
     }
-};
+  };
 
   return (
     <View className="flex-1 bg-white">

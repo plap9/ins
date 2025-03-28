@@ -1,9 +1,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios'; 
+import { Platform } from 'react-native';
 
 const apiClient = axios.create({
   baseURL: 'http://192.168.1.31:5000',
-  
+  timeout: 45000,
+  withCredentials: true
+});
+apiClient.interceptors.request.use(config => {
+  if (Platform.OS === 'android') {
+    config.url = config.url?.replace(/^\/api/, ''); 
+  }
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.code === 'ECONNABORTED') {
+      return Promise.reject(new Error('Request timeout'));
+    }
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.request.use(config => {
+  console.log('Request URL:', config.url);
+  console.log('Request Headers:', config.headers);
+  return config;
 });
 
 apiClient.interceptors.request.use(
@@ -20,17 +44,19 @@ apiClient.interceptors.request.use(
     }
 
     if (config.data instanceof FormData) {
-      if (config.headers) {
-
-           const headers = config.headers as any; 
-           delete headers['Content-Type'];
-       }
+      config.headers = {
+        ...config.headers,
+        'Content-Type': 'multipart/form-data',
+      };
+      
+      delete config.headers['Content-Type'];
     }
-    return config as any;
+
+    return config;
   },
   (error) => {
-      console.error('Axios request interceptor error:', error);
-      return Promise.reject(error);
+    console.error('Axios request interceptor error:', error);
+    return Promise.reject(error);
   }
 );
 

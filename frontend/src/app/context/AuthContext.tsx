@@ -105,3 +105,4 @@ export function useAuth(): AuthContextData {
 
   return context;
 }
+export default AuthContext;
