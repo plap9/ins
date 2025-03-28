@@ -17,8 +17,6 @@ import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import apiClient from "~/services/apiClient";
 import * as FileSystem from "expo-file-system";
-import RNFetchBlob from 'react-native-blob-util';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const filters = [
   { id: 1, name: "Fade", color: "#E8DCD8" },
@@ -55,21 +53,18 @@ export default function CreatePostScreen() {
       return;
     }
     
-    // Sửa mediaTypes thành phiên bản mới
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Thay Options bằng MediaType
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.8, // Giảm chất lượng ảnh
+      quality: 0.8, 
     });
   
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       let processedUri = asset.uri;
   
-      // Xử lý đặc biệt cho Android
       if (Platform.OS === 'android') {
-        // Copy file sang cache directory
         const newUri = `${FileSystem.cacheDirectory}${Date.now()}.jpg`;
         await FileSystem.copyAsync({
           from: asset.uri,
@@ -170,9 +165,7 @@ export default function CreatePostScreen() {
         Alert.alert("Thành công", "Bài post của bạn đã được đăng!", [
             { text: "OK", onPress: () => router.back() },
         ]);
-      } else {
-        throw new Error(await response.json());
-      }
+     
     } catch (error: any) {
       console.error("🛑 Lỗi upload:", error);
       Alert.alert(
