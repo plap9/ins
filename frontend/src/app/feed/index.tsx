@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, RefreshControl } from "react-native";
+import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, RefreshControl, Platform, StatusBar } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, Modal } from "react-native";
 import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5, } from "@expo/vector-icons";
@@ -152,20 +152,20 @@ export default function FeedScreen() {
   }, [loading, allCaughtUp, isRefreshing, page]);
 
   const renderFooter = () => {
-    if (!loading || isRefreshing) return null;
-    return (
-      <View style={{ paddingVertical: 20 }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
+    if (loading && !isRefreshing) {
+      return <View className="py-5"><ActivityIndicator size="large" color="#0000ff" /></View>;
+     }
+     if (allCaughtUp && posts.length > 0 && !loading && !isRefreshing) {
+        return <AllCaughtUpScreen />;
+     }
+     return null;
   };
 
   return (
+    <View className="flex-1 bg-white" style={{paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0}} >
     <View className="flex-1 bg-white">
       <View className="flex-1">
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">
-          {/* Nút bên trái: chữ Instagram */}
+        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100" style={{paddingTop: Platform.OS === 'android' ?  0 : 0}}>
           <TouchableOpacity onPress={() => setModalVisible(true)}>
             <View className="flex-row items-center">
               <Text className="text-2xl font-bold">Instagram</Text>
@@ -178,7 +178,6 @@ export default function FeedScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Nút bên phải: Notifications và Messages */}
           <View className="flex-row">
             <TouchableOpacity
               className="px-3"
@@ -192,34 +191,31 @@ export default function FeedScreen() {
           </View>
         </View>
 
-        {/* Stories Section */}
         <View className="py-2 border-b border-gray-100">
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 8 }}
+            contentContainerStyle={{ paddingHorizontal: 8, maxHeight: 100 }}
           >   
               <StoryList stories = {stories} /> 
           </ScrollView>
         </View>
 
-        {/* Modal hiển thị khi bấm vào chữ "Instagram" */}
         <Modal
           visible={modalVisible}
           transparent={true}
           animationType="fade"
           onRequestClose={() => setModalVisible(false)}
         >
-          {/* Nút bấm ngoài modal để đóng */}
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
             onPress={() => setModalVisible(false)}
           >
-            {/* Nội dung modal */}
             <View
               className="absolute mt-28 left-4 bg-white p-4 rounded-lg shadow-lg"
               style={{
+                top: Platform.OS === 'android' ? 60 : 0,
                 shadowColor: "#000",
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.25,
@@ -229,7 +225,6 @@ export default function FeedScreen() {
             >
               <TouchableOpacity
                 onPress={() => {
-                  // Xử lý "Đang theo dõi"
                   setModalVisible(false);
                 }}
               >
@@ -244,7 +239,6 @@ export default function FeedScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
-                  // Xử lý "Yêu thích"
                   setModalVisible(false);
                 }}
                 className="mt-2"
@@ -258,7 +252,6 @@ export default function FeedScreen() {
           </TouchableOpacity>
         </Modal>
 
-        {/* Danh sách bài post */}
           <FlatList
             data={posts}
             renderItem={({ item }) => <PostListItem posts={item} />}
@@ -268,6 +261,7 @@ export default function FeedScreen() {
             contentContainerStyle={{
               gap: 10,
               flexGrow: 1,
+              paddingBottom: Dimensions.get("window").height * 0.1
             }}
             keyExtractor={(item) => item.post_id.toString()}
             ListEmptyComponent={
@@ -289,6 +283,7 @@ export default function FeedScreen() {
             }
           />
       </View>
+    </View>
     </View>
   );
 }

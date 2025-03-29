@@ -6,7 +6,6 @@ import post from "./routes/post";
 import user from "./routes/user";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import comment from "./routes/comment";
-import upload from "./middlewares/upload";
 
 dotenv.config();
 const app = express();
@@ -25,14 +24,17 @@ app.use(cors({
 }));
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'POST');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
   next();
 });
-
-app.use("/auth", authRouter);  
 app.use("/posts", post);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use("/auth", authRouter);
 app.use("/users", user);
 app.use("/comments", comment);
 
