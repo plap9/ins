@@ -17,6 +17,6 @@ router.delete("/:id", authMiddleware, deletePost);
 
 router.post("/:id/like", authMiddleware, likePost);
 router.delete("/:id/like", authMiddleware, unlikePost);
-router.get("/:id/like", authMiddleware, getPostLikes);
+router.get("/:id/likes", authMiddleware, getPostLikes);
 console.log(router.stack);
 export default router;
