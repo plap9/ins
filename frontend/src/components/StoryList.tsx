@@ -1,6 +1,6 @@
-import React from "react";    
+import React from "react";
 import { View, Text, Image, ScrollView } from "react-native";
-  
+
 interface Story {
   id: string;
   image: string;
@@ -22,17 +22,21 @@ const StoryList = ({ stories }: HighlightsStoryProps): JSX.Element => {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {stories.map((story) => (
           <View key={story.id} className="items-center mr-4">
-            <View className={`
+            <View
+              className={`
              ${story.hasStory ? (story.isOpened ? "border-pink-500 border-2" : "border-gray-300 border-2") : ""} 
              ${story.isHighlight ? "w-16" : "w-24"}
              aspect-square rounded-full border border-gray-300 p-0.5 
-            `}>
+            `}
+            >
               <Image
                 source={{ uri: story.image }}
                 className="w-full h-full rounded-full"
               />
             </View>
-            <Text className="mt-1 text-xs text-center">{story.title || story.username}</Text>
+            <Text className="mt-1 text-xs text-center">
+              {story.title || story.username}
+            </Text>
           </View>
         ))}
       </ScrollView>
