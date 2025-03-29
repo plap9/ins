@@ -54,7 +54,7 @@ export const getComments = async (
 
 export const getReplies = async (
   commentId: number,
-  params?: PaginationParams
+  params?: { page?: number; limit?: number }
 ) => {
   try {
     const response = await apiClient.get(`/comments/${commentId}/replies`, {
