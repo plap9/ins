@@ -74,9 +74,6 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         sqlQuery += whereClause;
         sqlQuery += ` GROUP BY p.post_id ORDER BY p.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}`;
 
-        console.log("Executing SQL:", sqlQuery);
-        console.log("With Params:", queryParams);
-
         const [posts] = await pool.query<RowDataPacket[]>(sqlQuery, queryParams);
 
         const formattedPosts = posts.map(post => ({
@@ -88,9 +85,6 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
 
         let countQuery = "SELECT COUNT(DISTINCT p.post_id) AS total FROM posts p";
         countQuery += whereClause;
-
-        console.log("Executing Count SQL:", countQuery);
-        console.log("With Count Params:", countParams);
 
         const [[totalRow]] = await pool.query<RowDataPacket[]>(countQuery, countParams);
         const totalPosts = totalRow.total || 0;

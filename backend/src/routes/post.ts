@@ -18,5 +18,4 @@ router.delete("/:id", authMiddleware, deletePost);
 router.post("/:id/like", authMiddleware, likePost);
 router.delete("/:id/like", authMiddleware, unlikePost);
 router.get("/:id/likes", authMiddleware, getPostLikes);
-console.log(router.stack);
 export default router;

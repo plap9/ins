@@ -38,9 +38,7 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
         const { content, parent_id } = req.body;
-
         
-
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400 , ErrorCode.VALIDATION_ERROR));
         if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
@@ -195,7 +193,6 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
         };
         
         await cacheComments(cacheKey, result);
-
         res.status(200).json(result);
     } catch (error) {
         next(error);
@@ -519,7 +516,7 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
                 u.profile_picture,
                 (SELECT COUNT(*) FROM followers WHERE follower_id = ? AND following_id = u.user_id) > 0 AS is_following
             FROM likes l
-            JOIN users u ON l.user_id = u.user_id
+            LEFT JOIN users u ON l.user_id = u.user_id
             WHERE l.comment_id = ?
             ORDER BY l.created_at DESC
             LIMIT ? OFFSET ?

@@ -53,7 +53,6 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 
             await connection.commit();
 
-            console.log("[DEBUG] Adding email job to queue for:", contact);
             await emailQueue.add('send-verification-email',{
                 email: contact,
                 code: emailVerificationCode

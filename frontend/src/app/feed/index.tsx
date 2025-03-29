@@ -1,12 +1,38 @@
-import { ActivityIndicator, FlatList, SafeAreaView, Alert, ScrollView, Dimensions, RefreshControl, Platform, StatusBar } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, Modal } from "react-native";
-import { Feather, AntDesign, Entypo, SimpleLineIcons, FontAwesome5, } from "@expo/vector-icons";
+import {
+  ActivityIndicator,
+  FlatList,
+  Alert,
+  ScrollView,
+  Dimensions,
+  RefreshControl,
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  Platform,
+  // StatusBar // Bỏ nếu dùng SafeAreaView
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Feather,
+  AntDesign,
+  Entypo,
+  SimpleLineIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "~/services/apiClient";
+import {
+  BottomSheetModal,
+  BottomSheetModalProvider,
+} from "@gorhom/bottom-sheet";
+
 import AllCaughtUpScreen from "./allCaughtUp";
 import PostListItem from "../../components/PostListItem";
 import StoryList from "~/components/StoryList";
+import CommentBottomSheet from "../../components/CommentBottomSheet";
+import LikeBottomSheet from "../../components/LikeBottomSheet";
 
 interface Post {
   post_id: number;
@@ -22,9 +48,10 @@ interface Post {
   profile_picture: string;
   media_urls: string[];
   media_types: string[];
+  is_liked?: boolean;
 }
 
-  const stories = [
+const stories = [
   {
     id: "1",
     username: "Your Story",
@@ -84,97 +111,127 @@ interface Post {
   },
 ];
 
-
 export default function FeedScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const [allCaughtUp, setAllCaughtUp] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  const fetchPosts = useCallback(async (fetchPage = 1, isRefreshAction = false) => {
-    if (!isRefreshAction && allCaughtUp) return;
+  const commentSheetRef = useRef<BottomSheetModal>(null);
+  const [selectedPostIdForComments, setSelectedPostIdForComments] = useState<
+    number | null
+  >(null);
+  const likeSheetRef = useRef<BottomSheetModal>(null);
+  const [selectedPostIdForLikes, setSelectedPostIdForLikes] = useState<
+    number | null
+  >(null);
 
-    try {
-      if (isRefreshAction) {
-        setIsRefreshing(true);
-        setAllCaughtUp(false); 
-      } else if (fetchPage > 1 ) {
-        setLoading(true);
-      } else {
-        console.log("Loading posts...")
-      }
+  const handleCommentPosted = useCallback((updatedPostId: number) => {
+    setPosts(currentPosts =>
+        currentPosts.map(post => {
+            if (post.post_id === updatedPostId) {
+                return { ...post, comment_count: (post.comment_count || 0) + 1 };
+            }
+            return post;
+        })
+    );
+}, []); 
 
-      const response = await apiClient.get<{ message: string; posts: Post[] }>(
-        `/posts?page=${fetchPage}&limit=10`
-      );
+  const fetchPosts = useCallback(
+    async (fetchPage = 1, isRefreshAction = false) => {
+      if (allCaughtUp && !isRefreshAction) return;
+      if (isLoading && !isRefreshAction) return;
+      if (isRefreshing && isRefreshAction) return;
 
-      const fetchedPosts = response.data.posts || [];
+      setIsLoading(true);
+      if (isRefreshAction) setIsRefreshing(true);
 
-      if (fetchedPosts.length === 0) {
-        setAllCaughtUp(true);
-        if (fetchPage === 1) {
-          setPosts([]);
+      try {
+        const response = await apiClient.get<{
+          message: string;
+          posts: Post[];
+        }>(`/posts?page=${fetchPage}&limit=10`);
+        const fetchedPosts = (response.data.posts || []).map((p) => ({
+          ...p,
+          is_liked: p.is_liked ?? Math.random() < 0.3,
+        }));
+
+        if (fetchedPosts.length === 0) {
+          setAllCaughtUp(true);
+          if (fetchPage === 1) setPosts([]);
+        } else {
+          if (fetchPage === 1) setAllCaughtUp(false);
+          setPosts((prev) =>
+            fetchPage === 1 ? fetchedPosts : [...prev, ...fetchedPosts]
+          );
+          if (fetchedPosts.length < 10) setAllCaughtUp(true);
         }
-      } else {
-        setAllCaughtUp(fetchedPosts.length < 10);
+      } catch (error: any) {
+        console.error(
+          "API error fetching posts:",
+          error.response?.data || error
+        );
+        Alert.alert("Lỗi", "Không thể tải bài viết");
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-
-      setPosts(prev => 
-        fetchPage === 1 ? fetchedPosts : [...prev, ...fetchedPosts]
-      );
-    } catch (error) {
-      console.error("API error:", error);
-      Alert.alert("Lỗi", "Không thể tải bài viết");
-      setAllCaughtUp(true);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [allCaughtUp]); 
+    },
+    [allCaughtUp, isLoading, isRefreshing]
+  );
 
   useEffect(() => {
-    fetchPosts(1, false);
-  }, []); 
+    setPosts([]);
+    setPage(1);
+    setAllCaughtUp(false);
+    fetchPosts(1, true);
+  }, []);
 
   const onRefresh = useCallback(() => {
-    if (!isRefreshing) {
-      setPage(1);
-      fetchPosts(1, true);
-    }
-  }, [fetchPosts, isRefreshing]);
+    setPage(1);
+    setAllCaughtUp(false);
+    fetchPosts(1, true);
+  }, [fetchPosts]);
 
-  const loadMorePosts = useCallback(() => {
-    if (!loading && !allCaughtUp && !isRefreshing) {
+  const loadMorePosts = () => {
+    if (!isLoading && !isRefreshing && !allCaughtUp) {
       const nextPage = page + 1;
       setPage(nextPage);
-      fetchPosts(nextPage + 1, false);
-    } else {
-      console.log("Loading more posts...")
+      fetchPosts(nextPage, false);
     }
-  }, [loading, allCaughtUp, isRefreshing, page]);
-
-  const renderFooter = () => {
-    if (loading && !isRefreshing && page > 1) {
-      return <View className="py-5"><ActivityIndicator size="large" color="#0000ff" /></View>;
-     }
-     if (allCaughtUp && posts.length > 0 && !loading && !isRefreshing) {
-        return <AllCaughtUpScreen />;
-     }
-     return null;
   };
 
-  const navigateToLikers = (postId: number) => {
-    router.push(`/feed/likers/${postId}`);
-  }
+  const renderFooter = () => {
+    if (isLoading && !isRefreshing) {
+      return (
+        <View className="py-5">
+          <ActivityIndicator size="large" color="#0000ff" />
+        </View>
+      );
+    }
+    if (allCaughtUp && posts.length > 0 && !isLoading && !isRefreshing) {
+      return <AllCaughtUpScreen />;
+    }
+    return null;
+  };
+
+  const openCommentSheet = useCallback((postId: number) => {
+    setSelectedPostIdForComments(postId);
+    commentSheetRef.current?.present();
+  }, []);
+
+  const openLikeSheet = useCallback((postId: number) => {
+    setSelectedPostIdForLikes(postId);
+    likeSheetRef.current?.present();
+  }, []);
 
   return (
-    <View className="flex-1 bg-white" style={{paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0}} >
-    <View className="flex-1 bg-white">
-      <View className="flex-1">
-        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100" style={{paddingTop: Platform.OS === 'android' ?  0 : 0}}>
+    <BottomSheetModalProvider>
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">
           <TouchableOpacity onPress={() => setModalVisible(true)}>
             <View className="flex-row items-center">
               <Text className="text-2xl font-bold">Instagram</Text>
@@ -186,7 +243,6 @@ export default function FeedScreen() {
               />
             </View>
           </TouchableOpacity>
-
           <View className="flex-row">
             <TouchableOpacity
               className="px-3"
@@ -201,13 +257,7 @@ export default function FeedScreen() {
         </View>
 
         <View className="py-2 border-b border-gray-100">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 8, maxHeight: 100 }}
-          >   
-              <StoryList stories = {stories} /> 
-          </ScrollView>
+          <StoryList stories={stories} />
         </View>
 
         <Modal
@@ -223,14 +273,7 @@ export default function FeedScreen() {
           >
             <View
               className="absolute mt-28 left-4 bg-white p-4 rounded-lg shadow-lg"
-              style={{
-                top: Platform.OS === 'android' ? 60 : 0,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                elevation: 5,
-              }}
+              style={{ elevation: 5 }}
             >
               <TouchableOpacity
                 onPress={() => {
@@ -261,38 +304,55 @@ export default function FeedScreen() {
           </TouchableOpacity>
         </Modal>
 
-          <FlatList
-            data={posts}
-            renderItem={({ item }) => <PostListItem posts={item} onRefresh={onRefresh} onLikeCountPress={navigateToLikers}/>}
-            onEndReached={loadMorePosts}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={renderFooter}
-            contentContainerStyle={{
-              gap: 10,
-              flexGrow: 1,
-              paddingBottom: Dimensions.get("window").height * 0.1
-            }}
-            keyExtractor={(item) => item.post_id.toString()}
-            ListEmptyComponent={
-              !loading && !isRefreshing && allCaughtUp ? (
-                allCaughtUp ? <AllCaughtUpScreen /> : (
-                  <View className="flex-1 justify-center items-center">
-                    <Text className="text-gray-500">Chưa có bài viết nào để hiển thị</Text>
-                  </View>
-                )
-              ) : null
-            }
-            refreshControl={
-              <RefreshControl
+        <FlatList
+          className="flex-1"
+          data={posts}
+          renderItem={({ item }) => (
+            <PostListItem
+              posts={item}
+              onCommentPress={openCommentSheet}
+              onLikeCountPress={openLikeSheet}
+            />
+          )}
+          keyExtractor={(item) => item.post_id.toString()}
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={renderFooter}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 10, gap: 10 }}
+          ListEmptyComponent={
+            isLoading && posts.length === 0 ? (
+              <View className="flex-1 justify-center items-center">
+                <ActivityIndicator size="large" color="#0000ff" />
+              </View>
+            ) : !isLoading && !isRefreshing && posts.length === 0 ? (
+              allCaughtUp ? (
+                <AllCaughtUpScreen />
+              ) : (
+                <View className="flex-1 justify-center items-center p-5">
+                  <Text className="text-gray-500 text-center">
+                    Chưa có bài viết nào.
+                  </Text>
+                </View>
+              )
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              colors={["#007AFF", "#FF3B30"]}
+              colors={["#007AFF"]}
               tintColor={"#007AFF"}
-              />
-            }
-          />
-      </View>
-    </View>
-    </View>
+            />
+          }
+        />
+
+        <CommentBottomSheet
+          ref={commentSheetRef}
+          postId={selectedPostIdForComments}
+          onCommentAdded={handleCommentPosted}
+        />
+        <LikeBottomSheet ref={likeSheetRef} postId={selectedPostIdForLikes} />
+      </SafeAreaView>
+    </BottomSheetModalProvider>
   );
 }

@@ -81,9 +81,6 @@ export default function ForgotPasswordScreen() {
         code,
         newPassword,
       });
-
-      console.log('Reset Password Response:', response.data);
-
       Alert.alert("Thành công", response.data.message, [
         { text: "Đăng nhập", onPress: () => router.replace("/auth/login") }
       ]);
