@@ -101,8 +101,10 @@ export default function FeedScreen() {
       if (isRefreshAction) {
         setIsRefreshing(true);
         setAllCaughtUp(false); 
-      } else {
+      } else if (fetchPage > 1 ) {
         setLoading(true);
+      } else {
+        console.log("Loading posts...")
       }
 
       const response = await apiClient.get<{ message: string; posts: Post[] }>(
@@ -113,16 +115,16 @@ export default function FeedScreen() {
 
       if (fetchedPosts.length === 0) {
         setAllCaughtUp(true);
-        setPosts(prev => (fetchPage === 1 ? [] : prev));
-        return;
+        if (fetchPage === 1) {
+          setPosts([]);
+        }
+      } else {
+        setAllCaughtUp(fetchedPosts.length < 10);
       }
 
       setPosts(prev => 
         fetchPage === 1 ? fetchedPosts : [...prev, ...fetchedPosts]
       );
-
-      setAllCaughtUp(fetchedPosts.length < 10);
-
     } catch (error) {
       console.error("API error:", error);
       Alert.alert("Lỗi", "Không thể tải bài viết");
@@ -146,13 +148,16 @@ export default function FeedScreen() {
 
   const loadMorePosts = useCallback(() => {
     if (!loading && !allCaughtUp && !isRefreshing) {
-      setPage(prev => prev + 1);
-      fetchPosts(page + 1, false);
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchPosts(nextPage + 1, false);
+    } else {
+      console.log("Loading more posts...")
     }
   }, [loading, allCaughtUp, isRefreshing, page]);
 
   const renderFooter = () => {
-    if (loading && !isRefreshing) {
+    if (loading && !isRefreshing && page > 1) {
       return <View className="py-5"><ActivityIndicator size="large" color="#0000ff" /></View>;
      }
      if (allCaughtUp && posts.length > 0 && !loading && !isRefreshing) {
@@ -160,6 +165,10 @@ export default function FeedScreen() {
      }
      return null;
   };
+
+  const navigateToLikers = (postId: number) => {
+    router.push(`/feed/likers/${postId}`);
+  }
 
   return (
     <View className="flex-1 bg-white" style={{paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0}} >
@@ -254,7 +263,7 @@ export default function FeedScreen() {
 
           <FlatList
             data={posts}
-            renderItem={({ item }) => <PostListItem posts={item} />}
+            renderItem={({ item }) => <PostListItem posts={item} onRefresh={onRefresh} onLikeCountPress={navigateToLikers}/>}
             onEndReached={loadMorePosts}
             onEndReachedThreshold={0.5}
             ListFooterComponent={renderFooter}

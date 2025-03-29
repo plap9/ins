@@ -106,32 +106,32 @@ export const unlikePost = async (req: AuthRequest, res: Response, next: NextFunc
     }
 };
 
-
 export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         const postId = parseInt(req.params.id);
         const page = Math.max(parseInt(req.query.page as string || '1', 10), 1);
         const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
+        const loggedInUserId = req.user?.user_id; 
 
-        if (!req.user?.user_id) return next(new AppError('Người dùng chưa xác thực', 401));
+        if (!loggedInUserId) return next(new AppError('Người dùng chưa xác thực', 401));
         if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
 
-        const cachedLikes = await getCacheLikes(postId, page, limit);
-        if (cachedLikes) {
-            res.status(200).json(cachedLikes);
+        const cacheKey = `post:${postId}:likers:page:${page}:limit:${limit}`;
+        const cachedData = await getCacheLikes(postId, page, limit); 
+        if (cachedData) {
+            res.status(200).json({ ...cachedData, fromCache: true });
             return;
         }
-        
 
         const [[post]] = await pool.query<RowDataPacket[]>(`
-            SELECT post_id FROM posts WHERE post_id = ?`, 
+            SELECT post_id FROM posts WHERE post_id = ?`,
             [postId]
         );
         if (!post) return next(new AppError('Bài viết không tồn tại', 404));
 
         const offset = (page - 1) * limit;
 
-        const [likes] = await pool.query<RowDataPacket[]>(`
+        const [likesData] = await pool.query<RowDataPacket[]>(`
             SELECT
                 l.like_id,
                 l.user_id,
@@ -139,27 +139,30 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
                 u.username,
                 u.full_name,
                 u.profile_picture,
-                CASE 
-                    WHEN f.follower_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_following
+                -- Kiểm tra trạng thái follow của người dùng đang request (loggedInUserId) đối với người đã like (l.user_id)
+                CASE WHEN f.follower_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_following
             FROM likes l
             INNER JOIN users u ON l.user_id = u.user_id
-            LEFT JOIN followers f ON f.following_id = l.user_id AND f.follower_id = ?
+            LEFT JOIN followers f ON f.following_id = l.user_id AND f.follower_id = ? -- Dùng loggedInUserId
             WHERE l.post_id = ?
             ORDER BY l.created_at DESC
-            LIMIT ?
-            OFFSET ?`,
-            [req.user.user_id, postId, limit, offset]
+            LIMIT ? OFFSET ?`,
+            [loggedInUserId, postId, limit, offset] 
         );
 
         const [[totalRow]] = await pool.query<RowDataPacket[]>(`
             SELECT COUNT(*) AS total FROM likes WHERE post_id = ?`,
             [postId]
         );
-
         const total = totalRow?.total || 0;
 
         const result = {
-            likes,
+            users: likesData.map(like => ({
+                user_id: like.user_id,
+                username: like.username,
+                profile_picture: like.profile_picture,
+                is_following: !!like.is_following 
+            })),
             pagination: {
                 page,
                 limit,
@@ -168,9 +171,10 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
             }
         };
 
-        await cacheLikes(postId, result, page, limit);
+        await cacheLikes(postId, result, page, limit); 
 
-        res.status(200).json(result);
+        res.status(200).json(result); 
+
     } catch (error) {
         next(error);
     }
