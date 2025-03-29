@@ -28,12 +28,12 @@ router.get("/", authMiddleware, (req: express.Request, res: express.Response, ne
 });
 
 router.post("/", authMiddleware, validate(createCommentSchema), createComment);
-router.get("/", authMiddleware, getComments);
-router.get("/replies/:id", authMiddleware, getReplies);
+router.get("/:id/replies", authMiddleware, getReplies);
 router.put("/:id", authMiddleware, validate(updateCommentSchema), updateComment);
 router.delete("/:id", authMiddleware, deleteComment);
 router.post("/:id/like", authMiddleware, likeComment);
 router.delete("/:id/like", authMiddleware, unlikeComment);
 router.get("/:id/likes", authMiddleware, getCommentLikes);
 
+router.get("/", authMiddleware, getComments);
 export default router;
