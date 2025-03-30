@@ -7,6 +7,12 @@ import { ErrorCode } from '../../../types/errorCode';
 import { Pool, PoolConnection} from 'mysql2/promise';
 import { getCachedCommentLikes, getCachedComments, invalidateCommentCache, invalidateCommentsCache, cacheComments, invalidateCommentLikesCache, cacheCommentLikes} from '../../../utils/cacheUtils';
 
+export enum CommentType {
+    TEXT = 'text',
+    ICON = 'icon',
+    GIF = 'gif',
+}
+
 async function countChildComments(connection: PoolConnection, commentId: number): Promise<number> {
     let count = 0;
     
@@ -37,11 +43,29 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
     try {
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
-        const { content, parent_id } = req.body;
+        const { content, parent_id, type, gifUrl, iconName } = req.body;
         
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400 , ErrorCode.VALIDATION_ERROR));
-        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
+        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400, ErrorCode.VALIDATION_ERROR));
+        
+        // Validate based on comment type
+        const commentType = type || CommentType.TEXT;
+        if (!Object.values(CommentType).includes(commentType)) {
+            return next(new AppError('Loại bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "type"));
+        }
+        
+        // Validate content based on type
+        if (commentType === CommentType.TEXT && (!content || content.trim() === '')) {
+            return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
+        }
+        
+        if (commentType === CommentType.GIF && !gifUrl) {
+            return next(new AppError('URL GIF không được để trống', 400, ErrorCode.VALIDATION_ERROR, "gifUrl"));
+        }
+        
+        if (commentType === CommentType.ICON && !iconName) {
+            return next(new AppError('Tên icon không được để trống', 400, ErrorCode.VALIDATION_ERROR, "iconName"));
+        }
 
         await connection.beginTransaction();
 
@@ -62,9 +86,18 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
             }
         }
 
+        // Insert based on type
         const [result] = await connection.query<ResultSetHeader>(
-            'INSERT INTO comments (post_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)',
-            [postId, userId, parent_id || null, content]
+            'INSERT INTO comments (post_id, user_id, parent_id, content, type, gif_url, icon_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [
+                postId,
+                userId,
+                parent_id || null,
+                commentType === CommentType.TEXT ? content : null,
+                commentType,
+                commentType === CommentType.GIF ? gifUrl : null,
+                commentType === CommentType.ICON ? iconName : null
+            ]
         );
 
         if (result.affectedRows === 0) {
@@ -81,6 +114,9 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
                 c.user_id,
                 c.parent_id,
                 c.content,
+                c.type,
+                c.gif_url,
+                c.icon_name,
                 c.created_at,
                 u.username,
                 u.profile_picture
@@ -139,6 +175,9 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
                 c.user_id,
                 c.parent_id,
                 c.content,
+                c.type,
+                c.gif_url,
+                c.icon_name,
                 c.created_at,
                 u.username,
                 u.full_name,
@@ -233,6 +272,9 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
                 c.user_id, 
                 c.parent_id, 
                 c.content, 
+                c.type,
+                c.gif_url,
+                c.icon_name,
                 c.created_at,
                 u.username,
                 u.full_name,
@@ -278,24 +320,55 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
     try {
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
-        const { content } = req.body;
+        const { content, type, gifUrl, iconName } = req.body;
 
         if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
         if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
-        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
 
         const [[comment]] = await pool.query<RowDataPacket[]>(
-            'SELECT comment_id, user_id FROM comments WHERE comment_id = ?',
+            'SELECT comment_id, user_id, type FROM comments WHERE comment_id = ?',
             [commentId]
         );
 
         if (!comment) return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
         if (comment.user_id !== userId) return next(new AppError('Bạn không có quyền cập nhật bình luận này', 403, ErrorCode.INVALID_PERMISSIONS));
+        
+        // Validate content based on type
+        const commentType = type || comment.type || CommentType.TEXT;
+        
+        if (commentType === CommentType.TEXT && (!content || content.trim() === '')) {
+            return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
+        }
+        
+        if (commentType === CommentType.GIF && !gifUrl) {
+            return next(new AppError('URL GIF không được để trống', 400, ErrorCode.VALIDATION_ERROR, "gifUrl"));
+        }
+        
+        if (commentType === CommentType.ICON && !iconName) {
+            return next(new AppError('Tên icon không được để trống', 400, ErrorCode.VALIDATION_ERROR, "iconName"));
+        }
 
-        const [result] = await pool.query<ResultSetHeader>(
-            'UPDATE comments SET content = ? WHERE comment_id = ?',
-            [content, commentId]
-        );
+        let updateQuery: string;
+        let updateParams: any[];
+
+        switch (commentType) {
+            case CommentType.TEXT:
+                updateQuery = 'UPDATE comments SET content = ?, type = ?, gif_url = NULL, icon_name = NULL WHERE comment_id = ?';
+                updateParams = [content, commentType, commentId];
+                break;
+            case CommentType.GIF:
+                updateQuery = 'UPDATE comments SET content = NULL, type = ?, gif_url = ?, icon_name = NULL WHERE comment_id = ?';
+                updateParams = [commentType, gifUrl, commentId];
+                break;
+            case CommentType.ICON:
+                updateQuery = 'UPDATE comments SET content = NULL, type = ?, gif_url = NULL, icon_name = ? WHERE comment_id = ?';
+                updateParams = [commentType, iconName, commentId];
+                break;
+            default:
+                return next(new AppError('Loại bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "type"));
+        }
+
+        const [result] = await pool.query<ResultSetHeader>(updateQuery, updateParams);
 
         if (result.affectedRows === 0) return next(new AppError('Lỗi khi cập nhật bình luận', 500, ErrorCode.SERVER_ERROR));
 
@@ -306,6 +379,9 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
                 c.user_id,
                 c.parent_id,
                 c.content,
+                c.type,
+                c.gif_url,
+                c.icon_name,
                 c.created_at,
                 u.username,
                 u.profile_picture
@@ -315,7 +391,7 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
         `, [commentId]);
 
         await invalidateCommentCache(commentId);
-        await invalidateCommentsCache(comment.post_id);
+        await invalidateCommentsCache(updatedComment.post_id);
 
         res.status(200).json({
             message: 'Cập nhật bình luận thành công',

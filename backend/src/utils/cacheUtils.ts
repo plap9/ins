@@ -350,3 +350,17 @@ export const getCachedData = async (key: string) => {
 export const invalidateCacheKey = async (key: string) => {
   await redisClient.del(key);
 };
+
+export const cacheAnyData = async (key: string, data: any, expireTime: number) => {
+  if (!redisClient) return; 
+  try {
+    await redisClient.setex(
+      key,
+      expireTime,
+      JSON.stringify(data) 
+    );
+  } catch (error) {
+    console.error(`Redis SETEX error for key ${key}:`, error);
+  }
+};
+  
