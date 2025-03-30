@@ -8,16 +8,27 @@ interface OptionsModalProps {
 
 const OptionsModal: React.FC<OptionsModalProps> = ({ visible, onClose }) => {
   return (
-    <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
+    <Modal
+      transparent
+      animationType="none"
+      visible={visible}
+      onRequestClose={onClose}
+    >
       <Pressable className="flex-1 justify-end bg-black/30" onPress={onClose}>
         <View className="bg-white p-5 rounded-t-lg">
           <Text className="text-lg font-bold mb-5">Tùy chọn</Text>
 
-          <TouchableOpacity onPress={() => alert("Hạn Chế")} className="py-2 border-b border-gray-300">
+          <TouchableOpacity
+            onPress={() => alert("Hạn Chế")}
+            className="py-2 border-b border-gray-300"
+          >
             <Text className="text-base">Hạn Chế</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => alert("Chặn")} className="py-2 border-b border-gray-300">
+          <TouchableOpacity
+            onPress={() => alert("Chặn")}
+            className="py-2 border-b border-gray-300"
+          >
             <Text className="text-base">Chặn</Text>
           </TouchableOpacity>
 

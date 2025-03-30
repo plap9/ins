@@ -52,26 +52,38 @@ export default function CreatePostScreen() {
       Alert.alert("Cần cấp quyền", "Bạn cần cấp quyền truy cập thư viện");
       return;
     }
+    
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 1,
+      quality: 0.8, 
     });
-
+  
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      console.log("ImagePicker Result Asset:", JSON.stringify(result.assets[0], null, 2));
-      setSelectedImage(asset.uri);
+      let processedUri = asset.uri;
+  
+      if (Platform.OS === 'android') {
+        const newUri = `${FileSystem.cacheDirectory}${Date.now()}.jpg`;
+        await FileSystem.copyAsync({
+          from: asset.uri,
+          to: newUri,
+        });
+        processedUri = newUri;
+      }
+  
+      console.log("Processed URI:", processedUri);
+      setSelectedImage(processedUri);
     }
   };
-
+  
   const handlePost = async () => {
     if (!selectedImage) {
-        Alert.alert('Lỗi', 'Vui lòng chọn ảnh');
-        return;
+      Alert.alert('Lỗi', 'Vui lòng chọn ảnh');
+      return;
     }
-
+  
     setIsUploading(true);
     let temporaryFileUri: string | null = null; 
 
@@ -88,7 +100,6 @@ export default function CreatePostScreen() {
 
             if (headerParts.length >= 2 && headerParts[1].includes('/')) {
                actualMimeType = headerParts[1]; 
-               console.log(`Extracted MIME type: ${actualMimeType}`);
             } else {
                console.warn("Could not extract MIME type from data URI header.");
             }
@@ -102,13 +113,11 @@ export default function CreatePostScreen() {
             uploadFileName = `upload_${Date.now()}.${extension}`;
             temporaryFileUri = `<span class="math-inline">\{FileSystem\.cacheDirectory\}</span>{uploadFileName}`;
 
-            console.log(`Đang ghi Base64 vào file tạm: ${temporaryFileUri}`);
             await FileSystem.writeAsStringAsync(temporaryFileUri, base64Data, {
                 encoding: FileSystem.EncodingType.Base64,
             });
 
             fileUriForUpload = temporaryFileUri; 
-            console.log(`Đã tạo URI file tạm thành công: ${fileUriForUpload}`);
 
         } else if (selectedImage.startsWith('file://')) {
             console.log("Phát hiện file URI:", selectedImage);
@@ -119,7 +128,6 @@ export default function CreatePostScreen() {
                  fileExtension === "jpg" || fileExtension === "jpeg" ? "image/jpeg" :
                  fileExtension === "png" ? "image/png" :
                  'application/octet-stream'; 
-            console.log(`Thông tin file URI: Name=<span class="math-inline">\{uploadFileName\}, Type\=</span>{actualMimeType}`);
 
         } else {
             throw new Error(`Lược đồ URI không được hỗ trợ: ${selectedImage.substring(0, 30)}`);
@@ -131,10 +139,6 @@ export default function CreatePostScreen() {
             type: actualMimeType,
             name: uploadFileName,
         };
-
-        console.log("--- Appending File to FormData ---");
-        console.log(JSON.stringify(fileToAppend, null, 2));
-        console.log("----------------------------------");
 
         formData.append('files', fileToAppend as any);
 
@@ -153,13 +157,13 @@ export default function CreatePostScreen() {
         Alert.alert("Thành công", "Bài post của bạn đã được đăng!", [
             { text: "OK", onPress: () => router.back() },
         ]);
-
+     
     } catch (error: any) {
-        console.error("Lỗi khi đăng bài:", error.response?.data || error.message || error);
-        Alert.alert(
-            "Lỗi",
-            error.response?.data?.message || "Không thể đăng bài. Vui lòng thử lại."
-        );
+      console.error("Lỗi upload:", error);
+      Alert.alert(
+        "Lỗi", 
+        error.message || "Lỗi kết nối, vui lòng kiểm tra mạng"
+      );
     } finally {
         setIsUploading(false);
         if (temporaryFileUri) {
@@ -169,7 +173,7 @@ export default function CreatePostScreen() {
                .catch(delError => console.error("Error deleting temp file:", delError));
         }
     }
-};
+  };
 
   return (
     <View className="flex-1 bg-white">
@@ -192,7 +196,6 @@ export default function CreatePostScreen() {
               <Text className="text-xl font-bold">Create New Post</Text>
             </View>
 
-            {/* Image Selection */}
             <View className="mb-6 items-center">
               {selectedImage ? (
                 <View style={{ width: screenWidth - 32 }}>
@@ -221,7 +224,6 @@ export default function CreatePostScreen() {
               )}
             </View>
 
-            {/* Filters Section */}
             {selectedImage && (
               <View className="mb-6">
                 <Text className="text-base font-semibold mb-2">Filters</Text>
@@ -269,7 +271,6 @@ export default function CreatePostScreen() {
               </View>
             )}
 
-            {/* Caption */}
             <View className="mb-4">
               <Text className="text-base font-semibold mb-2">Caption</Text>
               <TextInput
@@ -283,7 +284,6 @@ export default function CreatePostScreen() {
               />
             </View>
 
-            {/* Location */}
             <View className="mb-6">
               <Text className="text-base font-semibold mb-2">Location</Text>
               <View className="flex-row items-center bg-gray-100 p-3 rounded-lg">
@@ -297,7 +297,6 @@ export default function CreatePostScreen() {
               </View>
             </View>
 
-            {/* Tag People */}
             <TouchableOpacity className="flex-row items-center justify-between p-4 bg-gray-100 rounded-lg mb-6">
               <View className="flex-row items-center">
                 <Feather name="users" size={20} color="#333" />
@@ -306,7 +305,6 @@ export default function CreatePostScreen() {
               <Feather name="chevron-right" size={20} color="#999" />
             </TouchableOpacity>
 
-            {/* Post Button */}
             <TouchableOpacity
               className={`rounded-lg p-4 items-center ${isUploading || !selectedImage ? "bg-blue-300" : "bg-blue-500"}`}
               onPress={handlePost}
