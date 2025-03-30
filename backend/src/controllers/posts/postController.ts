@@ -10,7 +10,6 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
     try {
         const { content, location } = req.body;
         const user_id = req.user?.user_id;
-        console.log("files:", req.files);
 
         console.log(" req.user:", req.user);
         if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
@@ -55,7 +54,6 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             content: content || null,
             location: location || null,
             post_privacy: "public",
-            files: req.files,
         });
     } catch (error) {
         await connection.rollback(); 

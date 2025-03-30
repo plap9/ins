@@ -1,4 +1,3 @@
-
 // ~/components/ProfilePostList.tsx
 import React from "react";
 import { View, Image, FlatList } from "react-native";

@@ -11,12 +11,11 @@ import comment from "./comment";
 const router: Router = express.Router();
 
 router.use("/:id/comments", comment);
-router.post("/", authMiddleware, upload.array("files"), validate(postSchema), createPost);
+router.post("/", authMiddleware, validate(postSchema), upload.array("files", 10), createPost);
 router.get("/", authMiddleware, getPosts);
 router.delete("/:id", authMiddleware, deletePost);
 
 router.post("/:id/like", authMiddleware, likePost);
 router.delete("/:id/like", authMiddleware, unlikePost);
-router.get("/:id/like", authMiddleware, getPostLikes);
-console.log(router.stack);
+router.get("/:id/likes", authMiddleware, getPostLikes);
 export default router;
