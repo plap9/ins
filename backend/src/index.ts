@@ -5,8 +5,7 @@ import authRouter from "./routes/auth";
 import post from "./routes/post";
 import user from "./routes/user";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
-import comment from "./routes/comment";
-
+import gif from "./routes/gif";
 dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -35,7 +34,7 @@ app.use((req, res, next) => {
 app.use("/posts", post);
 app.use("/auth", authRouter);
 app.use("/users", user);
-app.use("/comments", comment);
+app.use("/gifs", gif);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

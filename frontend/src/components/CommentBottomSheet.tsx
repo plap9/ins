@@ -14,6 +14,7 @@ import {
   Image,
   StyleSheet,
   Alert,
+  Keyboard,
 } from "react-native";
 import {
   BottomSheetModal,
@@ -21,18 +22,24 @@ import {
   BottomSheetBackdrop,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import { AntDesign } from "@expo/vector-icons";
+import { AntDesign, MaterialCommunityIcons } from "@expo/vector-icons";
+import { GiphyDialog, GiphySDK, GiphyThemePreset, GiphyDialogEvent } from "@giphy/react-native-sdk";
 import {
   getComments,
   createComment,
   likeComment,
   unlikeComment,
   getReplies,
+  CommentType,
+  CommentPayload,
 } from "../services/commentService";
 
 interface Comment {
   comment_id: number;
-  content: string;
+  content: string | null;
+  type: CommentType;
+  gifUrl?: string | null;
+  iconName?: string | null;
   username: string;
   profile_picture: string;
   created_at: string;
@@ -80,8 +87,23 @@ interface GetRepliesResponse {
   };
 }
 
-const DEFAULT_AVATAR = "https://via.placeholder.com/100";
+interface MyGiphyGif {
+  id: string;
+  images: {
+    fixed_height?: { 
+      url?: string;
+    };
+    fixed_height_small?: { 
+      url?: string;
+    };
+    original?: {
+        url?: string;
+    }
+  };
+  title?: string;
+}
 
+const DEFAULT_AVATAR = "https://via.placeholder.com/100";
 const formatDate = (dateString: string): string => {
   try {
     const date = new Date(dateString);
@@ -294,55 +316,126 @@ const CommentBottomSheet = forwardRef<
   };
 
   const handlePostComment = async () => {
-    if (!newComment.trim() || isPostingComment) return;
-    if (postId === null && !replyToComment) return;
+    if (!newComment.trim() || isPostingComment || postId === null) return;
 
     setIsPostingComment(true);
-    try {
-      const result = (await createComment(postId!, {
-        content: newComment,
+    const payload: CommentPayload = { 
+        content: newComment.trim(),
         parent_id: replyToComment?.comment_id,
-      })) as CreateCommentResponse;
+        type: CommentType.TEXT,
+    };
+
+    try {
+      const result = (await createComment(postId, payload)) as CreateCommentResponse;
 
       if (result && result.comment) {
-        if (replyToComment) {
-          setComments((prev) => {
-            const newComments = addReplyToComment(
-              prev,
-              replyToComment.comment_id,
-              {
-                ...result.comment,
-                parent_id: replyToComment.comment_id,
-                replies: [],
-                isRepliesExpanded: false,
-              }
-            );
-            return [...newComments];
-          });
-        } else {
-          setComments((prev) => [
-            {
-              ...result.comment,
-              replies: [],
-              isRepliesExpanded: false,
-            },
-            ...prev,
-          ]);
-        }
+         const newCommentData = {
+             ...result.comment,
+             replies: [],
+             isRepliesExpanded: false,
+         };
+
+         if (replyToComment) {
+            setComments((prev) => {
+                const [updated, found] = updateWithFoundStatus(prev, replyToComment.comment_id, newCommentData);
+                if (found) return updated;
+                return [newCommentData, ...prev];
+            });
+         } else {
+            setComments((prev) => [newCommentData, ...prev]);
+         }
 
         setNewComment("");
         setReplyToComment(null);
+        Keyboard.dismiss();
 
         if (onCommentAdded) {
-          onCommentAdded(postId!);
+          onCommentAdded(postId);
         }
       }
     } catch (error) {
+      console.error("Lỗi khi gửi bình luận text:", error);
       Alert.alert("Lỗi", "Không thể gửi bình luận.");
     } finally {
       setIsPostingComment(false);
     }
   };
+
+  const handleGifSelect = useCallback(async (gif: MyGiphyGif) => {
+    GiphyDialog.hide();
+    const gifUrl = gif.images.fixed_height?.url;
+
+    if (!gifUrl || isPostingComment || postId === null) {
+      console.warn("Không có URL GIF phù hợp hoặc đang gửi comment khác.");
+      return;
+    }
+
+    setIsPostingComment(true);
+    const payload: CommentPayload = {
+        parent_id: replyToComment?.comment_id,
+        type: CommentType.GIF, 
+        gifUrl: gifUrl,
+        content: null, 
+    };
+
+    try {
+      const result = (await createComment(postId, payload)) as CreateCommentResponse;
+
+      if (result && result.comment) {
+         const newCommentData = {
+             ...result.comment,
+             replies: [],
+             isRepliesExpanded: false,
+         };
+
+         if (replyToComment) {
+             setComments((prev) => {
+                 const [updated, found] = updateWithFoundStatus(prev, replyToComment.comment_id, newCommentData);
+                 if (found) return updated;
+                 return [newCommentData, ...prev];
+             });
+         } else {
+             setComments((prev) => [newCommentData, ...prev]);
+         }
+
+        setReplyToComment(null);
+        Keyboard.dismiss();
+
+        if (onCommentAdded) {
+          onCommentAdded(postId);
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi khi gửi bình luận GIF:", error);
+      Alert.alert("Lỗi", "Không thể gửi bình luận GIF.");
+    } finally {
+      setIsPostingComment(false);
+    }
+  }, [postId, replyToComment, isPostingComment, onCommentAdded]);
+
+  const openGiphyDialog = useCallback(() => {
+    Keyboard.dismiss();
+    GiphyDialog.show();
+
+    let gifSelectListeners: any = null;
+    let dialogDismissListener: any = null;
+
+    const cleanupListeners = () => {
+      gifSelectListeners?.remove();
+      dialogDismissListener?.remove();
+    };
+
+    gifSelectListeners = GiphyDialog.addListener(GiphyDialogEvent.MediaSelected, (e) => {
+      if (e.media && typeof e.media === 'object') {
+        handleGifSelect(e.media as MyGiphyGif);
+      }
+    });
+
+    dialogDismissListener = GiphyDialog.addListener(GiphyDialogEvent.Dismissed, () => {
+      console.log('Giphy dialog dismissed');
+      cleanupListeners();
+    });
+  }, [handleGifSelect]);
 
   const handleLikeComment = async (
     commentId: number,
@@ -557,10 +650,30 @@ const CommentBottomSheet = forwardRef<
             className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
           />
           <View className="flex-1 mr-2.5">
-            <Text>
-              <Text className="font-semibold">{item.username}</Text>
-              {item.content}
-            </Text>
+          {item.type === CommentType.GIF && item.gifUrl ? (
+              <View>
+                 <Text className="font-semibold mb-1">{item.username}</Text>
+                 <Image 
+                    source={{ uri: item.gifUrl }}
+                    className="w-[150px] h-[120px] rounded-lg mt-1 bg-gray-300"
+                    resizeMode="contain"
+                 />
+              </View>
+
+            ) : item.type === CommentType.ICON && item.iconName ? (
+               <Text>
+                  <Text className="font-semibold">{item.username}</Text>
+                  <Text style={{ marginLeft: 5, fontSize: 24 }}>
+                     {` ${item.iconName}`}
+                  </Text>
+               </Text>
+
+            ) : (
+               <Text>
+                  <Text className="font-semibold">{item.username}</Text>
+                  {item.content ? ` ${item.content}` : ''}
+               </Text>
+            )}
             <View className="flex-row items-center mt-1 gap-2.5">
               <Text className="text-xs text-gray-500">
                 {formatDate(item.created_at)}
@@ -628,6 +741,7 @@ const CommentBottomSheet = forwardRef<
       backdropComponent={renderBackdrop}
       style={styles.sheetContainer}
       handleIndicatorStyle={{ backgroundColor: "#ccc" }}
+      keyboardBehavior="interactive"
     >
       <View className="items-center py-3 border-b border-gray-200">
         <Text className="text-base font-semibold">Bình luận</Text>
@@ -667,6 +781,13 @@ const CommentBottomSheet = forwardRef<
             source={{ uri: DEFAULT_AVATAR }}
             className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
           />
+          <TouchableOpacity 
+            onPress={openGiphyDialog}
+            className="px-2 justify-center items-center"
+            disabled={isPostingComment}>
+              <MaterialCommunityIcons name="file-gif-box" size={28} color={isPostingComment ? '#ccc' : '#555'} />
+            </TouchableOpacity>
+
           <BottomSheetTextInput
             style={styles.textInput}
             placeholder={
@@ -714,13 +835,18 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 10,
     maxHeight: 80,
     backgroundColor: "#f0f2f5",
     borderRadius: 18,
     fontSize: 15,
+  },
+  gifImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
   },
 });
 

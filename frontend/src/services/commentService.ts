@@ -1,8 +1,11 @@
 import apiClient from "./apiClient";
 
-interface CommentPayload {
-  content: string;
-  parent_id?: number | null;
+export interface CommentPayload {
+  content: string | null;
+  parent_id?: number;
+  type: CommentType;
+  gifUrl?: string;
+  iconName?: string;
 }
 
 interface PaginationParams {
@@ -10,13 +13,30 @@ interface PaginationParams {
   limit?: number;
 }
 
+export enum CommentType {
+  TEXT = 'text',
+  ICON = 'icon',
+  GIF = 'gif',
+}
+
 export const createComment = async (
   postId: number,
   payload: CommentPayload
 ) => {
-  if (!payload.content || payload.content.trim() === "") {
+  const type = payload.type || CommentType.TEXT;
+  
+  if (type === CommentType.TEXT && (!payload.content || payload.content.trim() === "")) {
     return Promise.reject(new Error("Nội dung bình luận không được để trống"));
   }
+  
+  if (type === CommentType.GIF && !payload.gifUrl) {
+    return Promise.reject(new Error("URL GIF không được để trống"));
+  }
+  
+  if (type === CommentType.ICON && !payload.iconName) {
+    return Promise.reject(new Error("Tên icon không được để trống"));
+  }
+  
   try {
     const response = await apiClient.post(`/posts/${postId}/comments`, payload);
     return response.data;
@@ -73,12 +93,32 @@ export const getReplies = async (
   }
 };
 
-export const updateComment = async (commentId: number, content: string) => {
-  if (!content || content.trim() === "") {
+
+export const updateComment = async (
+  commentId: number, 
+  payload: {
+    content?: string;
+    type?: CommentType;
+    gifUrl?: string;
+    iconName?: string;
+  }
+) => {
+  const type = payload.type || CommentType.TEXT;
+  
+  if (type === CommentType.TEXT && (!payload.content || payload.content.trim() === "")) {
     return Promise.reject(new Error("Nội dung bình luận không được để trống"));
   }
+  
+  if (type === CommentType.GIF && !payload.gifUrl) {
+    return Promise.reject(new Error("URL GIF không được để trống"));
+  }
+  
+  if (type === CommentType.ICON && !payload.iconName) {
+    return Promise.reject(new Error("Tên icon không được để trống"));
+  }
+  
   try {
-    const response = await apiClient.put(`/comments/${commentId}`, { content });
+    const response = await apiClient.put(`/comments/${commentId}`, payload);
     return response.data;
   } catch (error: any) {
     console.error(
@@ -143,6 +183,48 @@ export const getCommentLikes = async (
   } catch (error: any) {
     console.error(
       `Lỗi khi lấy danh sách thích bình luận ${commentId}:`,
+      error.response?.data || error
+    );
+    throw error;
+  }
+};
+
+export const searchGiphy = async (
+  query: string,
+  params?: PaginationParams
+) => {
+  try {
+    const response = await apiClient.get('/gifs/search', {
+      params: {
+        q: query,
+        page: params?.page || 1,
+        limit: params?.limit || 20,
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      `Lỗi khi tìm kiếm GIF:`,
+      error.response?.data || error
+    );
+    throw error;
+  }
+};
+
+export const getTrendingGifs = async (
+  params?: PaginationParams
+) => {
+  try {
+    const response = await apiClient.get('/gifs/trending', {
+      params: {
+        page: params?.page || 1,
+        limit: params?.limit || 20,
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      `Lỗi khi lấy GIF thịnh hành:`,
       error.response?.data || error
     );
     throw error;
