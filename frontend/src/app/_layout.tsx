@@ -39,6 +39,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile/index" />
           <Stack.Screen name="profile/settingsscreen" />
           <Stack.Screen name="profile/settingsscreen/index" />
+          <Stack.Screen name="profile/[username]"/>
         </Stack>
 
         <StatusBar style="auto" />

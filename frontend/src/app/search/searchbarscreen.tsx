@@ -60,7 +60,7 @@ const SearchScreen = () => {
     <SafeAreaView className="flex-1 bg-white">
       {/* Header with Search Bar */}
       <View className="p-4 border-b border-gray-200 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
+        <TouchableOpacity onPress={() => router.push("/search")} className="mr-3">
           <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
         <TextInput

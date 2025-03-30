@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 
 export default function LayoutProfile() {
+
   return (
     <Stack>
       <Stack.Screen 
@@ -22,6 +23,14 @@ export default function LayoutProfile() {
       <Stack.Screen
         name="settingsscreen"
         options={{ title: "Settings", headerShown: false }}
+      />
+      <Stack.Screen
+        name="[username]"
+        options={({ route }: {route: any}) => ({
+          title: route.params?.username || 'Profile',
+          headerShown: false,
+          headerBackTitle: 'Back'
+        })}
       />
     </Stack>
   );

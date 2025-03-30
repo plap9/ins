@@ -6,10 +6,10 @@ import StoryList from "~/components/StoryList";
 import { useState } from "react";
 import ProfilePostList from "~/components/ProfilePostList";
 import { Feather, Ionicons, MaterialIcons, Fontisto, AntDesign } from '@expo/vector-icons';
-
+import DiscoverPersonItem, { Person } from "~/components/DiscoverPerson";
 
 // Giả lập dữ liệu cho phần stories:
-const stories = [
+const storiesdata = [
   {
     id: "1",
     image: "https://www.atakinteractive.com/hubfs/react-native%20%281%29.png",
@@ -24,21 +24,13 @@ const stories = [
   },
 ];
 
-// Define interface for discover people items
-interface DiscoverPerson {
-  id: string;
-  name: string;
-  image: string;
-  mutualFriends: number;
-}
-
-// Sample discover people data
-const discoverPeople: DiscoverPerson[] = [
+// Giả lập dữ liệu cho phần discover people:
+export const discoverPeopleData: Person[] = [
   {
     id: "1",
-    name: "john_doe",
+    name: "john_doe123",
     image: "https://randomuser.me/api/portraits/men/32.jpg",
-    mutualFriends: 5,
+    mutualFriends: 7,
   },
   {
     id: "2",
@@ -66,50 +58,20 @@ const discoverPeople: DiscoverPerson[] = [
   },
 ];
 
+
+
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");
   const [showDiscoverPeople, setShowDiscoverPeople] = useState(false);
-  const [peopleList, setPeopleList] = useState<DiscoverPerson[]>(discoverPeople);
   const router = useRouter();
-  const username = "username_123"; // You can replace this with actual username from your data
-  
-  // Function to remove a person card
-  const removePerson = (id: string) => {
-    setPeopleList(current => current.filter(person => person.id !== id));
+  const username = "username_123";
+
+  //logic component DiscoverPeople
+  const [discoverPeople, setDiscoverPeople] = useState<Person[]>(discoverPeopleData);
+  const handleRemovePerson = (id: string) => {
+  setDiscoverPeople(current => current.filter(person => person.id !== id));
   };
-  
-  // Discover People Item Component
-  const DiscoverPersonItem = ({ item }: { item: DiscoverPerson }) => {
-    return (
-      <View className="w-40 h-60 mr-3 bg-white rounded-lg border border-gray-200 relative">
-        <TouchableOpacity 
-          className="absolute right-0 top-1 z-10 w-6 h-6 items-center justify-center"
-          onPress={() => removePerson(item.id)}
-        >
-          <Feather name="x" size={14} color="grey" />
-        </TouchableOpacity>
-        <View className="items-center justify-center mt-4">
-          <Image
-            source={{ uri: item.image }}
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              overflow: 'hidden'
-            }}
-            resizeMode="cover"
-          />
-        </View>
-        <View className="p-2 items-center">
-          <Text className="font-bold" numberOfLines={1}>{item.name}</Text>
-          <Text className="text-xs text-gray-500">{item.mutualFriends} mutual friends</Text>
-          <TouchableOpacity className="bg-blue-500 rounded-lg py-2 mt-4 absolute top-16 left-2 right-2">
-            <Text className="text-white text-sm text-center font-semibold">Follow</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
+
   
   return (
     <View>
@@ -175,10 +137,10 @@ export default function ProfileScreen() {
         </View>
 
         {/* Story */}
-        <StoryList stories={stories} />
+        <StoryList stories={storiesdata} />
         
         {/* Buttons */}
-        <View className="flex-row justify-between mb-4">
+        <View className="flex-row justify-between mb-4" >
           <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
             <Text className="text-center text-black font-semibold">Edit</Text>
           </TouchableOpacity>
@@ -203,9 +165,15 @@ export default function ProfileScreen() {
               horizontal 
               showsHorizontalScrollIndicator={false}
             >
-              {peopleList.map(person => (
-                <DiscoverPersonItem key={person.id} item={person} />
-              ))}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {discoverPeople.map(person => (
+                  <DiscoverPersonItem 
+                    key={person.id} 
+                    suggested={person} 
+                    removePerson={handleRemovePerson} 
+                  />
+                ))}
+              </ScrollView>
             </ScrollView>
           </View>
         )}
