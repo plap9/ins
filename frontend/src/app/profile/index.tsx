@@ -1,12 +1,13 @@
 import { View, Text, Image, FlatList, TouchableOpacity, ScrollView } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
 import StoryList from "~/components/StoryList";
 import { useState } from "react";
 import ProfilePostList from "~/components/ProfilePostList";
 import { Feather, Ionicons, MaterialIcons, Fontisto, AntDesign } from '@expo/vector-icons';
 import DiscoverPersonItem, { Person } from "~/components/DiscoverPerson";
+import * as Clipboard from 'expo-clipboard';
+
 
 // Giả lập dữ liệu cho phần stories:
 const storiesdata = [
@@ -72,7 +73,14 @@ export default function ProfileScreen() {
   setDiscoverPeople(current => current.filter(person => person.id !== id));
   };
 
-  
+  const pathname = usePathname();
+
+  const handleShare = async () => {
+    const fullUrl = `http://localhost:8081/${pathname}`;
+    await Clipboard.setStringAsync(fullUrl);
+    alert('Đường dẫn đã được copy vào clipboard!');
+  };
+
   return (
     <View>
       {/* Header */}
@@ -144,7 +152,7 @@ export default function ProfileScreen() {
           <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
             <Text className="text-center text-black font-semibold">Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
+          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={handleShare}>
             <Text className="text-center text-black font-semibold">Share profile</Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -161,10 +169,6 @@ export default function ProfileScreen() {
             <View className="flex-row justify-between items-center mb-2">
               <Text className="font-bold text-base">Discover people</Text>
             </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-            >
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {discoverPeople.map(person => (
                   <DiscoverPersonItem 
@@ -174,7 +178,6 @@ export default function ProfileScreen() {
                   />
                 ))}
               </ScrollView>
-            </ScrollView>
           </View>
         )}
         

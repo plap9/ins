@@ -24,7 +24,7 @@ export default function RootLayout() {
   }
 
   return (
-<<<<<<< HEAD
+    <GestureHandlerRootView>
     <AuthProvider>
       <SafeAreaProvider>
         {/* Cấu hình chung cho tất cả các màn hình */}
@@ -45,31 +45,10 @@ export default function RootLayout() {
           <Stack.Screen name="profile/settingsscreen/index" />
           <Stack.Screen name="profile/[username]"/>
         </Stack>
-=======
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <SafeAreaProvider>
-          {/* Cấu hình chung cho tất cả các màn hình */}
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "slide_from_right",
-            }}
-          >
-            {/* Các màn hình chính */}
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth" />
-            {/* Các màn hình profile */}
-            <Stack.Screen name="profile" />
-            <Stack.Screen name="profile/index" />
-            <Stack.Screen name="profile/settingsscreen" />
-            <Stack.Screen name="profile/settingsscreen/index" />
-          </Stack>
->>>>>>> eb3487d6e8ffe473647134648808c6ce9c9ed906
 
           <StatusBar style="auto" />
         </SafeAreaProvider>
       </AuthProvider>
-    </GestureHandlerRootView>
+    </ GestureHandlerRootView>
   );
 }
