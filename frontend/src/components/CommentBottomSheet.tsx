@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   ForwardedRef,
+  useRef,
 } from "react";
 import {
   View,
@@ -14,6 +15,8 @@ import {
   Image,
   StyleSheet,
   Alert,
+  Platform,
+  TextInput as RNTextInput,
 } from "react-native";
 import {
   BottomSheetModal,
@@ -29,6 +32,7 @@ import {
   unlikeComment,
   getReplies,
 } from "../services/commentService";
+import { TextInput as RNGHTextInput } from 'react-native-gesture-handler';
 
 interface Comment {
   comment_id: number;
@@ -38,6 +42,7 @@ interface Comment {
   created_at: string;
   like_count: number;
   reply_count: number;
+  total_reply_count: number;
   is_liked: boolean;
   user_id?: number;
   replies?: Comment[];
@@ -81,6 +86,17 @@ interface GetRepliesResponse {
 }
 
 const DEFAULT_AVATAR = "https://via.placeholder.com/100";
+const MAX_COMMENT_DEPTH = 5;
+const MAX_UPDATE_DEPTH = 10;
+
+const commentsCache = new Map<number, {
+  comments: Comment[];
+  page: number;
+  totalPages: number;
+  allCommentsLoaded: boolean;
+}>();
+
+const timestampCache = new Map<number, number>();
 
 const formatDate = (dateString: string): string => {
   try {
@@ -108,44 +124,89 @@ const CommentBottomSheet = forwardRef<
   const [likeInProgress, setLikeInProgress] = useState<number | null>(null);
   const [replyToComment, setReplyToComment] = useState<Comment | null>(null);
   const [loadingReplies, setLoadingReplies] = useState<number | null>(null);
+  const textInputRef = useRef<RNGHTextInput>(null);
+  const currentPostIdRef = useRef<number | null>(null);
+  
 
   const snapPoints = useMemo(() => ["60%", "90%"], []);
 
-  const fetchCommentsForPost = useCallback(
-    async (postIdToFetch: number, fetchPage = 1) => {
-      if (isLoading) return;
-      if (allCommentsLoaded && fetchPage > 1) return;
-      if (fetchPage > totalPages) return;
+  useEffect(() => {
+    if (postId !== null && comments.length > 0) {
+      commentsCache.set(postId, {
+        comments: [...comments],
+        page,
+        totalPages,
+        allCommentsLoaded,
+      });
+      timestampCache.set(postId, Date.now());
+    }
+  }, [comments, page, totalPages, allCommentsLoaded, postId]);
 
+  const fetchCommentsForPost = useCallback(
+    async (postIdToFetch: number, fetchPage = 1, force = false) => {
+      if (isLoading && fetchPage === 1 && !force) return;
+      if (allCommentsLoaded && fetchPage > 1 && !force) return;
+
+      const isInitialLoadOrForce = fetchPage === 1 || force;
       setIsLoading(true);
+
       try {
+        const currentTime = Date.now();
+        const cacheTimestamp = timestampCache.get(postIdToFetch) || 0;
+        const cacheIsValid = currentTime - cacheTimestamp < 5 * 60 * 1000;
+        if (isInitialLoadOrForce && !force && commentsCache.has(postIdToFetch) && cacheIsValid) {
+          const cachedData = commentsCache.get(postIdToFetch);
+          if (cachedData) {
+            console.log("Sử dụng cache cho postId:", postIdToFetch);
+            setComments(cachedData.comments);
+            setPage(cachedData.page);
+            setTotalPages(cachedData.totalPages);
+            setAllCommentsLoaded(cachedData.allCommentsLoaded);
+            setIsLoading(false);
+            return;
+          }
+        }
+
         const data = (await getComments(postIdToFetch, {
           page: fetchPage,
           limit: 20,
           parent_id: null,
         })) as GetCommentsResponse;
+
+        console.log("Dữ liệu comments nhận được:", data);
+
         const fetched = data.comments || [];
+        const processedComments = fetched.map((c) => ({
+          ...c,
+          replies: c.replies || [],
+          isRepliesExpanded: c.isRepliesExpanded || false,
+        }));
 
         setTotalPages(data.pagination.totalPage);
+        const newAllLoaded =
+          processedComments.length < 20 ||
+          fetchPage >= data.pagination.totalPage;
 
-        if (fetched.length === 0) {
-          setAllCommentsLoaded(true);
-          if (fetchPage === 1) setComments([]);
+        if (isInitialLoadOrForce) {
+          console.log("Cập nhật comments mới:", processedComments);
+          setComments(processedComments);
         } else {
-          if (fetchPage === 1) {
-            setComments(fetched);
-            setAllCommentsLoaded(
-              fetched.length < 20 || fetchPage >= data.pagination.totalPage
-            );
-          } else {
-            setComments((prev) => [...prev, ...fetched]);
-            setAllCommentsLoaded(
-              fetched.length < 20 || fetchPage >= data.pagination.totalPage
-            );
-          }
+          setComments((prev) => [...prev, ...processedComments]);
+        }
+        setAllCommentsLoaded(newAllLoaded);
+
+        if (isInitialLoadOrForce) {
+        commentsCache.set(postIdToFetch, {
+        comments: processedComments,
+        page: fetchPage,
+        totalPages: data.pagination.totalPage,
+        allCommentsLoaded: newAllLoaded,
+        });
+        timestampCache.set(postIdToFetch, Date.now());
         }
       } catch (error) {
-        console.error("Error fetching comments:", error);
+        console.error("Lỗi khi tải bình luận:", error);
+        if (isInitialLoadOrForce) setComments([]);
       } finally {
         setIsLoading(false);
       }
@@ -155,32 +216,48 @@ const CommentBottomSheet = forwardRef<
 
   useEffect(() => {
     if (postId !== null) {
-      setComments([]);
-      setPage(1);
-      setAllCommentsLoaded(false);
-      setTotalPages(1);
-      fetchCommentsForPost(postId, 1);
-    } else {
-      setComments([]);
-      setPage(1);
-      setAllCommentsLoaded(false);
-      setTotalPages(1);
+      console.log(`Post ID changed: ${postId}. Fetching comments.`);
+      currentPostIdRef.current = postId;
+      if (currentPostIdRef.current !== postId) {
+        setComments([]);
+        setPage(1);
+        setAllCommentsLoaded(false);
+        setTotalPages(1);
+        setReplyToComment(null);
+        setNewComment("");
+      }
+      fetchCommentsForPost(postId, 1, false);
     }
   }, [postId]);
 
-  const loadMoreComments = () => {
-    if (postId !== null && !isLoading && !allCommentsLoaded) {
+  useEffect(() => {
+    console.log("Comments đã được cập nhật:", comments.length);
+  }, [comments]);
+
+  const loadMoreComments = useCallback(() => {
+    if (
+      postId !== null &&
+      !isLoading &&
+      !allCommentsLoaded &&
+      page < totalPages
+    ) {
       const nextPage = page + 1;
-      if (nextPage <= totalPages) {
-        setPage(nextPage);
-        fetchCommentsForPost(postId, nextPage);
-      }
+      console.log(`Tải thêm trang comments: ${nextPage}`);
+      setPage(nextPage);
+      fetchCommentsForPost(postId, nextPage);
     }
-  };
+  }, [
+    postId,
+    isLoading,
+    allCommentsLoaded,
+    page,
+    totalPages,
+    fetchCommentsForPost,
+  ]);
 
   const findAncestors = (comments: Comment[], targetId: number): number[] => {
     let path: number[] = [];
-    
+
     const find = (comments: Comment[], targetId: number): boolean => {
       for (const comment of comments) {
         if (comment.comment_id === targetId) return true;
@@ -198,359 +275,325 @@ const CommentBottomSheet = forwardRef<
     return path;
   };
 
-  const updateCommentsInTree = (
-    comments: Comment[],
-    targetIds: number[],
-    updateFn: (comment: Comment) => Comment
-  ): Comment[] => {
-    return comments.map(comment => {
-      let updatedComment = comment;
-      if (targetIds.includes(comment.comment_id)) {
-        updatedComment = updateFn(comment);
+  const updateCommentsInTree = useCallback(
+    (
+      currentComments: Comment[],
+      targetIds: number[],
+      updateFn: (comment: Comment) => Comment,
+      currentDepth: number = 0
+    ): Comment[] => {
+      if (currentDepth > MAX_UPDATE_DEPTH) {
+        return currentComments;
       }
-      if (updatedComment.replies) {
-        return {
-          ...updatedComment,
-          replies: updateCommentsInTree(updatedComment.replies, targetIds, updateFn)
-        };
-      }
-      return updatedComment;
-    });
-  };
-
-  const addReplyToComment = (
-    comments: Comment[],
-    parentId: number,
-    newReply: Comment
-  ): Comment[] => {
-    const processComments = (comments: Comment[]): Comment[] => {
-      return comments.map(comment => {
-        if (comment.comment_id === parentId) {
-          return { 
-            ...comment, 
-            reply_count: comment.reply_count + 1,
-            replies: [...(comment.replies || []), newReply],
-            isRepliesExpanded: true 
-          };
+      return currentComments.map((comment) => {
+        let updatedComment = { ...comment };
+        if (targetIds.includes(comment.comment_id)) {
+          updatedComment = updateFn(updatedComment);
         }
-        
-        if (comment.replies) {
-          const updatedReplies = processComments(comment.replies);
-          const hasChanges = JSON.stringify(updatedReplies) !== JSON.stringify(comment.replies);
-          
-          return hasChanges ? {
-            ...comment,
-            reply_count: comment.reply_count + 1,
-            replies: updatedReplies
-          } : comment;
+        if (updatedComment.replies && updatedComment.replies.length > 0) {
+          updatedComment.replies = updateCommentsInTree(
+            updatedComment.replies,
+            targetIds,
+            updateFn,
+            currentDepth + 1
+          );
         }
-        
-        return comment;
+        return updatedComment;
       });
-    };
-    
-    return processComments(comments);
-  };
-  
-  const updateWithFoundStatus = (
-    comments: Comment[],
-    parentId: number,
-    newReply: Comment
-  ): [Comment[], boolean] => {
-    let found = false;
+    },
+    []
+  );
 
-    const updated = comments.map((comment) => {
-      if (comment.comment_id === parentId) {
-        found = true;
-        return {
-          ...comment,
-          reply_count: comment.reply_count + 1,
-          replies: [...(comment.replies || []), newReply],
-          isRepliesExpanded: true,
-        };
+  const insertReplyAtAnyLevel = useCallback(
+    (comments: Comment[], parentId: number, newReply: Comment): Comment[] => {
+      const processComments = (items: Comment[]): [Comment[], boolean] => {
+        let found = false;
+        const result = items.map((comment) => {
+          if (comment.comment_id === parentId) {
+            found = true;
+            const updatedReplies = [...(comment.replies || []), newReply];
+            return {
+              ...comment,
+              reply_count: comment.reply_count + 1,
+              total_reply_count: comment.total_reply_count + 1,
+              replies: updatedReplies,
+              isRepliesExpanded: true,
+            };
+          }
+          
+          if (comment.replies && comment.replies.length > 0) {
+            const [updatedReplies, foundInChild] = processComments(comment.replies);
+            if (foundInChild) {
+              found = true;
+              return {
+                ...comment,
+                total_reply_count: comment.total_reply_count + 1,
+                replies: updatedReplies,
+              };
+            }
+          }
+          
+          return comment;
+        });
+        
+        return [result, found];
+      };
+      
+      const [updatedComments, found] = processComments(comments);
+      
+      if (!found && newReply.parent_id === null) {
+        return [newReply, ...updatedComments];
       }
+      
+      return updatedComments;
+    },
+    []
+  );
 
-      if (comment.replies) {
-        const [updatedReplies, childFound] = updateWithFoundStatus(
-          comment.replies,
-          parentId,
-          newReply
-        );
-
-        if (childFound) {
-          found = true;
-          return {
-            ...comment,
-            reply_count: comment.reply_count + 1,
-            replies: updatedReplies,
-          };
-        }
-      }
-
-      return comment;
-    });
-
-    return [updated, found];
-  };
-
-  const handlePostComment = async () => {
+  const handlePostComment = useCallback(async () => {
     if (!newComment.trim() || isPostingComment) return;
-    if (postId === null && !replyToComment) return;
+    if (postId === null) {
+      Alert.alert("Lỗi", "Không thể xác định bài viết.");
+      return;
+    }
 
     setIsPostingComment(true);
+    const parentId = replyToComment?.comment_id;
+
     try {
-      const result = (await createComment(postId!, {
+      const result = (await createComment(postId, {
         content: newComment,
-        parent_id: replyToComment?.comment_id,
+        parent_id: parentId,
       })) as CreateCommentResponse;
 
       if (result && result.comment) {
-        if (replyToComment) {
-          setComments((prev) => {
-            const newComments = addReplyToComment(
-              prev,
-              replyToComment.comment_id,
-              {
-                ...result.comment,
-                parent_id: replyToComment.comment_id,
-                replies: [],
-                isRepliesExpanded: false,
-              }
-            );
-            return [...newComments];
-          });
+        const newCommentObj = {
+          ...result.comment,
+          replies: [],
+          isRepliesExpanded: false,
+        };
+
+        if (parentId) {
+          setComments((prev) => insertReplyAtAnyLevel(prev, parentId, newCommentObj));
         } else {
-          setComments((prev) => [
-            {
-              ...result.comment,
-              replies: [],
-              isRepliesExpanded: false,
-            },
-            ...prev,
-          ]);
+          setComments((prev) => [newCommentObj, ...prev]);
         }
 
         setNewComment("");
         setReplyToComment(null);
 
-        if (onCommentAdded) {
-          onCommentAdded(postId!);
+        if (onCommentAdded && postId) {
+          onCommentAdded(postId);
         }
+
+        if (commentsCache.has(postId)) {
+          const cachedData = commentsCache.get(postId);
+          if (cachedData) {
+            const updatedComments = parentId ? insertReplyAtAnyLevel(cachedData.comments, parentId, newCommentObj) : [newCommentObj, ...cachedData.comments];
+
+            commentsCache.set(postId, {
+              ...cachedData,
+              comments: updatedComments,
+            });
+          }
+        }
+      } else {
+        throw new Error("API trả về dữ liệu không hợp lệ.");
       }
-    } catch (error) {
-      Alert.alert("Lỗi", "Không thể gửi bình luận.");
+    } catch (error: any) {
+      console.error("Lỗi khi đăng bình luận:", error);
+      const errorMessage =
+        error.response?.data?.message || "Không thể gửi bình luận.";
+      Alert.alert("Lỗi", errorMessage);
     } finally {
       setIsPostingComment(false);
     }
-  };
+  }, [
+    postId,
+    newComment,
+    isPostingComment,
+    replyToComment,
+    insertReplyAtAnyLevel,
+    onCommentAdded,
+  ]);
 
-  const handleLikeComment = async (
-    commentId: number,
-    currentlyLiked: boolean
-  ) => {
-    if (likeInProgress === commentId) return;
-
-    const originalComments = [...comments];
-
-    try {
+  const handleLikeComment = useCallback(
+    async (commentId: number, currentlyLiked: boolean) => {
+      if (likeInProgress === commentId) return;
       setLikeInProgress(commentId);
 
-      const updatedComments = updateCommentsInTree(
-        comments,
-        [commentId],
-        (comment) => ({
-          ...comment,
-          is_liked: !currentlyLiked,
-          like_count: currentlyLiked
-            ? comment.like_count - 1
-            : comment.like_count + 1,
-        })
-      );
-      setComments(updatedComments);
-
-      const response = (await (currentlyLiked
-        ? unlikeComment(commentId)
-        : likeComment(commentId))) as LikeResponse;
-
-      const serverUpdatedComments = updateCommentsInTree(
-        updatedComments,
-        [commentId],
-        (comment) => ({
-          ...comment,
-          is_liked: response.liked,
-          like_count: response.like_count,
-        })
+      setComments((prev) =>
+        updateCommentsInTree(
+          prev,
+          [commentId],
+          (comment) => ({
+            ...comment,
+            is_liked: !currentlyLiked,
+            like_count: currentlyLiked
+              ? Math.max(0, comment.like_count - 1)
+              : comment.like_count + 1,
+          }),
+          0
+        )
       );
 
-      setComments(serverUpdatedComments);
-    } catch (error: any) {
-      setComments(originalComments);
-      const errorMessage =
-        error.response?.data?.message || "Thao tác thất bại, vui lòng thử lại";
-      if (error.response?.status !== 401) {
-        Alert.alert("Lỗi", errorMessage);
+      try {
+        const response = (await (currentlyLiked
+          ? unlikeComment(commentId)
+          : likeComment(commentId))) as LikeResponse;
+        setComments((prev) =>
+          updateCommentsInTree(
+            prev,
+            [commentId],
+            (comment) => ({
+              ...comment,
+              is_liked: response.liked,
+              like_count: response.like_count,
+            }),
+            0
+          )
+        );
+      } catch (error: any) {
+        setComments((prev) =>
+          updateCommentsInTree(
+            prev,
+            [commentId],
+            (comment) => ({
+              ...comment,
+              is_liked: currentlyLiked,
+              like_count: currentlyLiked
+                ? comment.like_count + 1
+                : Math.max(0, comment.like_count - 1),
+            }),
+            0
+          )
+        );
+        console.error("Lỗi khi like/unlike:", error);
+        const errorMessage =
+          error.response?.data?.message || "Thao tác thất bại.";
+        if (error.response?.status !== 401) {
+          Alert.alert("Lỗi", errorMessage);
+        }
+      } finally {
+        setLikeInProgress(null);
       }
-    } finally {
-      setLikeInProgress(null);
-    }
-  };
-  const handleReplyToComment = (comment: Comment) => {
+    },
+    [likeInProgress, updateCommentsInTree]
+  );
+
+  const handleReplyToComment = useCallback((comment: Comment) => {
     setReplyToComment(comment);
-    setNewComment("");
-  };
+    textInputRef.current?.focus();
+  }, []);
 
-  const handleCancelReply = () => {
+  const handleCancelReply = useCallback(() => {
     setReplyToComment(null);
-  };
+  }, []);
 
-  const loadReplies = async (commentId: number, page: number = 1) => {
-    setLoadingReplies(commentId);
-    try {
-      const response = (await getReplies(commentId, {
-        page,
-        limit: 20,
-      })) as GetRepliesResponse;
-  
-      setComments(prev =>
-        updateCommentsInTree(prev, [commentId], comment => ({
-          ...comment,
-          replies: page === 1 
-            ? response.comments.map(r => ({ 
-                ...r, 
-                replies: [], 
-                isRepliesExpanded: false 
-              }))
-            : [...(comment.replies || []), ...response.comments],
-          isRepliesExpanded: true,
-        }))
-      );
-    } catch (error) {
-      console.error("Error loading replies:", error);
-      Alert.alert("Lỗi", "Không thể tải phản hồi.");
-    } finally {
-      setLoadingReplies(null);
-    }
-  };
+  const loadReplies = useCallback(
+    async (commentId: number, page: number = 1) => {
+      setLoadingReplies(commentId);
+      try {
+        const response = (await getReplies(commentId, {
+          page,
+          limit: 10,
+        })) as GetRepliesResponse;
 
-  const toggleReplies = (commentId: number) => {
-    setComments(prev =>
-      updateCommentsInTree(prev, [commentId], comment => ({
-        ...comment,
-        isRepliesExpanded: !comment.isRepliesExpanded,
-      }))
-    );
-  };
+        const newReplies = response.comments.map((r) => ({
+          ...r,
+          replies: [],
+          isRepliesExpanded: false,
+        }));
 
-  const renderReplyItem = ({ item, level = 1 }: { item: Comment, level?: number }) => (
-    <View>
-      <View className={`flex-row items-start py-2 pl-${7 + level} mt-1`}>
-        <Image
-          source={{ uri: item.profile_picture || DEFAULT_AVATAR }}
-          className="w-7 h-7 rounded-full mr-2 bg-gray-200"
-        />
-        <View className="flex-1 mr-2">
-          <Text>
-            <Text className="font-semibold">{item.username}</Text> {item.content}
-          </Text>
-          <View className="flex-row items-center mt-1 gap-2">
-            <Text className="text-xs text-gray-500">
-              {formatDate(item.created_at)}
-            </Text>
-            {item.like_count > 0 && (
-              <Text className="text-xs text-gray-500 font-medium">
-                {item.like_count} lượt thích
-              </Text>
-            )}
-            <TouchableOpacity onPress={() => handleReplyToComment(item)}>
-              <Text className="text-xs text-gray-500 font-medium">Trả lời</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        <TouchableOpacity
-          className="p-1"
-          onPress={() => handleLikeComment(item.comment_id, item.is_liked)}
-          disabled={likeInProgress === item.comment_id}
-        >
-          <AntDesign
-            name={item.is_liked ? "heart" : "hearto"}
-            size={14}
-            color={item.is_liked ? "red" : "grey"}
-          />
-        </TouchableOpacity>
-      </View>
-      
-      {item.reply_count > 0 && (
-        <TouchableOpacity
-          className={`flex-row items-center ml-${11 + level} mb-2`}
-          onPress={() => toggleReplies(item.comment_id)}
-        >
-          <View className="w-6 border-l-2 border-b-2 border-gray-300 h-6 -ml-2 rounded-bl-lg" />
-          <Text className="text-xs text-gray-500 font-medium ml-2">
-            {!item.isRepliesExpanded ||
-            (item.replies && item.replies.length < item.reply_count)
-              ? `Xem ${item.reply_count} phản hồi`
-              : "Ẩn phản hồi"}
-          </Text>
-          {loadingReplies === item.comment_id && (
-            <ActivityIndicator
-              size="small"
-              color="#999"
-              style={{ marginLeft: 5 }}
-            />
-          )}
-        </TouchableOpacity>
-      )}
-  
-      {item.isRepliesExpanded && item.replies && item.replies.length > 0 && (
-        <View className="mb-2">
-          {item.replies.map((reply) => (
-            <View key={`reply-${reply.comment_id}`}>
-              {renderReplyItem({ item: reply, level: level + 1 })}
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-
-  const renderCommentItem = ({ item }: { item: Comment }) => (
-    <CommentItem item={item} depth={0} />
-  );
-
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        {...props}
-      />
-    ),
-    []
-  );
-
-  const renderListFooter = () => {
-    if (!isLoading) return null;
-    return (
-      <View className="py-5">
-        <ActivityIndicator />
-      </View>
-    );
-  };
-
-  const CommentItem = ({ item, depth = 0 }: { item: Comment; depth?: number }) => {
-    const [localLoading, setLocalLoading] = useState(false);
-  
-    const handleToggleReplies = async () => {
-      if (!item.isRepliesExpanded && (!item.replies || item.replies.length < item.reply_count)) {
-        setLocalLoading(true);
-        await loadReplies(item.comment_id);
-        setLocalLoading(false);
+        if (newReplies.length > 0) {
+          setComments((prev) =>
+            updateCommentsInTree(
+              prev,
+              [commentId],
+              (comment) => ({
+                ...comment,
+                replies:
+                  page === 1
+                    ? newReplies
+                    : [...(comment.replies || []), ...newReplies],
+                isRepliesExpanded: true,
+              }),
+              0
+            )
+          );
+        }
+        return {
+          fetchedReplies: newReplies,
+          hasMore: page < response.pagination.totalPage,
+          totalReplies: response.pagination.total,
+        };
+      } catch (error) {
+        console.error("Lỗi khi tải phản hồi cho comment:", commentId, error);
+        Alert.alert("Lỗi", "Không thể tải phản hồi.");
+        throw error;
+      } finally {
+        setLoadingReplies(null);
       }
-      toggleReplies(item.comment_id);
+    },
+    [updateCommentsInTree]
+  );
+
+  const toggleReplies = useCallback((commentId: number) => {
+    setComments((prev) =>
+      updateCommentsInTree(
+        prev, 
+        [commentId], 
+        (comment) => ({
+          ...comment,
+          isRepliesExpanded: !comment.isRepliesExpanded,
+        })
+      )
+    );
+  }, [updateCommentsInTree]);
+
+  const CommentItem = ({
+    item,
+    depth = 0,
+  }: {
+    item: Comment;
+    depth?: number;
+  }) => {
+    const [localLoading, setLocalLoading] = useState(false);
+    const isLoadingThisReply = loadingReplies === item.comment_id;
+
+    const handleToggleReplies = async () => {
+      if (item.isRepliesExpanded) {
+        toggleReplies(item.comment_id);
+        return;
+      }
+
+      const needsLoading =
+        (!item.replies || item.replies.length === 0) &&
+        item.total_reply_count > 0;
+
+      if (needsLoading) {
+        setLocalLoading(true);
+        try {
+          await loadReplies(item.comment_id, 1);
+        } catch (error) {
+          console.error(
+            `Không thể tải/mở replies cho comment ${item.comment_id}`,
+            error
+          );
+        } finally {
+          setLocalLoading(false);
+        }
+      } else if (item.replies && item.replies.length > 0) {
+        toggleReplies(item.comment_id);
+      }
     };
-  
+
+    if (depth > MAX_COMMENT_DEPTH) {
+      return null;
+    }
+
     return (
-      <View style={{ marginLeft: depth * 20 }}>
+      <View style={{ marginLeft: Math.min(depth * 15, 60) }}>
         <View className="flex-row items-start py-2.5">
           <Image
             source={{ uri: item.profile_picture || DEFAULT_AVATAR }}
@@ -558,7 +601,7 @@ const CommentBottomSheet = forwardRef<
           />
           <View className="flex-1 mr-2.5">
             <Text>
-              <Text className="font-semibold">{item.username}</Text>
+              <Text className="font-semibold">{item.username}</Text>{" "}
               {item.content}
             </Text>
             <View className="flex-row items-center mt-1 gap-2.5">
@@ -571,7 +614,9 @@ const CommentBottomSheet = forwardRef<
                 </Text>
               )}
               <TouchableOpacity onPress={() => handleReplyToComment(item)}>
-                <Text className="text-xs text-gray-500 font-medium">Trả lời</Text>
+                <Text className="text-xs text-gray-500 font-medium">
+                  Trả lời
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -587,30 +632,35 @@ const CommentBottomSheet = forwardRef<
             />
           </TouchableOpacity>
         </View>
-  
-        {item.reply_count > 0 && (
+
+        {item.total_reply_count > 0 && (
           <TouchableOpacity
-            className="flex-row items-center ml-12 mb-2"
+            className="flex-row items-center ml-11 mb-2"
             onPress={handleToggleReplies}
+            disabled={localLoading || isLoadingThisReply}
           >
-            <View className="w-6 border-l-2 border-b-2 border-gray-300 h-6 -ml-2 rounded-bl-lg" />
+            <View className="w-5 border-l border-b border-gray-300 h-5 -ml-1 rounded-bl-md" />
             <Text className="text-xs text-gray-500 font-medium ml-2">
               {!item.isRepliesExpanded
-                ? `Xem ${item.reply_count} phản hồi`
+                ? `Xem ${item.total_reply_count} phản hồi`
                 : "Ẩn phản hồi"}
             </Text>
-            {(loadingReplies === item.comment_id || localLoading) && (
-              <ActivityIndicator size="small" color="#999" style={{ marginLeft: 5 }} />
+            {(localLoading || isLoadingThisReply) && (
+              <ActivityIndicator
+                size="small"
+                color="#999"
+                style={{ marginLeft: 5 }}
+              />
             )}
           </TouchableOpacity>
         )}
-  
-        {item.isRepliesExpanded && item.replies && (
-          <View className="mb-2">
+
+        {item.isRepliesExpanded && item.replies && item.replies.length > 0 && (
+          <View>
             {item.replies.map((reply) => (
-              <CommentItem 
-                key={`reply-${reply.comment_id}`} 
-                item={reply} 
+              <CommentItem
+                key={`reply-${reply.comment_id}`}
+                item={reply}
                 depth={depth + 1}
               />
             ))}
@@ -620,6 +670,24 @@ const CommentBottomSheet = forwardRef<
     );
   };
 
+  const renderListFooter = () => {
+    if (isLoading && page > 1) {
+      return <ActivityIndicator style={{ marginVertical: 20 }} />;
+    }
+    return null;
+  };
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+      />
+    ),
+    []
+  );
+
   return (
     <BottomSheetModal
       ref={ref}
@@ -627,7 +695,9 @@ const CommentBottomSheet = forwardRef<
       snapPoints={snapPoints}
       backdropComponent={renderBackdrop}
       style={styles.sheetContainer}
-      handleIndicatorStyle={{ backgroundColor: "#ccc" }}
+      onDismiss={() => {
+        console.log("BottomSheet dismissed");
+      }}
     >
       <View className="items-center py-3 border-b border-gray-200">
         <Text className="text-base font-semibold">Bình luận</Text>
@@ -635,7 +705,7 @@ const CommentBottomSheet = forwardRef<
       <BottomSheetFlatList
         data={comments}
         keyExtractor={(item) => item.comment_id.toString()}
-        renderItem={renderCommentItem}
+        renderItem={({ item }) => <CommentItem item={item} depth={0} />}
         contentContainerStyle={styles.listContentContainer}
         onEndReached={loadMoreComments}
         onEndReachedThreshold={0.5}
@@ -668,6 +738,7 @@ const CommentBottomSheet = forwardRef<
             className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
           />
           <BottomSheetTextInput
+            ref={textInputRef}
             style={styles.textInput}
             placeholder={
               replyToComment
@@ -676,10 +747,12 @@ const CommentBottomSheet = forwardRef<
             }
             value={newComment}
             onChangeText={setNewComment}
+            placeholderTextColor="#8e8e8e"
           />
           <TouchableOpacity
             onPress={handlePostComment}
             disabled={!newComment.trim() || isPostingComment}
+            className="pl-2.5"
           >
             {isPostingComment ? (
               <ActivityIndicator size="small" color="#blue" />
