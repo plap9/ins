@@ -103,7 +103,6 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
     } catch (error) {
         await connection.rollback();
         next(error);
-        return;
     } finally {
         connection.release();
     }
@@ -195,10 +194,8 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
         
         await cacheComments(cacheKey, result);
         res.status(200).json(result);
-        return;
     } catch (error) {
         next(error);
-        return;
     }
 };
 
@@ -220,6 +217,7 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
             res.status(200).json(cachedData);
             return;
         }
+
         const [[comment]] = await pool.query<RowDataPacket[]>(
             "SELECT comment_id, post_id FROM comments WHERE comment_id = ?",
             [commentId]
@@ -255,7 +253,7 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         const total = totalRow?.total || 0;
 
         const result = {
-            comments: replies,
+            replies,
             pagination: {
                 page,
                 limit,
@@ -267,12 +265,12 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         await cacheComments(cacheKey, result);
 
         res.status(200).json(result);
-        return;
     } catch (error) {
         next(error);
-        return;
     }
 };
+
+
 
 export const updateComment = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -321,10 +319,8 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
             message: 'Cập nhật bình luận thành công',
             comment: updatedComment
         });
-        return;
     } catch (error) {
         next(error);
-        return;
     }
 };
 
@@ -373,11 +369,9 @@ export const deleteComment = async (req: AuthRequest, res: Response, next: NextF
             message: 'Xóa bình luận thành công',
             deletedCount: totalDeleteCount
         });
-        return;
     } catch (error) {
         await connection.rollback();
         next(error);
-        return;
     } finally {
         connection.release();
     }
@@ -386,108 +380,101 @@ export const deleteComment = async (req: AuthRequest, res: Response, next: NextF
 export const likeComment = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction();
-
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(commentId)) throw new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
+        if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
 
-        const [[comment]] = await connection.query<RowDataPacket[]>(`
-            SELECT 
-                comment_id,
-                like_count,
-                (SELECT COUNT(*) FROM likes WHERE comment_id = ? AND user_id = ?) AS is_liked
-            FROM comments 
-            WHERE comment_id = ? FOR UPDATE`,
-            [commentId, userId, commentId]
+        const [[comment]] = await connection.query<RowDataPacket[]>(
+            'SELECT comment_id FROM comments WHERE comment_id = ?',
+            [commentId]
         );
+        
+        if (!comment) {
+            return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
+        }
 
-        if (!comment) throw new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND);
-        if (comment.is_liked) throw new AppError('Đã thích bình luận này', 400, ErrorCode.VALIDATION_ERROR);
+        const [[liked]] = await connection.query<RowDataPacket[]>(
+            'SELECT like_id FROM likes WHERE comment_id = ? AND user_id = ?',
+            [commentId, userId]
+        );
+        
+        if (liked) {
+            return next(new AppError('Bạn đã thích bình luận này rồi', 400, ErrorCode.VALIDATION_ERROR));
+        }
 
-        const [insertResult] = await connection.query<ResultSetHeader>(
-            "INSERT INTO likes (comment_id, user_id) VALUES (?, ?)",
+        const [result] = await connection.query<ResultSetHeader>(
+            'INSERT INTO likes (comment_id, user_id) VALUES (?, ?)',
             [commentId, userId]
         );
 
-        if (insertResult.affectedRows === 0) throw new AppError('Lỗi thêm like', 500, ErrorCode.SERVER_ERROR);
+        if (result.affectedRows === 0) {
+            return next(new AppError('Lỗi khi thích bình luận', 500, ErrorCode.SERVER_ERROR));
+        }
 
-        await connection.query(
-            "UPDATE comments SET like_count = like_count + 1 WHERE comment_id = ?",
-            [commentId]
-        );
-
-        await connection.commit();
         await invalidateCommentLikesCache(commentId);
-        await invalidateCommentCache(commentId);
-        await invalidateCommentsCache(comment.post_id);
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
 
-        res.status(200).json({
-            liked: true,
-            like_count: comment.like_count + 1
+        res.status(201).json({
+            message: 'Thích bình luận thành công',
+            like_id: result.insertId
         });
-        return;
     } catch (error) {
-        await connection.rollback();
         next(error);
-        return;
     } finally {
         connection.release();
     }
 };
 
+
 export const unlikeComment = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction();
-
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(commentId)) throw new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
+        if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
 
-        const [[comment]] = await connection.query<RowDataPacket[]>(`
-            SELECT 
-                comment_id,
-                like_count,
-                (SELECT COUNT(*) FROM likes WHERE comment_id = ? AND user_id = ?) AS is_liked
-            FROM comments 
-            WHERE comment_id = ? FOR UPDATE`,
-            [commentId, userId, commentId]
+        const [[comment]] = await connection.query<RowDataPacket[]>(
+            'SELECT comment_id FROM comments WHERE comment_id = ?',
+            [commentId]
         );
+        
+        if (!comment) {
+            return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
+        }
 
-        if (!comment) throw new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND);
-        if (!comment.is_liked) throw new AppError('Chưa thích bình luận này', 400, ErrorCode.VALIDATION_ERROR);
+        const [[liked]] = await connection.query<RowDataPacket[]>(
+            'SELECT like_id FROM likes WHERE comment_id = ? AND user_id = ?',
+            [commentId, userId]
+        );
+        
+        if (!liked) {
+            return next(new AppError('Bạn chưa thích bình luận này', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
+        }
 
-        const [deleteResult] = await connection.query<ResultSetHeader>(
-            "DELETE FROM likes WHERE comment_id = ? AND user_id = ?",
+        const [result] = await connection.query<ResultSetHeader>(
+            'DELETE FROM likes WHERE comment_id = ? AND user_id = ?',
             [commentId, userId]
         );
 
-        if (deleteResult.affectedRows === 0) throw new AppError('Lỗi xóa like', 500, ErrorCode.SERVER_ERROR);
+        if (result.affectedRows === 0) {
+            return next(new AppError('Lỗi khi bỏ thích bình luận', 500, ErrorCode.SERVER_ERROR));
+        }
 
-        await connection.query(
-            "UPDATE comments SET like_count = GREATEST(0, like_count - 1) WHERE comment_id = ?",
-            [commentId]
-        );
-
-        await connection.commit();
         await invalidateCommentLikesCache(commentId);
-        await invalidateCommentCache(commentId);
-        await invalidateCommentsCache(comment.post_id);
+        await invalidateCommentCache(commentId);
+        await invalidateCommentsCache(comment.post_id);
+
 
         res.status(200).json({
-            liked: false,
-            like_count: comment.like_count - 1
+            message: 'Bỏ thích bình luận thành công'
         });
-        return;
     } catch (error) {
-        await connection.rollback();
         next(error);
-        return;
     } finally {
         connection.release();
     }
@@ -509,6 +496,8 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
             res.status(200).json(cachedData);
             return;
         }
+
+
         const [[comment]] = await pool.query<RowDataPacket[]>(
             'SELECT comment_id FROM comments WHERE comment_id = ?',
             [commentId]
@@ -552,9 +541,8 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
         await cacheCommentLikes(commentId, result, page, limit);
 
         res.status(200).json(result);
-        return;
+
     } catch (error) {
         next(error);
-        return;
     }
 };
