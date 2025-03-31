@@ -1,11 +1,14 @@
 import { View, Text, Image, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
 import { AntDesign, Fontisto, Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from "expo-status-bar";
 import { useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 
 import StoryList from '~/components/StoryList';
-import DiscoverPersonItem from '~/components/DiscoverPerson';
+import DiscoverPersonItem, { Person } from '~/components/DiscoverPerson';
+
+
 const UserProfileScreen = () => {
     const router = useRouter();
 
@@ -27,6 +30,7 @@ interface User {
   following: number;
 }
 
+//sample data user at search barbar
 const sampleUsers: User[] = [
   {
     id: "1",
@@ -80,6 +84,7 @@ const sampleUsers: User[] = [
   },
 ];
 
+//sample data storystory
 const stories = [
   {
     id: "1",
@@ -95,7 +100,41 @@ const stories = [
   },
 ];
 
-//   const { username } = useLocalSearchParams();
+//sample data discoverpeoplediscoverpeople
+const discoverPeopleData: Person[] = [
+  {
+    id: "1",
+    name: "john_doe123",
+    image: "https://randomuser.me/api/portraits/men/32.jpg",
+    mutualFriends: 7,
+  },
+  {
+    id: "2",
+    name: "jane_smith",
+    image: "https://randomuser.me/api/portraits/women/44.jpg",
+    mutualFriends: 3,
+  },
+  {
+    id: "3",
+    name: "robert_johnson",
+    image: "https://randomuser.me/api/portraits/men/45.jpg",
+    mutualFriends: 8,
+  },
+  {
+    id: "4",
+    name: "emily_wilson",
+    image: "https://randomuser.me/api/portraits/women/22.jpg",
+    mutualFriends: 2,
+  },
+  {
+    id: "5",
+    name: "michael_brown",
+    image: "https://randomuser.me/api/portraits/men/67.jpg",
+    mutualFriends: 4,
+  },
+];
+
+
   const { username } = useLocalSearchParams<UserProfileRouteParams>();
   
   // Trong thực tế, bạn sẽ fetch user data từ API dựa trên username
@@ -109,6 +148,25 @@ const stories = [
       </View>
     );
   }
+
+  const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");
+  const [showDiscoverPeople, setShowDiscoverPeople] = useState(false);  
+  
+    //logic component DiscoverPeople
+    const [discoverPeople, setDiscoverPeople] = useState<Person[]>(discoverPeopleData);
+    const handleRemovePerson = (id: string) => {
+    setDiscoverPeople(current => current.filter(person => person.id !== id));
+    };
+  
+    const pathname = usePathname();
+  
+    const handleShare = async () => {
+      const fullUrl = `http://localhost:8081${pathname}`;
+      await Clipboard.setStringAsync(fullUrl);
+      alert('Đường dẫn đã được copy vào clipboard!');
+    };
+  
+  
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -175,6 +233,39 @@ const stories = [
         {/* Story */}
         <StoryList stories={stories} />
         {/* Buttons */}
+        {/* Buttons */}
+        <View className="flex-row justify-between mb-4" >
+          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
+            <Text className="text-center text-black font-semibold">Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={handleShare}>
+            <Text className="text-center text-black font-semibold">Share profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12" 
+            onPress={() => setShowDiscoverPeople(!showDiscoverPeople)}
+          >
+            <AntDesign name="addusergroup" size={20} color="black" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Discover People Section - Only visible when button is pressed */}
+        {showDiscoverPeople && (
+          <View className="mb-4">
+            <View className="flex-row justify-between items-center mb-2">
+              <Text className="font-bold text-base">Discover people</Text>
+            </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {discoverPeople.map(person => (
+                  <DiscoverPersonItem 
+                    key={person.id} 
+                    suggested={person} 
+                    removePerson={handleRemovePerson} 
+                  />
+                ))}
+              </ScrollView>
+          </View>
+        )}
         
     
 
