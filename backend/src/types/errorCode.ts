@@ -1,5 +1,3 @@
-
-
 export enum ErrorCode {
     MISSING_CREDENTIALS = "AUTH_001",
     INVALID_CREDENTIALS = "AUTH_002",
@@ -25,6 +23,7 @@ export enum ErrorCode {
     UNSUPPORTED_FILE_TYPE = "FILE_003",
     FILE_DOWNLOAD_ERROR = "FILE_004",
     FILE_PROCESSING_ERROR = "FILE_005",
+    FILE_MISSING = "FILE_006",
   
     VALIDATION_ERROR = "VAL_001",
   

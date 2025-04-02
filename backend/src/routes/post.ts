@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import upload from "../middlewares/upload";
+import upload, { uploadPostMedia } from "../middlewares/upload";
 import { createPost } from "../controllers/posts/postController";
 import { getPosts, deletePost } from "../controllers/posts/postQueryController";
 import { authMiddleware } from "../middlewares/authMiddleware";
@@ -11,7 +11,7 @@ import comment from "./comment";
 const router: Router = express.Router();
 
 router.use("/:id/comments", comment);
-router.post("/", authMiddleware, validate(postSchema), upload.array("files", 10), createPost);
+router.post("/", authMiddleware, validate(postSchema), uploadPostMedia, createPost);
 router.get("/", authMiddleware, getPosts);
 router.delete("/:id", authMiddleware, deletePost);
 

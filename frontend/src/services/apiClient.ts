@@ -2,11 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Platform } from "react-native";
 
+const API_URL = "http://192.168.1.31:5000";
+
 const apiClient = axios.create({
-  baseURL: "http://192.168.1.31:5000",
+  baseURL: API_URL,
   timeout: 45000,
   withCredentials: true,
 });
+
 apiClient.interceptors.request.use((config) => {
   if (Platform.OS === "android") {
     config.url = config.url?.replace(/^\/api/, "");
@@ -18,12 +21,20 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === "ECONNABORTED") {
-      return Promise.reject(new Error("Request timeout"));
+      console.error("Request timeout:", error);
+      return Promise.reject(new Error("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng."));
     }
+    
+    if (!error.response) {
+      console.error("Network error:", error);
+      return Promise.reject(new Error("Lỗi kết nối mạng. Vui lòng kiểm tra kết nối và thử lại."));
+    }
+    
     return Promise.reject(error);
   }
 );
 
+// Log request for debugging
 apiClient.interceptors.request.use((config) => {
   console.log("Request URL:", config.url);
   console.log("Request Headers:", config.headers);
@@ -78,11 +89,17 @@ apiClient.interceptors.response.use(
           const authData = JSON.parse(authDataSerialized);
 
           const response = await axios.post<{ token: string }>(
-            "http://192.168.1.31:5000/auth/refresh-token",
+            `${API_URL}/auth/refresh-token`,
             {
               refreshToken: authData.refreshToken,
             }
           );
+
+          if (!response.data || !response.data.token) {
+            console.error("Invalid response from refresh token endpoint");
+            await AsyncStorage.removeItem("@AuthData");
+            return Promise.reject(new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."));
+          }
 
           const { token: newToken } = response.data;
 
@@ -98,11 +115,12 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         } else {
           console.error("Cannot refresh token: No auth data found.");
-          return Promise.reject(error);
+          return Promise.reject(new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."));
         }
       } catch (refreshError) {
         console.error("Refresh token failed:", refreshError);
-        return Promise.reject(refreshError);
+        await AsyncStorage.removeItem("@AuthData");
+        return Promise.reject(new Error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại."));
       }
     }
     return Promise.reject(error);

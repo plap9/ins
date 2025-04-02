@@ -10,6 +10,8 @@ import {
   getCachedData, 
   invalidateCacheKey 
 } from '../../utils/cacheUtils';
+import { uploadResizedImage } from '../../utils/s3Utils';
+import { ImageResizeConfig } from '../../middlewares/upload';
 import { RowDataPacket } from 'mysql2';
 
 interface UserUpdateFields {
@@ -22,40 +24,60 @@ interface UserUpdateFields {
     date_of_birth?: string;
     is_private?: boolean;
     [key: string]: any; 
-  }
+}
   
-  interface UserSettingsFields {
+interface UserSettingsFields {
     notification_preferences?: object;
     privacy_settings?: object;
     language?: string;
     theme?: string;
     two_factor_auth_enabled?: boolean;
     [key: string]: any; 
-  }
+}
 
 export const updateUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const connection = await pool.getConnection();
+    
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
             return next(new AppError("Tham số 'user_id' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
         }
 
-        const { full_name, bio, profile_picture, phone_number, website, gender, date_of_birth, is_private } = req.body;
+        await connection.beginTransaction();
+
+        let avatarUrl: string | undefined;
+
+        if (req.file) {
+            try {
+                const result = await uploadResizedImage(req.file.buffer, ImageResizeConfig.AVATAR);
+                avatarUrl = result.Location;
+            } catch (error) {
+                await connection.rollback();
+                return next(new AppError('Không thể upload ảnh', 500, ErrorCode.FILE_PROCESSING_ERROR));
+            }
+        }
+
+        const { full_name, bio, phone_number, website, gender, date_of_birth, is_private } = req.body;
         
         const updateFields: UserUpdateFields = { 
             full_name, 
-            bio, 
-            profile_picture, 
+            bio,
             phone_number, 
             website, 
             gender, 
             date_of_birth, 
             is_private 
         };
+
+        if (avatarUrl) {
+            updateFields.profile_picture = avatarUrl;
+        }
         
         const fieldsToUpdate = Object.keys(updateFields).filter(key => updateFields[key] !== undefined);
         
-        if (fieldsToUpdate.length === 0) {
+        if (fieldsToUpdate.length === 0 && !avatarUrl) {
+            await connection.rollback();
             return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
         }
 
@@ -74,11 +96,14 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         updateQuery += " WHERE user_id = ?";
         queryParams.push(userId);
 
-        const [result] = await pool.query(updateQuery, queryParams);
+        const [result] = await connection.query(updateQuery, queryParams);
 
         if ((result as any).affectedRows === 0) {
+            await connection.rollback();
             return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", 404, ErrorCode.USER_NOT_FOUND));
         }
+
+        await connection.commit();
 
         await invalidateUserProfileCache(userId);
 
@@ -115,7 +140,10 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
             user: updatedUser[0]
         });
     } catch (error) {
+        await connection.rollback();
         next(error);
+    } finally {
+        connection.release();
     }
 };
 

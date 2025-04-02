@@ -43,6 +43,9 @@ export default function PostListItem({
       : undefined;
 
   const profileImageUrl = posts.profile_picture || DEFAULT_AVATAR;
+  const username = posts.username || "Người dùng ẩn";
+  const content = posts.content || "";
+  const commentCount = posts.comment_count || 0;
 
   const formatDate = (dateString: string) => {
     try {
@@ -134,7 +137,7 @@ export default function PostListItem({
           className="w-10 h-10 rounded-full bg-gray-200"
         />
         <Text className="font-semibold flex-1" numberOfLines={1}>
-          {posts.username || "Người dùng ẩn"}
+          {username}
         </Text>
         <Feather name="more-horizontal" size={20} color="black" />
       </View>
@@ -155,7 +158,7 @@ export default function PostListItem({
             )}
           </TouchableOpacity>
           <TouchableOpacity onPress={handleCommentPress}>
-            <Ionicons name="chatbubble-outline" size={24} color="black" />     
+            <Ionicons name="chatbubble-outline" size={24} color="black" />
           </TouchableOpacity>
           <TouchableOpacity>
             <Feather name="send" size={24} color="black" />
@@ -174,18 +177,18 @@ export default function PostListItem({
           </Text>
         </TouchableOpacity>
       )}
-      {posts.content && posts.content.trim() !== "" && (
+      {content && content.trim() !== "" && (
         <View className="px-3 pt-1 pb-1">
           <Text numberOfLines={2}>
-            <Text className="font-semibold">{posts.username}</Text>{" "}
-            {posts.content}
+            <Text className="font-semibold">{username}</Text>{" "}
+            {content}
           </Text>
         </View>
       )}
-      {posts.comment_count > 0 && (
+      {commentCount > 0 && (
         <TouchableOpacity onPress={handleCommentPress}>
           <Text className="text-gray-500 px-3 pb-1">
-            Xem tất cả {posts.comment_count} bình luận
+            Xem tất cả {commentCount} bình luận
           </Text>
         </TouchableOpacity>
       )}
