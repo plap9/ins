@@ -49,9 +49,31 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
             return next(new AppError("Người dùng không tồn tại.", 404, ErrorCode.USER_NOT_FOUND));
         }
 
-        await cacheUserProfile(userId, users[0]);
+        const [[postCountResult]] = await pool.query<RowDataPacket[]>(
+            `SELECT COUNT(*) as post_count FROM posts WHERE user_id = ?`,
+            [userId]
+        );
 
-        res.status(200).json({ success: true, user: users[0], source: 'database' });
+        const [[followerCountResult]] = await pool.query<RowDataPacket[]>(
+            `SELECT COUNT(*) as follower_count FROM followers WHERE following_id = ?`,
+            [userId]
+        );
+
+        const [[followingCountResult]] = await pool.query<RowDataPacket[]>(
+            `SELECT COUNT(*) as following_count FROM followers WHERE follower_id = ?`,
+            [userId]
+        );
+
+        const userWithStats = {
+            ...users[0],
+            post_count: postCountResult?.post_count || 0,
+            follower_count: followerCountResult?.follower_count || 0,
+            following_count: followingCountResult?.following_count || 0
+        };
+
+        await cacheUserProfile(userId, userWithStats);
+
+        res.status(200).json({ success: true, user: userWithStats, source: 'database' });
     } catch (error) {
         next(error);
     }
