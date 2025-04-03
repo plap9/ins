@@ -1,15 +1,29 @@
-import { View, Text, Image, FlatList, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  FlatList,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, usePathname } from "expo-router";
 import StoryList from "~/components/StoryList";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProfilePostList from "~/components/ProfilePostList";
-import { Feather, Ionicons, MaterialIcons, Fontisto, AntDesign } from '@expo/vector-icons';
+import {
+  Feather,
+  Ionicons,
+  MaterialIcons,
+  Fontisto,
+  AntDesign,
+} from "@expo/vector-icons";
 import DiscoverPersonItem, { Person } from "~/components/DiscoverPerson";
-import * as Clipboard from 'expo-clipboard';
+import * as Clipboard from "expo-clipboard";
+import { getUserProfile } from "~/services/userService";
+import { UserProfile } from "~/services/userService";
+import { useAuth } from "../context/AuthContext";
 
-
-// Giả lập dữ liệu cho phần stories:
 const storiesdata = [
   {
     id: "1",
@@ -25,7 +39,6 @@ const storiesdata = [
   },
 ];
 
-// Giả lập dữ liệu cho phần discover people:
 export const discoverPeopleData: Person[] = [
   {
     id: "1",
@@ -59,18 +72,18 @@ export const discoverPeopleData: Person[] = [
   },
 ];
 
-
-
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");
   const [showDiscoverPeople, setShowDiscoverPeople] = useState(false);
   const router = useRouter();
-  const username = "username_123";
+  const { authData } = useAuth();
+  const [userId, setUserId] = useState<number | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  //logic component DiscoverPeople
   const [discoverPeople, setDiscoverPeople] = useState<Person[]>(discoverPeopleData);
   const handleRemovePerson = (id: string) => {
-  setDiscoverPeople(current => current.filter(person => person.id !== id));
+    setDiscoverPeople((current) => current.filter((person) => person.id !== id));
   };
 
   const pathname = usePathname();
@@ -78,8 +91,56 @@ export default function ProfileScreen() {
   const handleShare = async () => {
     const fullUrl = `http://localhost:8081/${pathname}`;
     await Clipboard.setStringAsync(fullUrl);
-    alert('Đường dẫn đã được copy vào clipboard!');
+    alert("Đường dẫn đã được copy vào clipboard!");
   };
+
+  useEffect(() => {
+    if (authData?.user?.user_id) {
+      setUserId(authData.user.user_id);
+    }
+  }, [authData]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!userId) return;
+      
+      try {
+        const response = await getUserProfile(userId);
+        setProfile(response.user);
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+        setProfile(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchProfile();
+    }
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <View className="flex-1 justify-center items-center p-4">
+        <Text className="text-lg mb-4">Không thể tải thông tin người dùng</Text>
+        <TouchableOpacity 
+          className="bg-blue-500 py-2 px-4 rounded-lg"
+          onPress={() => router.push('/auth/login')}
+        >
+          <Text className="text-white font-bold">Đăng nhập</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View>
@@ -88,50 +149,53 @@ export default function ProfileScreen() {
         {/* Username (left side) */}
         <TouchableOpacity onPress={() => alert("Username pressed")}>
           <View className="flex-row items-center">
-            <Text className="text-xl font-bold">{username}</Text>
+            <Text className="text-xl font-bold">{profile?.username}</Text>
             <Ionicons name="chevron-down" size={20} color="black" style={{ marginLeft: 5 }} />
           </View>
         </TouchableOpacity>
-        
+
         {/* Buttons (right side) */}
         <View className="flex-row items-center">
-          <TouchableOpacity 
-            className="mr-5" 
-            onPress={() => router.push("/profile/create")}
-          >
+          <TouchableOpacity className="mr-5" onPress={() => router.push("/profile/create")}>
             <Feather name="plus-square" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => router.push("/profile/settingsscreen")}
-          >
+          <TouchableOpacity onPress={() => router.push("/profile/settingsscreen")}>
             <Feather name="menu" size={24} color="black" />
           </TouchableOpacity>
         </View>
       </View>
-      
+
       <View className="bg-white p-4">
         <StatusBar style="auto" />
-        
-            {/* Avatar */}
+
+        {/* Avatar */}
         <View className="flex-row items-center mb-4">
-          <Image
-            source={{ uri: "https://cdn-useast1.kapwing.com/static/templates/spider-man-triple-meme-template-full-a9a8b78a.webp" }}
-            className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
-            style={{ aspectRatio: 1 }}
-          />
+          {profile?.profile_picture ? (
+            <Image
+              source={{
+                uri: profile.profile_picture,
+              }}
+              className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
+              style={{ aspectRatio: 1 }}
+            />
+          ) : (
+            <View className="w-20 h-20 rounded-full border border-gray-300 bg-gray-300 items-center justify-center" style={{ aspectRatio: 1 }}>
+              <Text className="text-gray-500 font-bold text-xl">{profile?.username?.charAt(0).toUpperCase() || 'U'}</Text>
+            </View>
+          )}
           <View className="flex-1 ml-4">
             {/* Stats */}
             <View className="flex-row justify-between w-full">
               <View className="items-center flex-1">
-                <Text className="text-lg font-bold">120</Text>
+                <Text className="text-lg font-bold">{profile?.post_count || 0}</Text>
                 <Text className="text-gray-500 text-xs">Posts</Text>
               </View>
               <View className="items-center flex-1">
-                <Text className="text-lg font-bold">5.2K</Text>
+                <Text className="text-lg font-bold">{profile?.follower_count || 0}</Text>
                 <Text className="text-gray-500 text-xs">Followers</Text>
               </View>
               <View className="items-center flex-1">
-                <Text className="text-lg font-bold">320</Text>
+                <Text className="text-lg font-bold">{profile?.following_count || 0}</Text>
                 <Text className="text-gray-500 text-xs">Following</Text>
               </View>
             </View>
@@ -140,47 +204,53 @@ export default function ProfileScreen() {
 
         {/* Username and Bio */}
         <View className="mb-4">
-          <Text className="text-lg font-bold">Username</Text>
-          <Text className="text-gray-500">Bio or short description</Text>
+          <Text className="text-lg font-bold">{profile?.full_name || "Username"}</Text>
+          <Text className="text-gray-500">{profile?.bio || "Bio or short description"}</Text>
         </View>
 
         {/* Story */}
         <StoryList stories={storiesdata} />
-        
+
         {/* Buttons */}
-        <View className="flex-row justify-between mb-4" >
-          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={() => router.push("/profile/update")}>
+        <View className="flex-row justify-between mb-4">
+          <TouchableOpacity
+            className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
+            onPress={() => router.push("/profile/update")}
+          >
             <Text className="text-center text-black font-semibold">Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity className="flex-1 bg-gray-200 p-2 rounded-lg mr-2" onPress={handleShare}>
+          <TouchableOpacity
+            className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
+            onPress={handleShare}
+          >
             <Text className="text-center text-black font-semibold">Share profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12" 
+          <TouchableOpacity
+            className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12"
             onPress={() => setShowDiscoverPeople(!showDiscoverPeople)}
           >
             <AntDesign name="addusergroup" size={20} color="black" />
           </TouchableOpacity>
         </View>
-        
+
         {/* Discover People Section - Only visible when button is pressed */}
         {showDiscoverPeople && (
           <View className="mb-4">
             <View className="flex-row justify-between items-center mb-2">
               <Text className="font-bold text-base">Discover people</Text>
             </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {discoverPeople.map(person => (
-                  <DiscoverPersonItem 
-                    key={person.id} 
-                    suggested={person} 
-                    removePerson={handleRemovePerson} 
-                  />
-                ))}
-              </ScrollView>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {discoverPeople.map((person) => (
+                <DiscoverPersonItem
+                  key={person.id}
+                  suggested={person}
+                  removePerson={handleRemovePerson}
+                />
+              ))}
+            </ScrollView>
           </View>
         )}
-        
+
         {/* Pagination */}
         {/* 3 button: Posts, Reels, Tags */}
         <View className="flex-row">
@@ -188,10 +258,10 @@ export default function ProfileScreen() {
             onPress={() => setActiveTab("posts")}
             className="flex-1 items-center py-2"
           >
-            <Fontisto 
-              name="nav-icon-grid" 
-              size={22} 
-              color={activeTab === "posts" ? "black" : "#AAAAAA"} 
+            <Fontisto
+              name="nav-icon-grid"
+              size={22}
+              color={activeTab === "posts" ? "black" : "#AAAAAA"}
             />
           </TouchableOpacity>
 
@@ -199,10 +269,10 @@ export default function ProfileScreen() {
             onPress={() => setActiveTab("reels")}
             className="flex-1 items-center py-2"
           >
-            <MaterialIcons 
-              name="video-collection" 
-              size={24} 
-              color={activeTab === "reels" ? "black" : "#AAAAAA"} 
+            <MaterialIcons
+              name="video-collection"
+              size={24}
+              color={activeTab === "reels" ? "black" : "#AAAAAA"}
             />
           </TouchableOpacity>
 
@@ -210,18 +280,17 @@ export default function ProfileScreen() {
             onPress={() => setActiveTab("tags")}
             className="flex-1 items-center py-2"
           >
-            <Fontisto 
-              name="hashtag" 
-              size={22} 
-              color={activeTab === "tags" ? "black" : "#AAAAAA"} 
+            <Fontisto
+              name="hashtag"
+              size={22}
+              color={activeTab === "tags" ? "black" : "#AAAAAA"}
             />
           </TouchableOpacity>
         </View>
-        
-        <View className="w-full">  
-          <ProfilePostList activeTab={activeTab}/>
-        </View>   
-         
+
+        <View className="w-full">
+          <ProfilePostList activeTab={activeTab} userId={userId || undefined} />
+        </View>
       </View>
     </View>
   );

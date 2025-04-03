@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, ScrollView, Switch } from 'react-native';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Header from './components/Header';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Setting item with switch
 const SettingSwitch = ({ title, description, value, onValueChange }: 

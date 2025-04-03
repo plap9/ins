@@ -33,8 +33,6 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// Log request for debugging
 apiClient.interceptors.request.use((config) => {
   console.log("Request URL:", config.url);
   console.log("Request Headers:", config.headers);
@@ -55,12 +53,7 @@ apiClient.interceptors.request.use(
     }
 
     if (config.data instanceof FormData) {
-      config.headers = {
-        ...config.headers,
-        "Content-Type": "multipart/form-data",
-      };
-
-      delete config.headers["Content-Type"];
+      console.log("Phát hiện FormData, để Axios tự xử lý Content-Type");
     }
 
     return config;

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Switch, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Header from './components/Header';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Notification setting item component
 const NotificationItem = ({ title, description, value, onValueChange }: 

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Header from './components/Header';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const OptionSelector = ({ title, options, selectedOption, onSelect }: 
   { title: string, options: { value: string, label: string, description?: string }[], selectedOption: string, onSelect: (value: string) => void }

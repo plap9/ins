@@ -41,11 +41,9 @@ const ProfileScreen = () => {
 
       {/* Avatar và 4 nút điều khiển */}
       <View className="items-center my-5">
-        <Avatar
-          rounded
-          size="large"
-          source={{ uri: "https://www.motortrend.com/uploads/2022/07/1993-nissan-s13-kis-front-viewt.jpg" }}
-        />
+        <View className="rounded-full bg-gray-300 items-center justify-center" style={{ width: 80, height: 80 }}>
+          <Text className="text-gray-500 font-bold text-xl">U</Text>
+        </View>
         <Text className="text-2xl font-bold mt-2">Username</Text>
         <View className="flex-row mt-5">
           <TouchableOpacity className="items-center mx-4">

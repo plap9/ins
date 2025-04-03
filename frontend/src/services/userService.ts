@@ -1,11 +1,23 @@
 import apiClient from './apiClient';
 
+// Khai báo các interface
 export interface UserProfile {
   user_id: number;
   username: string;
+  email?: string;
   full_name: string;
   bio: string;
   profile_picture: string;
+  phone_number?: string;
+  is_private?: boolean;
+  is_verified?: boolean;
+  website?: string;
+  gender?: string;
+  date_of_birth?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_login?: string;
+  status?: string;
   post_count: number;
   follower_count: number;
   following_count: number;
@@ -14,9 +26,16 @@ export interface UserProfile {
 interface UserProfileResponse {
   success: boolean;
   user: UserProfile;
+  source?: string;
 }
 
-interface UserUpdateData {
+interface UserUpdateResponse {
+  success: boolean;
+  message: string;
+  user: UserProfile;
+}
+
+export interface UpdateUserRequest {
   full_name?: string;
   bio?: string;
   profile_picture?: string;
@@ -25,6 +44,8 @@ interface UserUpdateData {
   gender?: string;
   date_of_birth?: string;
   is_private?: boolean;
+  username?: string;
+  avatar_base64?: string;
 }
 
 interface UserSettingsData {
@@ -35,10 +56,39 @@ interface UserSettingsData {
   two_factor_auth_enabled?: boolean;
 }
 
+interface UserSettingsResponse {
+  success: boolean;
+  settings: {
+    notification_preferences?: object;
+    privacy_settings?: object;
+    language?: string;
+    theme?: string;
+    two_factor_auth_enabled?: boolean;
+  };
+  source?: string;
+}
+
+interface UserSettingsUpdateResponse {
+  success: boolean;
+  message: string;
+  settings: {
+    notification_preferences?: object;
+    privacy_settings?: object;
+    language?: string;
+    theme?: string;
+    two_factor_auth_enabled?: boolean;
+  };
+}
+
+export interface User extends UserProfile {}
+
+// Khai báo hằng số 
+export const MAX_AVATAR_SIZE_MB = 5;
+
 export const getUserProfile = async (userId: number): Promise<UserProfileResponse> => {
   try {
     console.log(`[userService] Gọi API getUserProfile với userId: ${userId}`);
-    const response = await apiClient.get<UserProfileResponse>(`/user/${userId}`);
+    const response = await apiClient.get<UserProfileResponse>(`/users/${userId}`);
     console.log(`[userService] Kết quả API getUserProfile:`, response.data);
     return response.data;
   } catch (error) {
@@ -47,66 +97,120 @@ export const getUserProfile = async (userId: number): Promise<UserProfileRespons
   }
 };
 
-export const updateUserProfile = async (userId: number, data: UserUpdateData) => {
+export const updateUserProfile = async (userId: number, data: UpdateUserRequest): Promise<UserUpdateResponse> => {
   try {
-    const response = await apiClient.put(`/users/${userId}`, data);
-    return response.data;
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    throw error;
-  }
-};
-
-export const uploadAvatar = async (userId: number, file: File) => {
-  try {
-    const formData = new FormData();
-    formData.append('avatar', file);
-
-    const response = await apiClient.post(`/users/${userId}/avatar`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    console.log(`[userService] Gọi API updateUserProfile với userId: ${userId}`);
     
+    // Nếu có avatar_base64, kiểm tra kích thước
+    if (data.avatar_base64) {
+      // Ước tính kích thước (1 ký tự base64 ~ 0.75 byte)
+      const estimatedSizeInBytes = Math.ceil(data.avatar_base64.length * 0.75);
+      const estimatedSizeInMB = estimatedSizeInBytes / (1024 * 1024);
+      
+      console.log(`[userService] Kích thước ảnh base64: ~${estimatedSizeInMB.toFixed(2)}MB`);
+      
+      if (estimatedSizeInMB > MAX_AVATAR_SIZE_MB) {
+        throw new Error(`Kích thước avatar không được vượt quá ${MAX_AVATAR_SIZE_MB}MB`);
+      }
+    }
+    
+    const response = await apiClient.put<UserUpdateResponse>(`/users/${userId}`, data);
+    console.log(`[userService] Kết quả API updateUserProfile:`, response.data);
     return response.data;
   } catch (error) {
-    console.error('Error uploading avatar:', error);
+    console.error('[userService] Lỗi trong updateUserProfile:', error);
     throw error;
   }
 };
 
-export const searchUsers = async (searchTerm: string, page = 1, limit = 20) => {
+export const getUser = async (userId: number): Promise<User> => {
+  const response = await getUserProfile(userId);
+  return response.user;
+};
+
+export const updateUser = async (userId: number, updateData: UpdateUserRequest): Promise<User> => {
+  const response = await updateUserProfile(userId, updateData);
+  return response.user;
+};
+
+export const getCurrentUser = async (): Promise<User> => {
   try {
-    const response = await apiClient.get('/users/search', {
-      params: {
-        query: searchTerm,
-        page,
-        limit,
-      },
-    });
-    return response.data;
+    const response = await apiClient.get<{success: boolean, user: User}>('/users/me');
+    return response.data.user;
   } catch (error) {
-    console.error('Error searching users:', error);
+    console.error('Lỗi khi lấy thông tin người dùng hiện tại:', error);
     throw error;
   }
 };
 
-export const getUserSettings = async (userId: number) => {
+export const followUser = async (userId: number): Promise<void> => {
   try {
-    const response = await apiClient.get(`/users/${userId}/settings`);
-    return response.data;
+    await apiClient.post(`/users/${userId}/follow`);
   } catch (error) {
-    console.error('Error fetching user settings:', error);
+    console.error('Lỗi khi theo dõi người dùng:', error);
     throw error;
   }
 };
 
-export const updateUserSettings = async (userId: number, data: UserSettingsData) => {
+export const unfollowUser = async (userId: number): Promise<void> => {
   try {
-    const response = await apiClient.put(`/users/${userId}/settings`, data);
-    return response.data;
+    await apiClient.delete(`/users/${userId}/follow`);
   } catch (error) {
-    console.error('Error updating user settings:', error);
+    console.error('Lỗi khi hủy theo dõi người dùng:', error);
     throw error;
   }
-}; 
+};
+
+export const getUserFollowers = async (userId: number): Promise<User[]> => {
+  try {
+    const response = await apiClient.get<{success: boolean, followers: User[]}>(`/users/${userId}/followers`);
+    return response.data.followers;
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách người theo dõi:', error);
+    throw error;
+  }
+};
+
+export const getUserFollowing = async (userId: number): Promise<User[]> => {
+  try {
+    const response = await apiClient.get<{success: boolean, following: User[]}>(`/users/${userId}/following`);
+    return response.data.following;
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách đang theo dõi:', error);
+    throw error;
+  }
+};
+
+export const searchUsers = async (query: string): Promise<User[]> => {
+  try {
+    const response = await apiClient.get<{success: boolean, users: User[]}>(`/users/search?q=${encodeURIComponent(query)}`);
+    return response.data.users;
+  } catch (error) {
+    console.error('Lỗi khi tìm kiếm người dùng:', error);
+    throw error;
+  }
+};
+
+export const getUserSettings = async (userId: number): Promise<UserSettingsResponse> => {
+  try {
+    console.log(`[userService] Gọi API getUserSettings với userId: ${userId}`);
+    const response = await apiClient.get<UserSettingsResponse>(`/users/${userId}/settings`);
+    console.log(`[userService] Kết quả API getUserSettings:`, response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[userService] Lỗi trong getUserSettings:', error);
+    throw error;
+  }
+};
+
+export const updateUserSettings = async (userId: number, data: UserSettingsData): Promise<UserSettingsUpdateResponse> => {
+  try {
+    console.log(`[userService] Gọi API updateUserSettings với userId: ${userId}`);
+    const response = await apiClient.put<UserSettingsUpdateResponse>(`/users/${userId}/settings`, data);
+    console.log(`[userService] Kết quả API updateUserSettings:`, response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[userService] Lỗi trong updateUserSettings:', error);
+    throw error;
+  }
+};

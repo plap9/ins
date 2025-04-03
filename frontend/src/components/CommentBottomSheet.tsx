@@ -85,7 +85,6 @@ interface GetRepliesResponse {
   };
 }
 
-const DEFAULT_AVATAR = "https://via.placeholder.com/100";
 const MAX_COMMENT_DEPTH = 5;
 const MAX_UPDATE_DEPTH = 10;
 
@@ -595,10 +594,16 @@ const CommentBottomSheet = forwardRef<
     return (
       <View style={{ marginLeft: Math.min(depth * 15, 60) }}>
         <View className="flex-row items-start py-2.5">
-          <Image
-            source={{ uri: item.profile_picture || DEFAULT_AVATAR }}
-            className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
-          />
+          {item.profile_picture ? (
+            <Image
+              source={{ uri: item.profile_picture }}
+              className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
+            />
+          ) : (
+            <View className="w-9 h-9 rounded-full mr-2.5 bg-gray-300 items-center justify-center">
+              <Text className="text-gray-500 font-bold">{item.username.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
           <View className="flex-1 mr-2.5">
             <Text>
               <Text className="font-semibold">{item.username}</Text>{" "}
@@ -733,10 +738,9 @@ const CommentBottomSheet = forwardRef<
           </View>
         )}
         <View className="flex-row items-center">
-          <Image
-            source={{ uri: DEFAULT_AVATAR }}
-            className="w-9 h-9 rounded-full mr-2.5 bg-gray-200"
-          />
+          <View className="w-9 h-9 rounded-full mr-2.5 bg-gray-300 items-center justify-center">
+            <Text className="text-gray-500 font-bold">U</Text>
+          </View>
           <BottomSheetTextInput
             ref={textInputRef}
             style={styles.textInput}
