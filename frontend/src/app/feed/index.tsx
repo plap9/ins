@@ -203,22 +203,17 @@ export default function FeedScreen() {
   const onRefresh = useCallback(() => {
     console.log("Feed Screen: Đang thực hiện refresh");
     
-    // Tăng cường refresh bằng cách force reload dữ liệu
     setIsRefreshing(true);
     
-    // Xóa trạng thái cũ
     setPosts([]);
     setPage(1);
     setAllCaughtUp(false);
     
-    // Xóa cache posts trước
     apiClient.get('/cache/clear/posts')
       .then(() => {
         console.log('Đã xóa cache posts trước khi refresh');
-        // Tạo timestamp để tránh cache
         const timestamp = Date.now();
         
-        // Fetch lại dữ liệu với force = true để không dùng cache
         return apiClient.get<{ message: string; posts: Post[] }>(`/posts?page=1&limit=20&_=${timestamp}`);
       })
       .then(response => {

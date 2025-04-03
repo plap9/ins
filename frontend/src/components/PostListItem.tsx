@@ -2,7 +2,7 @@ import { Text, View, Image, TouchableOpacity, Alert } from "react-native";
 import { Ionicons, Feather, AntDesign } from "@expo/vector-icons";
 import { useState, useMemo } from "react";
 import { likePost, unlikePost } from "../services/likeService";
-import { getS3Url } from "../config";
+import { getS3Url } from "../utils/config";
 
 interface PostListItemProps {
   posts: {

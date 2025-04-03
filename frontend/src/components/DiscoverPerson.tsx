@@ -20,7 +20,7 @@ const DiscoverPersonItem = ({ suggested, removePerson }: DiscoverPersonItemProps
       <View className="w-40 h-60 mr-3 bg-white rounded-lg border border-gray-200 relative">
         <TouchableOpacity 
           className="absolute right-0 top-1 z-10 w-6 h-6 items-center justify-center"
-          onPress={() => removePerson && removePerson(suggested.id)} //Logic sẽ được truyền từ parent
+          onPress={() => removePerson && removePerson(suggested.id)}
         >
           <Feather name="x" size={14} color="grey" />
         </TouchableOpacity>

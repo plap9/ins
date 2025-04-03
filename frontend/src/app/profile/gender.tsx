@@ -36,7 +36,6 @@ const GenderScreen = () => {
           This information is not public in your profile.
         </Text>
         
-        {/* Gender options as list */}
         <View>
           {genderOptions.map((option) => (
             <TouchableOpacity 

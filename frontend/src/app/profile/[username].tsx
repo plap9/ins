@@ -14,12 +14,10 @@ const UserProfileScreen = () => {
     const router = useRouter();
 
 
-// Type for route params
 type UserProfileRouteParams = {
     username: string;
   }
   
-// Type data in User
 interface User {
   id: string;
   username: string;
@@ -31,7 +29,6 @@ interface User {
   following: number;
 }
 
-//sample data user at search barbar
 const sampleUsers: User[] = [
   {
     id: "1",
@@ -85,7 +82,6 @@ const sampleUsers: User[] = [
   },
 ];
 
-//sample data storystory
 const stories = [
   {
     id: "1",
@@ -101,7 +97,6 @@ const stories = [
   },
 ];
 
-//sample data discoverpeoplediscoverpeople
 const discoverPeopleData: Person[] = [
   {
     id: "1",
@@ -138,8 +133,6 @@ const discoverPeopleData: Person[] = [
 
   const { username } = useLocalSearchParams<UserProfileRouteParams>();
   
-  // Trong thực tế, bạn sẽ fetch user data từ API dựa trên username
-  // Ở đây tôi dùng sampleUsers từ file search của bạn
   const user = sampleUsers.find(u => u.username === username);
 
   if (!user) {
@@ -153,7 +146,6 @@ const discoverPeopleData: Person[] = [
   const [activeTab, setActiveTab] = useState<"posts" | "reels" | "tags">("posts");
   const [showDiscoverPeople, setShowDiscoverPeople] = useState(false);  
   
-    //logic component DiscoverPeople
     const [discoverPeople, setDiscoverPeople] = useState<Person[]>(discoverPeopleData);
     const handleRemovePerson = (id: string) => {
     setDiscoverPeople(current => current.filter(person => person.id !== id));
