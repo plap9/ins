@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Image, FlatList, Text, ActivityIndicator, TouchableOpacity, Dimensions } from "react-native";
+import { View, Image, FlatList, Text, ActivityIndicator, TouchableOpacity, Dimensions, Modal } from "react-native";
 import apiClient from "~/services/apiClient";
 import { useRouter } from "expo-router";
 

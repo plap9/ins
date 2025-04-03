@@ -166,7 +166,6 @@ export default function CreatePostScreen() {
 
         console.log("Đăng bài thành công, đang xóa cache...");
         
-        // Xóa cả cache posts và cache profile
         try {
             await apiClient.get(`/cache/clear/posts?_=${Date.now()}`);
             if (response.data && response.data.user_id) {
@@ -180,12 +179,10 @@ export default function CreatePostScreen() {
             { 
                 text: "OK", 
                 onPress: () => {
-                    // Đợi một khoảng thời gian ngắn để đảm bảo server đã lưu dữ liệu
                     setTimeout(() => {
-                        // Refresh feed trước khi quay về trang feed
                         refreshFeed();
                         router.back();
-                    }, 1000); // Đợi 1 giây
+                    }, 1000);
                 }
             },
         ]);

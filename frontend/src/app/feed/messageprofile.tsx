@@ -5,7 +5,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, Ionicons, Feather, FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// Import modal components
 import NotificationModal from "~/components/NotificationModal";
 import OptionsModal from "~/components/OptionsModal";
 
@@ -14,16 +13,13 @@ const ProfileScreen = () => {
 
   const router = useRouter();
 
-  // State cho modal Thông báo và Tùy chọn
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
 
-  // State cho các toggle trong modal Thông báo
   const [messageNotification, setMessageNotification] = useState(false);
   const [callNotification, setCallNotification] = useState(false);
   const [previewNotification, setPreviewNotification] = useState(false);
 
-  // State cho pagination
   const [selectedTab, setSelectedTab] = useState<"shared" | "sent">("shared");
 
   
@@ -170,15 +166,4 @@ const ProfileScreen = () => {
 
 export default ProfileScreen;
 
-{/* <NotificationModal
-visible={showNotificationModal}
-onClose={() => setShowNotificationModal(false)}
-messageNotification={messageNotification}
-setMessageNotification={setMessageNotification}
-callNotification={callNotification}
-setCallNotification={setCallNotification}
-previewNotification={previewNotification}
-setPreviewNotification={setPreviewNotification}
-/>
 
-<OptionsModal visible={showOptionsModal} onClose={() => setShowOptionsModal(false)} /> */}

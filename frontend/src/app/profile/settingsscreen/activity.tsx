@@ -5,7 +5,6 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Header from './components/Header';
 
-// Define activity data type
 interface ActivityItem {
   id: string;
   type: 'like' | 'comment' | 'follow' | 'save';
@@ -15,7 +14,6 @@ interface ActivityItem {
   contentImage?: string;
 }
 
-// Sample data for activity
 const activityData: ActivityItem[] = [
   {
     id: '1',
