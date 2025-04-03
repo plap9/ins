@@ -12,17 +12,26 @@ export const config = {
 };
 
 export const getS3Url = (key: string): string => {
-  if (!key) return '';
+  if (!key) {
+    console.log("getS3Url: key rỗng");
+    return '';
+  }
   
+  console.log("getS3Url đã nhận key:", key);
+
   if (key.startsWith('http://') || key.startsWith('https://')) {
+    console.log("getS3Url: key đã là URL đầy đủ");
     return key;
   }
   
   if (key.startsWith('s3:')) {
     key = key.substring(3);
+    console.log("getS3Url: đã bỏ prefix s3:");
   }
   
-  return `https://${config.AWS.S3_BUCKET_NAME}.s3.${config.AWS.REGION}.amazonaws.com/${key}`;
+  const fullUrl = `https://${config.AWS.S3_BUCKET_NAME}.s3.${config.AWS.REGION}.amazonaws.com/${key}`;
+  console.log("getS3Url: trả về URL đầy đủ:", fullUrl);
+  return fullUrl;
 };
 
 export default config; 

@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
+import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, usePathname } from "expo-router";
 import StoryList from "~/components/StoryList";
-import { useEffect, useState } from "react";
 import ProfilePostList from "~/components/ProfilePostList";
 import {
   Feather,
@@ -96,7 +96,10 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (authData?.user?.user_id) {
+      console.log("Thiết lập userId:", authData.user.user_id);
       setUserId(authData.user.user_id);
+    } else {
+      console.error("Không tìm thấy user_id trong authData:", authData);
     }
   }, [authData]);
 
@@ -165,133 +168,141 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <View className="bg-white p-4">
-        <StatusBar style="auto" />
+      <ScrollView className="bg-white">
+        <View className="p-4">
+          <StatusBar style="auto" />
 
-        {/* Avatar */}
-        <View className="flex-row items-center mb-4">
-          {profile?.profile_picture ? (
-            <Image
-              source={{
-                uri: profile.profile_picture,
-              }}
-              className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
-              style={{ aspectRatio: 1 }}
-            />
-          ) : (
-            <View className="w-20 h-20 rounded-full border border-gray-300 bg-gray-300 items-center justify-center" style={{ aspectRatio: 1 }}>
-              <Text className="text-gray-500 font-bold text-xl">{profile?.username?.charAt(0).toUpperCase() || 'U'}</Text>
+          {/* Avatar */}
+          <View className="flex-row items-center mb-4">
+            {profile?.profile_picture ? (
+              <Image
+                source={{
+                  uri: profile.profile_picture,
+                }}
+                className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
+                style={{ aspectRatio: 1 }}
+              />
+            ) : (
+              <View className="w-20 h-20 rounded-full border border-gray-300 bg-gray-300 items-center justify-center" style={{ aspectRatio: 1 }}>
+                <Text className="text-gray-500 font-bold text-xl">{profile?.username?.charAt(0).toUpperCase() || 'U'}</Text>
+              </View>
+            )}
+            <View className="flex-1 ml-4">
+              {/* Stats */}
+              <View className="flex-row justify-between w-full">
+                <View className="items-center flex-1">
+                  <Text className="text-lg font-bold">{profile?.post_count || 0}</Text>
+                  <Text className="text-gray-500 text-xs">Posts</Text>
+                </View>
+                <View className="items-center flex-1">
+                  <Text className="text-lg font-bold">{profile?.follower_count || 0}</Text>
+                  <Text className="text-gray-500 text-xs">Followers</Text>
+                </View>
+                <View className="items-center flex-1">
+                  <Text className="text-lg font-bold">{profile?.following_count || 0}</Text>
+                  <Text className="text-gray-500 text-xs">Following</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Username and Bio */}
+          <View className="mb-4">
+            <Text className="text-lg font-bold">{profile?.full_name || "Username"}</Text>
+            <Text className="text-gray-500">{profile?.bio || "Bio or short description"}</Text>
+          </View>
+
+          {/* Story */}
+          <StoryList stories={storiesdata} />
+
+          {/* Buttons */}
+          <View className="flex-row justify-between mb-4">
+            <TouchableOpacity
+              className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
+              onPress={() => router.push("/profile/update")}
+            >
+              <Text className="text-center text-black font-semibold">Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
+              onPress={handleShare}
+            >
+              <Text className="text-center text-black font-semibold">Share profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12"
+              onPress={() => setShowDiscoverPeople(!showDiscoverPeople)}
+            >
+              <AntDesign name="addusergroup" size={20} color="black" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Discover People Section - Only visible when button is pressed */}
+          {showDiscoverPeople && (
+            <View className="mb-4">
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="font-bold text-base">Discover people</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {discoverPeople.map((person) => (
+                  <DiscoverPersonItem
+                    key={person.id}
+                    suggested={person}
+                    removePerson={handleRemovePerson}
+                  />
+                ))}
+              </ScrollView>
             </View>
           )}
-          <View className="flex-1 ml-4">
-            {/* Stats */}
-            <View className="flex-row justify-between w-full">
-              <View className="items-center flex-1">
-                <Text className="text-lg font-bold">{profile?.post_count || 0}</Text>
-                <Text className="text-gray-500 text-xs">Posts</Text>
-              </View>
-              <View className="items-center flex-1">
-                <Text className="text-lg font-bold">{profile?.follower_count || 0}</Text>
-                <Text className="text-gray-500 text-xs">Followers</Text>
-              </View>
-              <View className="items-center flex-1">
-                <Text className="text-lg font-bold">{profile?.following_count || 0}</Text>
-                <Text className="text-gray-500 text-xs">Following</Text>
-              </View>
-            </View>
+
+          {/* Pagination */}
+          {/* 3 button: Posts, Reels, Tags */}
+          <View className="flex-row">
+            <TouchableOpacity
+              onPress={() => setActiveTab("posts")}
+              className="flex-1 items-center py-2"
+            >
+              <Fontisto
+                name="nav-icon-grid"
+                size={22}
+                color={activeTab === "posts" ? "black" : "#AAAAAA"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setActiveTab("reels")}
+              className="flex-1 items-center py-2"
+            >
+              <MaterialIcons
+                name="video-collection"
+                size={24}
+                color={activeTab === "reels" ? "black" : "#AAAAAA"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setActiveTab("tags")}
+              className="flex-1 items-center py-2"
+            >
+              <Fontisto
+                name="hashtag"
+                size={22}
+                color={activeTab === "tags" ? "black" : "#AAAAAA"}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Username and Bio */}
-        <View className="mb-4">
-          <Text className="text-lg font-bold">{profile?.full_name || "Username"}</Text>
-          <Text className="text-gray-500">{profile?.bio || "Bio or short description"}</Text>
+        <View style={{ height: 500 }}>
+          {userId ? (
+            <>
+              <ProfilePostList activeTab={activeTab} userId={userId} />
+            </>
+          ) : (
+            <Text className="text-center text-red-500 my-4">Không có userId, không thể tải bài đăng</Text>
+          )}
         </View>
-
-        {/* Story */}
-        <StoryList stories={storiesdata} />
-
-        {/* Buttons */}
-        <View className="flex-row justify-between mb-4">
-          <TouchableOpacity
-            className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
-            onPress={() => router.push("/profile/update")}
-          >
-            <Text className="text-center text-black font-semibold">Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 bg-gray-200 p-2 rounded-lg mr-2"
-            onPress={handleShare}
-          >
-            <Text className="text-center text-black font-semibold">Share profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="bg-gray-200 p-2 rounded-lg items-center justify-center w-12"
-            onPress={() => setShowDiscoverPeople(!showDiscoverPeople)}
-          >
-            <AntDesign name="addusergroup" size={20} color="black" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Discover People Section - Only visible when button is pressed */}
-        {showDiscoverPeople && (
-          <View className="mb-4">
-            <View className="flex-row justify-between items-center mb-2">
-              <Text className="font-bold text-base">Discover people</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {discoverPeople.map((person) => (
-                <DiscoverPersonItem
-                  key={person.id}
-                  suggested={person}
-                  removePerson={handleRemovePerson}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Pagination */}
-        {/* 3 button: Posts, Reels, Tags */}
-        <View className="flex-row">
-          <TouchableOpacity
-            onPress={() => setActiveTab("posts")}
-            className="flex-1 items-center py-2"
-          >
-            <Fontisto
-              name="nav-icon-grid"
-              size={22}
-              color={activeTab === "posts" ? "black" : "#AAAAAA"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setActiveTab("reels")}
-            className="flex-1 items-center py-2"
-          >
-            <MaterialIcons
-              name="video-collection"
-              size={24}
-              color={activeTab === "reels" ? "black" : "#AAAAAA"}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setActiveTab("tags")}
-            className="flex-1 items-center py-2"
-          >
-            <Fontisto
-              name="hashtag"
-              size={22}
-              color={activeTab === "tags" ? "black" : "#AAAAAA"}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View className="w-full">
-          <ProfilePostList activeTab={activeTab} userId={userId || undefined} />
-        </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
