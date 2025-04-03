@@ -11,6 +11,7 @@ const COMMENT_CACHE_EXPIRY = 300;
 const USER_CACHE_EXPIRY = 900; 
 const USER_LIST_CACHE_EXPIRY = 600; 
 const USER_QUEUE_EXPIRY = 3600;
+const POST_CACHE_EXPIRY = 300;
 
 export const sanitizeUserData = (user: any) => {
   const sanitized = { ...user };
@@ -32,12 +33,12 @@ export const getCachedUser = async (userId: number) => {
   return data ? JSON.parse(data) : null;
 };
 
-export const cachePostList = async (key: string, postsData: any, expireTime = 900) => {
+export const cachePostList = async (key: string, data: any, expireTime = POST_CACHE_EXPIRY) => {
   await redisClient.setex(
-    `posts:${key}`,
+    key,
     expireTime,
-    JSON.stringify(postsData)
-  )
+    JSON.stringify(data)
+  );
 };
 
 export const getCachePostsList = async (key: string) => {

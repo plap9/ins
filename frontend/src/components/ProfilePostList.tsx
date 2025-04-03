@@ -1,95 +1,178 @@
-// ~/components/ProfilePostList.tsx
-import React, { useEffect, useState } from 'react';
-import { View, FlatList, Image, TouchableOpacity, Text } from 'react-native';
-import { Link } from 'expo-router';
+import React, { useState, useEffect } from "react";
+import { View, Image, FlatList, Text, ActivityIndicator, TouchableOpacity, Dimensions } from "react-native";
+import apiClient from "~/services/apiClient";
+import { useRouter } from "expo-router";
 
-// Dữ liệu mẫu cho grid posts
-const samplePosts = [
-  {
-    id: 1,
-    image: "https://images.unsplash.com/photo-1597589827317-4c6d6e0a90bd"
-  },
-  {
-    id: 2,
-    image: "https://images.unsplash.com/photo-1598128558393-70ff21433be0"
-  },
-  {
-    id: 3,
-    image: "https://images.unsplash.com/photo-1609692814859-8cb88b73827c"
-  },
-  {
-    id: 4,
-    image: "https://images.unsplash.com/photo-1558227576-efbf15cf1864"
-  },
-  {
-    id: 5,
-    image: "https://images.unsplash.com/photo-1558054455-d6b4d21e39c0"
-  },
-  {
-    id: 6,
-    image: "https://images.unsplash.com/photo-1583221700633-f13c7e442f26"
-  },
-];
+interface Post {
+  post_id: number;
+  content: string;
+  created_at: string;
+  media_urls: string[];
+  media_types: string[];
+}
 
-interface Props {
-  activeTab: string;
+interface ApiResponse {
+  success: boolean;
+  posts: Post[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPage: number;
+  };
+}
+
+interface ProfilePostListProps {
+  activeTab: "posts" | "reels" | "tags";
   userId?: number;
 }
 
-export default function ProfilePostList({ activeTab, userId }: Props) {
-  const [posts, setPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+const ProfilePostList: React.FC<ProfilePostListProps> = ({ activeTab, userId }) => {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [reels, setReels] = useState<Post[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const screenWidth = Dimensions.get('window').width;
+  const itemSize = screenWidth / 3;
 
   useEffect(() => {
-    // Giả lập việc tải dữ liệu
-    const timer = setTimeout(() => {
-      console.log("[ProfilePostList] Đang sử dụng dữ liệu mẫu cho posts");
-      setPosts(samplePosts);
-      setLoading(false);
-    }, 300);
-    
-    return () => clearTimeout(timer);
+    const fetchUserPosts = async () => {
+      if (!userId) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        console.log(`Đang lấy bài đăng của người dùng: ${userId}`);
+        const response = await apiClient.get<ApiResponse>(`/posts?user_id=${userId}&page=1&limit=50`);
+        console.log("API response:", response.data);
+        
+        if (response.data && response.data.posts) {
+          const allPosts = response.data.posts;
+          
+          const safeAllPosts = allPosts.map(post => ({
+            ...post,
+            media_types: post.media_types || [],
+            media_urls: post.media_urls || []
+          }));
+          
+          const userPosts = safeAllPosts.filter((post) => 
+            !post.media_types.includes('video')
+          );
+          
+          const userReels = safeAllPosts.filter((post) => 
+            post.media_types.includes('video')
+          );
+          
+          console.log(`Số lượng posts: ${userPosts.length}, reels: ${userReels.length}`);
+          
+          setPosts(userPosts);
+          setReels(userReels);
+        } else {
+          console.log("Không có dữ liệu bài đăng");
+          setPosts([]);
+          setReels([]);
+        }
+      } catch (err) {
+        console.error("Lỗi khi lấy bài đăng của người dùng:", err);
+        setError("Không thể tải bài đăng. Vui lòng thử lại sau.");
+        setPosts([]);
+        setReels([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserPosts();
   }, [userId]);
 
-  const renderItem = ({ item }: { item: any }) => (
-    <Link href={`/post/${item.id}`} asChild>
-      <TouchableOpacity className="w-1/3 p-0.5">
-        <Image
-          source={{ uri: item.image }}
-          className="aspect-square w-full h-full"
-        />
-      </TouchableOpacity>
-    </Link>
-  );
+  const handlePostPress = (postId: number) => {
+    router.push(`/post/${postId}`);
+  };
+
+  let currentData: Post[] = [];
+  if (activeTab === "posts") currentData = posts;
+  if (activeTab === "reels") currentData = reels;
 
   if (loading) {
     return (
-      <View className="h-40 justify-center items-center bg-white">
-        <Text className="text-gray-500">Đang tải bài viết...</Text>
+      <View className="flex-1 items-center justify-center">
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
     );
   }
 
-  if (posts.length === 0 || activeTab !== "posts") {
+  if (error) {
     return (
-      <View className="h-40 justify-center items-center p-5 bg-white">
-        <Text className="text-gray-500 text-center">
-          {activeTab === "posts" ? "Chưa có bài viết nào." : 
-           activeTab === "reels" ? "Chưa có reels nào." :
-           "Chưa có ảnh được gắn thẻ."}
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-red-500">{error}</Text>
+      </View>
+    );
+  }
+
+  if (currentData.length === 0) {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <Text className="text-gray-500">
+          {activeTab === "posts" 
+            ? "Chưa có bài viết nào" 
+            : activeTab === "reels" 
+              ? "Chưa có reels nào"
+              : "Chưa có ảnh được gắn thẻ"}
         </Text>
       </View>
     );
   }
 
-  return (
-    <FlatList
-      data={posts}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id.toString()}
-      numColumns={3}
-      className="bg-white"
-      scrollEnabled={false}
-    />
+  const renderItem = ({ item }: { item: Post }) => (
+    <TouchableOpacity 
+      onPress={() => handlePostPress(item.post_id)}
+      style={{
+        width: itemSize,
+        height: itemSize,
+        padding: 1
+      }}
+    >
+      {item.media_urls && item.media_urls.length > 0 ? (
+        <Image 
+          source={{ uri: item.media_urls[0] }} 
+          style={{
+            width: '100%',
+            height: '100%'
+          }}
+        />
+      ) : (
+        <View 
+          style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#E0E0E0',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}
+        >
+          <Text style={{ color: '#9E9E9E', fontSize: 12 }}>Không có ảnh</Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
-}
+
+  return (
+    <View className="flex-1">
+      <FlatList
+        data={currentData}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.post_id.toString()}
+        numColumns={3}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 20
+        }}
+      />
+    </View>
+  );
+};
+
+export default ProfilePostList;

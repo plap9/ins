@@ -1,4 +1,4 @@
-import { SafeAreaView, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import CreatePostScreen from "~/app/new/index";
 
 export default function NewPost() {

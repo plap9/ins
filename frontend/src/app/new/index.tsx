@@ -17,6 +17,7 @@ import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import apiClient from "~/services/apiClient";
 import * as FileSystem from "expo-file-system";
+import { refreshFeed } from "~/services/feedService";
 
 const filters = [
   { id: 1, name: "Fade", color: "#E8DCD8" },
@@ -36,6 +37,16 @@ const filters = [
   { id: 15, name: "Soft Light", color: "#FFF8E0" },
   { id: 16, name: "Zoom Blur", color: "#E0E0FF" },
 ];
+
+interface PostResponse {
+    success?: boolean;
+    message?: string;
+    post_id?: number;
+    user_id?: number;
+    content?: string | null;
+    location?: string | null;
+    post_privacy?: string;
+}
 
 export default function CreatePostScreen() {
   const router = useRouter();
@@ -89,9 +100,8 @@ export default function CreatePostScreen() {
 
     try {
         let fileUriForUpload = selectedImage; 
-        let base64Data: string | null = null;
-        let actualMimeType: string = 'application/octet-stream'; 
-        let uploadFileName: string = `upload_${Date.now()}.tmp`;
+        let actualMimeType: string = 'image/jpeg'; 
+        let uploadFileName: string = `upload_${Date.now()}.jpg`;
 
         if (selectedImage.startsWith('data:')) {
             console.log("Phát hiện data URI, đang chuyển đổi sang file URI...");
@@ -101,17 +111,17 @@ export default function CreatePostScreen() {
             if (headerParts.length >= 2 && headerParts[1].includes('/')) {
                actualMimeType = headerParts[1]; 
             } else {
-               console.warn("Could not extract MIME type from data URI header.");
+               console.warn("Không thể trích xuất MIME type từ data URI header.");
             }
 
-            base64Data = uriParts[1];
+            const base64Data = uriParts[1];
             if (!base64Data) {
                 throw new Error("Không thể trích xuất dữ liệu Base64 từ URI.");
             }
 
-            const extension = actualMimeType.split('/')[1] || 'tmp';
+            const extension = actualMimeType.split('/')[1] || 'jpg';
             uploadFileName = `upload_${Date.now()}.${extension}`;
-            temporaryFileUri = `<span class="math-inline">\{FileSystem\.cacheDirectory\}</span>{uploadFileName}`;
+            temporaryFileUri = `${FileSystem.cacheDirectory}${uploadFileName}`;
 
             await FileSystem.writeAsStringAsync(temporaryFileUri, base64Data, {
                 encoding: FileSystem.EncodingType.Base64,
@@ -122,25 +132,23 @@ export default function CreatePostScreen() {
         } else if (selectedImage.startsWith('file://')) {
             console.log("Phát hiện file URI:", selectedImage);
             fileUriForUpload = selectedImage; 
-            uploadFileName = fileUriForUpload.split('/').pop() || `upload_${Date.now()}.tmp`;
+            uploadFileName = fileUriForUpload.split('/').pop() || `upload_${Date.now()}.jpg`;
             const fileExtension = uploadFileName.split('.').pop()?.toLowerCase();
             actualMimeType =
                  fileExtension === "jpg" || fileExtension === "jpeg" ? "image/jpeg" :
                  fileExtension === "png" ? "image/png" :
-                 'application/octet-stream'; 
+                 'image/jpeg'; 
 
         } else {
             throw new Error(`Lược đồ URI không được hỗ trợ: ${selectedImage.substring(0, 30)}`);
         }
 
         const formData = new FormData();
-        const fileToAppend = {
+        formData.append('media', {
             uri: fileUriForUpload, 
             type: actualMimeType,
             name: uploadFileName,
-        };
-
-        formData.append('files', fileToAppend as any);
+        } as any);
 
         if (caption.trim()) {
             formData.append('content', caption);
@@ -150,12 +158,36 @@ export default function CreatePostScreen() {
         }
 
         console.log("Đang gửi POST /posts với FormData...");
-        const response = await apiClient.post('/posts', formData, {
-            headers: {}, 
+        const response = await apiClient.post<PostResponse>('/posts', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            }, 
         });
 
+        console.log("Đăng bài thành công, đang xóa cache...");
+        
+        // Xóa cả cache posts và cache profile
+        try {
+            await apiClient.get(`/cache/clear/posts?_=${Date.now()}`);
+            if (response.data && response.data.user_id) {
+                await apiClient.get(`/users/${response.data.user_id}/invalidate-cache`);
+            }
+        } catch (cacheError) {
+            console.warn("Lỗi khi xóa cache:", cacheError);
+        }
+
         Alert.alert("Thành công", "Bài post của bạn đã được đăng!", [
-            { text: "OK", onPress: () => router.back() },
+            { 
+                text: "OK", 
+                onPress: () => {
+                    // Đợi một khoảng thời gian ngắn để đảm bảo server đã lưu dữ liệu
+                    setTimeout(() => {
+                        // Refresh feed trước khi quay về trang feed
+                        refreshFeed();
+                        router.back();
+                    }, 1000); // Đợi 1 giây
+                }
+            },
         ]);
      
     } catch (error: any) {
@@ -167,10 +199,10 @@ export default function CreatePostScreen() {
     } finally {
         setIsUploading(false);
         if (temporaryFileUri) {
-           console.log(`Attempting to delete temporary file: ${temporaryFileUri}`);
+           console.log(`Đang xóa file tạm: ${temporaryFileUri}`);
            FileSystem.deleteAsync(temporaryFileUri, { idempotent: true })
-               .then(() => console.log("Deleted temporary file."))
-               .catch(delError => console.error("Error deleting temp file:", delError));
+               .then(() => console.log("Đã xóa file tạm."))
+               .catch(delError => console.error("Lỗi xóa file tạm:", delError));
         }
     }
   };

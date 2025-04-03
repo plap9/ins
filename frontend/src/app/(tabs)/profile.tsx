@@ -1,6 +1,5 @@
-import { View, SafeAreaView} from "react-native";
-import { useState } from "react";
-import * as ImagePicker from 'expo-image-picker';
+import { View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import ProfileScreen from "~/app/profile/index";
 
 

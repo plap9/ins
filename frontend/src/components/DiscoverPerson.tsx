@@ -25,16 +25,31 @@ const DiscoverPersonItem = ({ suggested, removePerson }: DiscoverPersonItemProps
           <Feather name="x" size={14} color="grey" />
         </TouchableOpacity>
         <View className="items-center justify-center mt-4">
-          <Image
-            source={{ uri: suggested.image }}
-            style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              overflow: 'hidden'
-            }}
-            resizeMode="cover"
-          />
+          {suggested.image ? (
+            <Image
+              source={{ uri: suggested.image }}
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                overflow: 'hidden'
+              }}
+              resizeMode="cover"
+            />
+          ) : (
+            <View 
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: '#E0E0E0',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Text className="text-gray-500 font-bold text-xl">{suggested.name.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
         </View>
         <View className="p-2 items-center">
           <Text className="font-bold" numberOfLines={1}>{suggested.name}</Text>

@@ -5,6 +5,7 @@ import { AppError } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { cachePostList, getCachePostsList } from "../../utils/cacheUtils";
+import { invalidateCacheKey } from "../../utils/cacheUtils";
 
 export const getPosts = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -16,6 +17,7 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         const page = parseInt(req.query.page as string || "1", 10);
         const limit = parseInt(req.query.limit as string || "10", 10);
         const filterUserId = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
+        const forceRefresh = req.query._ ? true : false;
 
         if (isNaN(page) || page < 1) {
              return next(new AppError("Tham số 'page' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR, "page"));
@@ -34,10 +36,22 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         const filterCacheKey = filterUserId ? `:filterUser:${filterUserId}` : '';
         const cacheKey = `user:${loggedInUserId}:${baseCacheKey}${filterCacheKey}`;
 
-        const cachedData = await getCachePostsList(cacheKey);
-        if (cachedData) {
-            res.status(200).json({ success: true, ...cachedData, fromCache: true });
-            return;
+        let useCache = !forceRefresh;
+        let cachedData = null;
+        
+        if (useCache) {
+            cachedData = await getCachePostsList(cacheKey);
+            if (cachedData) {
+                res.status(200).json({ success: true, ...cachedData, fromCache: true });
+                return;
+            }
+        } else {
+            try {
+                await invalidateCacheKey(cacheKey);
+                console.log(`Đã xóa cache key: ${cacheKey} do force refresh`);
+            } catch (err) {
+                console.warn("Không thể xóa cache:", err);
+            }
         }
 
         const queryParams: (string | number)[] = [loggedInUserId];
@@ -63,25 +77,27 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
             queryParams.push(filterUserId);
             countParams.push(filterUserId); 
         }
-        /*
-        else {
-             whereClause = ` WHERE (p.post_privacy = 'public' OR p.user_id = ? OR p.user_id IN (SELECT following_id FROM followers WHERE follower_id = ?))`;
-             queryParams.push(loggedInUserId, loggedInUserId); 
-             countParams.push(loggedInUserId, loggedInUserId); 
-        }
-        */
 
         sqlQuery += whereClause;
         sqlQuery += ` GROUP BY p.post_id ORDER BY p.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}`;
 
+        console.log("SQL Query:", sqlQuery, "Params:", queryParams);
         const [posts] = await pool.query<RowDataPacket[]>(sqlQuery, queryParams);
+        console.log(`Tìm thấy ${posts.length} bài viết`);
 
-        const formattedPosts = posts.map(post => ({
-            ...post,
-            is_liked: !!post.is_liked,
-            media_urls: post.media_urls ? post.media_urls.split("||") : [],
-            media_types: post.media_types ? post.media_types.split("||") : [],
-        }));
+        const formattedPosts = posts.map(post => {
+            console.log(`Post ${post.post_id}:`, {
+                media_urls: post.media_urls,
+                media_types: post.media_types,
+            });
+            
+            return {
+                ...post,
+                is_liked: !!post.is_liked,
+                media_urls: post.media_urls ? post.media_urls.split("||") : [],
+                media_types: post.media_types ? post.media_types.split("||") : [],
+            };
+        });
 
         let countQuery = "SELECT COUNT(DISTINCT p.post_id) AS total FROM posts p";
         countQuery += whereClause;
@@ -102,11 +118,12 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
             pagination: paginationInfo
         };
 
-        await cachePostList(cacheKey, resultToCacheAndSend);
+        await cachePostList(cacheKey, resultToCacheAndSend, 60);
 
         res.status(200).json({
              success: true,
-             ...resultToCacheAndSend
+             ...resultToCacheAndSend,
+             fromCache: false
          });
 
     } catch (error) {

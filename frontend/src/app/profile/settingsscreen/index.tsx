@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 interface SettingItemProps {
   icon: string;
   iconPack?: string;

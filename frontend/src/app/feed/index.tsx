@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
-  // StatusBar // Bỏ nếu dùng SafeAreaView
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -27,6 +26,7 @@ import {
   BottomSheetModal,
   BottomSheetModalProvider,
 } from "@gorhom/bottom-sheet";
+import { setRefreshFeedCallback, refreshFeed } from "~/services/feedService";
 
 import AllCaughtUpScreen from "./allCaughtUp";
 import PostListItem from "../../components/PostListItem";
@@ -45,7 +45,7 @@ interface Post {
   comment_count: number;
   user_id: number;
   username: string;
-  profile_picture: string;
+  profile_picture: string | null;
   media_urls: string[];
   media_types: string[];
   is_liked?: boolean;
@@ -157,6 +157,7 @@ export default function FeedScreen() {
         const fetchedPosts = (response.data.posts || []).map((p) => ({
           ...p,
           is_liked: p.is_liked ?? Math.random() < 0.3,
+          profile_picture: p.profile_picture || null,
         }));
 
         if (fetchedPosts.length === 0) {
@@ -184,17 +185,64 @@ export default function FeedScreen() {
   );
 
   useEffect(() => {
+    setRefreshFeedCallback(() => {
+      console.log("Feed Screen: Đang refresh từ callback");
+      onRefresh();
+    });
+
     setPosts([]);
     setPage(1);
     setAllCaughtUp(false);
     fetchPosts(1, true);
+
+    return () => {
+      setRefreshFeedCallback(() => {});
+    };
   }, []);
 
   const onRefresh = useCallback(() => {
+    console.log("Feed Screen: Đang thực hiện refresh");
+    
+    // Tăng cường refresh bằng cách force reload dữ liệu
+    setIsRefreshing(true);
+    
+    // Xóa trạng thái cũ
+    setPosts([]);
     setPage(1);
     setAllCaughtUp(false);
-    fetchPosts(1, true);
-  }, [fetchPosts]);
+    
+    // Xóa cache posts trước
+    apiClient.get('/cache/clear/posts')
+      .then(() => {
+        console.log('Đã xóa cache posts trước khi refresh');
+        // Tạo timestamp để tránh cache
+        const timestamp = Date.now();
+        
+        // Fetch lại dữ liệu với force = true để không dùng cache
+        return apiClient.get<{ message: string; posts: Post[] }>(`/posts?page=1&limit=20&_=${timestamp}`);
+      })
+      .then(response => {
+        const fetchedPosts = (response.data.posts || []).map((p) => ({
+          ...p,
+          is_liked: p.is_liked ?? Math.random() < 0.3,
+          profile_picture: p.profile_picture || null,
+        }));
+        
+        console.log(`Feed Screen: Đã nhận ${fetchedPosts.length} bài viết`);
+        setPosts(fetchedPosts);
+        
+        if (fetchedPosts.length < 20) {
+          setAllCaughtUp(true);
+        }
+        
+        setIsRefreshing(false);
+      })
+      .catch(error => {
+        console.error("API error refreshing posts:", error);
+        Alert.alert("Lỗi", "Không thể tải bài viết");
+        setIsRefreshing(false);
+      });
+  }, []);
 
   const loadMorePosts = () => {
     if (!isLoading && !isRefreshing && !allCaughtUp) {

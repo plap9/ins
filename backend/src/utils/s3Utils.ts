@@ -9,6 +9,22 @@ import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type';
 
 dotenv.config();
 
+const checkS3Config = () => {
+  const missingEnvVars = [];
+  if (!process.env.AWS_REGION) missingEnvVars.push('AWS_REGION');
+  if (!process.env.AWS_ACCESS_KEY_ID) missingEnvVars.push('AWS_ACCESS_KEY_ID');
+  if (!process.env.AWS_SECRET_ACCESS_KEY) missingEnvVars.push('AWS_SECRET_ACCESS_KEY');
+  if (!process.env.AWS_S3_BUCKET_NAME) missingEnvVars.push('AWS_S3_BUCKET_NAME');
+  
+  if (missingEnvVars.length > 0) {
+    console.error(`[s3Utils] CẢNH BÁO: Thiếu biến môi trường S3: ${missingEnvVars.join(', ')}`);
+    return false;
+  }
+  return true;
+};
+
+const s3Configured = checkS3Config();
+
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -46,6 +62,10 @@ export const uploadToS3 = async (
   contentType?: string
 ): Promise<UploadResult> => {
   try {
+    if (!s3Configured) {
+      throw new Error('Cấu hình S3 không hợp lệ. Kiểm tra biến môi trường.');
+    }
+    
     let Body: Buffer | Readable;
     
     if (typeof filePath === 'string') {
@@ -57,6 +77,8 @@ export const uploadToS3 = async (
 
     const finalKey = key || `${uuidv4()}`;
     const detectedContentType = contentType || await detectContentType(Body);
+    
+    console.log(`[s3Utils] Tải lên file với content type: ${detectedContentType}, key: ${finalKey}`);
 
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -67,6 +89,7 @@ export const uploadToS3 = async (
     });
 
     const result = await s3Client.send(command);
+    console.log(`[s3Utils] S3 response:`, result);
     
     await redisClient.setex(
       `s3:${finalKey}`,
@@ -78,13 +101,17 @@ export const uploadToS3 = async (
       })
     );
 
+    const location = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${finalKey}`;
+    console.log(`[s3Utils] URL của file: ${location}`);
+    
     return {
-      Location: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${finalKey}`,
+      Location: location,
       Key: finalKey,
       ETag: result.ETag,
       Bucket: process.env.AWS_S3_BUCKET_NAME || ''
     };
   } catch (error) {
+    console.error(`[s3Utils] Lỗi khi tải lên S3:`, error);
     throw new Error(`Upload to S3 failed: ${(error as Error).message}`);
   }
 };
@@ -123,22 +150,34 @@ export const uploadResizedImage = async (
     height?: number;
     quality?: number;
     format?: keyof sharp.FormatEnum;
+    key?: string;
   }
 ): Promise<UploadResult> => {
   try {
+    console.log(`[s3Utils] Bắt đầu xử lý ảnh với kích thước: ${buffer.length} bytes`);
+    console.log(`[s3Utils] Tùy chọn resize: width=${options.width}, height=${options.height}, quality=${options.quality}, format=${options.format}, key=${options.key || 'auto'}`);
+    
     const processedImage = sharp(buffer)
       .resize(options.width, options.height, { fit: 'contain' })
       .toFormat(options.format || 'jpeg')
       .jpeg({ quality: options.quality || 80 });
 
+    console.log(`[s3Utils] Đang chuyển đổi ảnh thành buffer...`);
     const processedBuffer = await processedImage.toBuffer();
+    console.log(`[s3Utils] Chuyển đổi ảnh hoàn tất, kích thước sau xử lý: ${processedBuffer.length} bytes`);
     
-    return uploadToS3(
+    console.log(`[s3Utils] Đang tải ảnh lên S3...`);
+    const result = await uploadToS3(
       processedBuffer,
-      undefined,
+      options.key,
       `image/${options.format || 'jpeg'}`
     );
+    console.log(`[s3Utils] Tải ảnh lên S3 thành công, URL: ${result.Location}`);
+    
+    return result;
   } catch (error) {
+    console.error(`[s3Utils] Lỗi xử lý và tải ảnh lên: ${(error as Error).message}`);
+    console.error(`[s3Utils] Chi tiết lỗi:`, error);
     throw new Error(`Image processing failed: ${(error as Error).message}`);
   }
 };

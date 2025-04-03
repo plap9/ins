@@ -1,7 +1,8 @@
 import { Text, View, Image, TouchableOpacity, Alert } from "react-native";
 import { Ionicons, Feather, AntDesign } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { likePost, unlikePost } from "../services/likeService";
+import { getS3Url } from "../config";
 
 interface PostListItemProps {
   posts: {
@@ -15,7 +16,7 @@ interface PostListItemProps {
     comment_count: number;
     user_id: number;
     username: string;
-    profile_picture: string;
+    profile_picture: string | null;
     media_urls: string[];
     media_types: string[];
     is_liked?: boolean;
@@ -24,8 +25,8 @@ interface PostListItemProps {
   onLikeCountPress?: (postId: number) => void;
   onCommentPress?: (postId: number) => void;
 }
-
 const DEFAULT_AVATAR = "https://via.placeholder.com/100";
+
 
 export default function PostListItem({
   posts,
@@ -37,12 +38,17 @@ export default function PostListItem({
   const [likeCount, setLikeCount] = useState(posts.like_count || 0);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const displayMediaUrl =
-    posts.media_urls && posts.media_urls.length > 0
-      ? posts.media_urls[0]
-      : undefined;
-
+  const displayMediaUrl = useMemo(() => {
+    if (posts.media_urls && posts.media_urls.length > 0) {
+      const url = posts.media_urls[0];
+      if (!url) return null;
   const profileImageUrl = posts.profile_picture || DEFAULT_AVATAR;
+      return getS3Url(url);
+    }
+    return null;
+  }, [posts.media_urls, posts.post_id]);
+
+  const profileImageUrl = posts.profile_picture ? getS3Url(posts.profile_picture) : null;
   const username = posts.username || "Người dùng ẩn";
   const content = posts.content || "";
   const commentCount = posts.comment_count || 0;
@@ -132,10 +138,16 @@ export default function PostListItem({
   return (
     <View className="bg-white mb-2 border-b border-gray-100">
       <View className="p-3 flex-row items-center gap-3">
-        <Image
-          source={{ uri: profileImageUrl }}
-          className="w-10 h-10 rounded-full bg-gray-200"
-        />
+        {profileImageUrl ? (
+          <Image
+            source={{ uri: profileImageUrl }}
+            className="w-10 h-10 rounded-full bg-gray-200"
+          />
+        ) : (
+          <View className="w-10 h-10 rounded-full bg-gray-300 items-center justify-center">
+            <Text className="text-gray-500 font-bold">{username.charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
         <Text className="font-semibold flex-1" numberOfLines={1}>
           {username}
         </Text>

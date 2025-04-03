@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, SafeAreaView, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, FlatList, Image, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Header from './components/Header';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Sample data for restricted users
 const restrictedUsers = [

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Image, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Header from './components/Header';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Sample data for saved posts
 const savedItems = [

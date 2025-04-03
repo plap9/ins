@@ -47,8 +47,6 @@ interface LikeBottomSheetProps {
   postId: number | null;
 }
 
-const DEFAULT_AVATAR = "https://via.placeholder.com/100";
-
 const LikeBottomSheet = forwardRef<BottomSheetModal, LikeBottomSheetProps>(
   ({ postId }, ref: ForwardedRef<BottomSheetModal>) => {
     const [likers, setLikers] = useState<Liker[]>([]);
@@ -156,12 +154,18 @@ const LikeBottomSheet = forwardRef<BottomSheetModal, LikeBottomSheetProps>(
       const isCurrentUser = typeof currentUserId === 'number' && item.user_id === currentUserId;
       return (
         <View className="flex-row items-center px-4 py-2.5">
-          <Image
-            source={{ uri: item.profile_picture || DEFAULT_AVATAR }}
-            className="w-11 h-11 rounded-full mr-3 bg-gray-200"
-          />
+          {item.profile_picture ? (
+            <Image
+              source={{ uri: item.profile_picture }}
+              className="w-11 h-11 rounded-full mr-3 bg-gray-200"
+            />
+          ) : (
+            <View className="w-11 h-11 rounded-full mr-3 bg-gray-300 items-center justify-center">
+              <Text className="text-gray-500 font-bold">{item.username.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
           <View className="flex-1 justify-center">
-               <Text className="font-bold text-sm">{item.username}</Text>
+               <Text className="font-bold text-sm">{item.username}</Text>
             {item.full_name && (
               <Text className="text-gray-500 text-xs">{item.full_name}</Text>
             )}
@@ -204,7 +208,7 @@ const LikeBottomSheet = forwardRef<BottomSheetModal, LikeBottomSheetProps>(
       if (isLoading && page > 1) {
         return (
           <View className="py-5">
-             <ActivityIndicator size="small" color="#888" />       
+             <ActivityIndicator size="small" color="#888" />       
           </View>
         );
       }
@@ -250,7 +254,7 @@ const LikeBottomSheet = forwardRef<BottomSheetModal, LikeBottomSheetProps>(
           ListEmptyComponent={
             isLoading && page === 1 ? (
               <View className="py-20 items-center">
-                                  <ActivityIndicator size="large" />           
+                 <ActivityIndicator size="large" />           
               </View>
             ) : !isLoading && likers.length === 0 ? (
               <View className="py-20 items-center">

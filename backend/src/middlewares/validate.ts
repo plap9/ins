@@ -5,6 +5,10 @@ import { ErrorCode } from "../types/errorCode";
 
 export const validate = (schema: Schema) => 
     (req: Request, res: Response, next: NextFunction): void => {
+        if (req.file) {
+            return next();
+        }
+
         const { error } = schema.validate(req.body, { abortEarly: false });
 
         if (error) {
