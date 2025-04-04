@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Image, ScrollView } from "react-native";
+import { View, Text, Image, ScrollView, TouchableOpacity } from "react-native";
 
 interface Story {
   id: string;
@@ -14,14 +14,19 @@ interface Story {
 
 interface HighlightsStoryProps {
   stories: Story[];
+  onStoryPress?: (storyId: string) => void;
 }
 
-const StoryList = ({ stories }: HighlightsStoryProps): JSX.Element => {
+const StoryList = ({ stories, onStoryPress }: HighlightsStoryProps): JSX.Element => {
   return (
     <View className="mb-4">
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {stories.map((story) => (
-          <View key={story.id} className="items-center mr-4">
+          <TouchableOpacity 
+            key={story.id} 
+            className="items-center mr-4"
+            onPress={() => onStoryPress?.(story.id)}
+          >
             <View
               className={`
              ${story.hasStory ? (story.isOpened ? "border-pink-500 border-2" : "border-gray-300 border-2") : ""} 
@@ -37,7 +42,7 @@ const StoryList = ({ stories }: HighlightsStoryProps): JSX.Element => {
             <Text className="mt-1 text-xs text-center">
               {story.title || story.username}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
     </View>

@@ -1,7 +1,7 @@
 import express, { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
 import { validate } from "../middlewares/validate";
-import upload from "../middlewares/upload";
+import { uploadPostMedia } from "../middlewares/upload";
 import { createStory } from "../controllers/stories/storyController";
 import { 
     getStories, 
@@ -14,7 +14,7 @@ import { storySchema, replyStorySchema, addToHighlightSchema } from "../validati
 
 const router: Router = express.Router();
 
-router.post("/", authMiddleware, validate(storySchema), upload.array("media", 1), createStory);
+router.post("/", authMiddleware, validate(storySchema), uploadPostMedia, createStory);
 
 router.get("/", authMiddleware, getStories);
 
