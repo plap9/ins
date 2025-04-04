@@ -30,9 +30,11 @@ import { setRefreshFeedCallback, refreshFeed } from "~/services/feedService";
 
 import AllCaughtUpScreen from "./allCaughtUp";
 import PostListItem from "../../components/PostListItem";
-import StoryList from "~/components/StoryList";
+import StoriesList from "../../components/story/StoriesList";
 import CommentBottomSheet from "../../components/CommentBottomSheet";
 import LikeBottomSheet from "../../components/LikeBottomSheet";
+import StoryLibraryScreen from "../../components/story/StoryLibraryScreen";
+import StoryService from "../../services/storyService";
 
 interface Post {
   post_id: number;
@@ -51,66 +53,6 @@ interface Post {
   is_liked?: boolean;
 }
 
-const stories = [
-  {
-    id: "1",
-    username: "Your Story",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: false,
-    isYourStory: true,
-    isOpened: false,
-  },
-  {
-    id: "2",
-    username: "doanthang",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: true,
-  },
-  {
-    id: "3",
-    username: "lappham",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: true,
-  },
-  {
-    id: "4",
-    username: "vuong.quoc_echs",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: false,
-  },
-  {
-    id: "5",
-    username: "echxanh",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: false,
-  },
-  {
-    id: "6",
-    username: "jes.ech",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: false,
-  },
-  {
-    id: "7",
-    username: "pepefrog",
-    image:
-      "https://anhnail.vn/wp-content/uploads/2024/10/anh-meme-ech-xanh-5.webp",
-    hasStory: true,
-    isOpened: false,
-  },
-];
-
 export default function FeedScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState<boolean>(false);
@@ -119,6 +61,8 @@ export default function FeedScreen() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const [allCaughtUp, setAllCaughtUp] = useState(false);
+  const [showStoryButton, setShowStoryButton] = useState(true);
+  const [showStoryLibrary, setShowStoryLibrary] = useState(false);
 
   const commentSheetRef = useRef<BottomSheetModal>(null);
   const [selectedPostIdForComments, setSelectedPostIdForComments] = useState<
@@ -271,6 +215,30 @@ export default function FeedScreen() {
     likeSheetRef.current?.present();
   }, []);
 
+  const handleCreateStory = () => {
+    console.log("Opening story library from feed");
+    setShowStoryLibrary(true);
+  };
+
+  const handleCloseStoryLibrary = () => {
+    console.log("Closing story library");
+    setShowStoryLibrary(false);
+  };
+
+  const handleOpenCamera = async () => {
+    try {
+      console.log("Mở camera từ feed...");
+      const photo = await StoryService.takePhoto();
+      if (photo) {
+        console.log("Chụp ảnh thành công:", photo);
+        Alert.alert("Thành công", "Đã chụp ảnh thành công");
+      }
+    } catch (error) {
+      console.error("Lỗi khi chụp ảnh:", error);
+      Alert.alert("Lỗi", "Không thể mở camera");
+    }
+  };
+
   return (
     <BottomSheetModalProvider>
       <SafeAreaView className="flex-1 bg-white">
@@ -299,9 +267,52 @@ export default function FeedScreen() {
           </View>
         </View>
 
-        <View className="py-2 border-b border-gray-100">
-          <StoryList stories={stories} />
-        </View>
+        <FlatList
+          className="flex-1"
+          data={posts}
+          renderItem={({ item }) => (
+            <PostListItem
+              posts={item}
+              onCommentPress={openCommentSheet}
+              onLikeCountPress={openLikeSheet}
+            />
+          )}
+          keyExtractor={(item) => item.post_id.toString()}
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.5}
+          ListHeaderComponent={
+            <View className="border-b border-gray-100">
+              <StoriesList />
+            </View>
+          }
+          ListFooterComponent={renderFooter}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 10, gap: 10 }}
+          ListEmptyComponent={
+            isLoading && posts.length === 0 ? (
+              <View className="flex-1 justify-center items-center">
+                <ActivityIndicator size="large" color="#0000ff" />
+              </View>
+            ) : !isLoading && !isRefreshing && posts.length === 0 ? (
+              allCaughtUp ? (
+                <AllCaughtUpScreen />
+              ) : (
+                <View className="flex-1 justify-center items-center p-5">
+                  <Text className="text-gray-500 text-center">
+                    Chưa có bài viết nào.
+                  </Text>
+                </View>
+              )
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={onRefresh}
+              colors={["#007AFF"]}
+              tintColor={"#007AFF"}
+            />
+          }
+        />
 
         <Modal
           visible={modalVisible}
@@ -347,53 +358,59 @@ export default function FeedScreen() {
           </TouchableOpacity>
         </Modal>
 
-        <FlatList
-          className="flex-1"
-          data={posts}
-          renderItem={({ item }) => (
-            <PostListItem
-              posts={item}
-              onCommentPress={openCommentSheet}
-              onLikeCountPress={openLikeSheet}
-            />
-          )}
-          keyExtractor={(item) => item.post_id.toString()}
-          onEndReached={loadMorePosts}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 10, gap: 10 }}
-          ListEmptyComponent={
-            isLoading && posts.length === 0 ? (
-              <View className="flex-1 justify-center items-center">
-                <ActivityIndicator size="large" color="#0000ff" />
-              </View>
-            ) : !isLoading && !isRefreshing && posts.length === 0 ? (
-              allCaughtUp ? (
-                <AllCaughtUpScreen />
-              ) : (
-                <View className="flex-1 justify-center items-center p-5">
-                  <Text className="text-gray-500 text-center">
-                    Chưa có bài viết nào.
-                  </Text>
-                </View>
-              )
-            ) : null
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={["#007AFF"]}
-              tintColor={"#007AFF"}
-            />
-          }
-        />
         <CommentBottomSheet
           ref={commentSheetRef}
           postId={selectedPostIdForComments}
           onCommentAdded={handleCommentPosted}
         />
         <LikeBottomSheet ref={likeSheetRef} postId={selectedPostIdForLikes} />
+
+        {showStoryButton && (
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              bottom: 30,
+              right: 30,
+              backgroundColor: '#0095f6',
+              padding: 15,
+              borderRadius: 30,
+              elevation: 5,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+            }}
+            onPress={() => {
+              Alert.alert(
+                "Tạo story",
+                "Chọn cách tạo story",
+                [
+                  { text: "Hủy", style: "cancel" },
+                  { 
+                    text: "Mở camera", 
+                    onPress: handleOpenCamera
+                  },
+                  { 
+                    text: "Chọn từ thư viện", 
+                    onPress: handleCreateStory
+                  }
+                ]
+              );
+            }}
+          >
+            <AntDesign name="plus" size={24} color="white" />
+          </TouchableOpacity>
+        )}
+
+        <Modal
+          visible={showStoryLibrary}
+          animationType="slide"
+          onRequestClose={handleCloseStoryLibrary}
+          presentationStyle="fullScreen"
+          statusBarTranslucent={true}
+        >
+          <StoryLibraryScreen onClose={handleCloseStoryLibrary} />
+        </Modal>
       </SafeAreaView>
     </BottomSheetModalProvider>
   );
