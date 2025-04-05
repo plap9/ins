@@ -10,7 +10,9 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
         const user_id = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
         const current_user_id = (req as AuthRequest).user?.user_id;
 
-        if (!user_id) {
+        console.log("getStories - Request params:", { user_id, current_user_id });
+
+        if (user_id === undefined) {
             return next(new AppError("Thiếu thông số user_id", 400, ErrorCode.VALIDATION_ERROR));
         }
 
@@ -27,35 +29,82 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
                 s.close_friends_only,
                 u.user_id,
                 u.username,
-                u.profile_picture
+                u.profile_picture,
+                EXISTS (SELECT 1 FROM story_views sv WHERE sv.story_id = s.story_id AND sv.viewer_id = ?) as is_viewed
             FROM stories s
             INNER JOIN users u ON s.user_id = u.user_id
             WHERE s.expires_at > NOW()`;
-        const queryParams: any[] = [];
+        
+        const queryParams: any[] = [current_user_id];
 
-        if (user_id) {
+        if (user_id > 0) {
             sql += " AND s.user_id = ?";
             queryParams.push(user_id);
 
             if (user_id !== current_user_id) {
-                sql += " AND (s.close_firends_only = FALSE OR (s.close_friends_only = TRUE AND EXISTS (SELECT 1 FROM close_friends WHERE user_id = ? AND friend_id = ?)))";
-                queryParams.push(current_user_id, user_id);
+                sql += " AND (s.close_friends_only = FALSE OR (s.close_friends_only = TRUE AND EXISTS (SELECT 1 FROM close_friends WHERE user_id = ? AND friend_id = ?)))";
+                queryParams.push(user_id, current_user_id);
             }
+        } else if (user_id === 0 && current_user_id) {
+            sql += ` AND (
+                s.user_id = ? OR
+                (s.user_id IN (SELECT following_id FROM followers WHERE follower_id = ?) 
+                AND (s.close_friends_only = FALSE OR (s.close_friends_only = TRUE AND EXISTS (SELECT 1 FROM close_friends WHERE user_id = s.user_id AND friend_id = ?))))
+            )`;
+            queryParams.push(current_user_id, current_user_id, current_user_id);
         } else {
-            if (current_user_id) {
-                sql += `AND (
-                    s.user_id IN (SELECT following_id FROM followers WHERE follower_id = ?)
-                    AND (s.close_friends_only = FALSE OR (s.close_friends_only = TRUE AND EXISTS (SELECT 1 FROM close_friends WHERE user_id = s.user_id AND friend_id = ?)))`;
-                queryParams.push(current_user_id, current_user_id);
-            } else {
-                return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
-            }
+            return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
         }
+        
         sql += " ORDER BY s.created_at DESC";
 
+        console.log("SQL Query:", sql);
+        console.log("Query params:", queryParams);
+
         const [stories] = await pool.query<RowDataPacket[]>(sql, queryParams);
-        res.status(200).json( {success: true, stories });
+        console.log(`Tìm thấy ${stories.length} stories`);
+
+        const storyGroups: any[] = [];
+        const userStories: Record<number, any> = {};
+
+        stories.forEach((story: any) => {
+            const userId = story.user_id;
+            
+            if (!userStories[userId]) {
+                userStories[userId] = {
+                    user: {
+                        user_id: userId,
+                        username: story.username,
+                        profile_picture: story.profile_picture
+                    },
+                    stories: [],
+                    has_unviewed: false
+                };
+                storyGroups.push(userStories[userId]);
+            }
+            
+            userStories[userId].stories.push({
+                story_id: story.story_id,
+                media_url: story.media_url,
+                created_at: story.created_at,
+                expires_at: story.expires_at,
+                has_text: story.has_text,
+                sticker_data: story.sticker_data,
+                filter_data: story.filter_data,
+                view_count: story.view_count,
+                close_friends_only: story.close_friends_only,
+                is_viewed: story.is_viewed === 1
+            });
+            
+            if (story.is_viewed === 0) {
+                userStories[userId].has_unviewed = true;
+            }
+        });
+
+        console.log(`Đã nhóm thành ${storyGroups.length} story groups`);
+        res.status(200).json({ success: true, storyGroups });
     } catch (error) {
+        console.error("Error in getStories:", error);
         next(error);
     }
 };
@@ -110,16 +159,25 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
         const viewer_id = req.user?.user_id;
         if (!viewer_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
+        console.log(`Đánh dấu đã xem story ID ${story_id} bởi user ${viewer_id}`);
+
         const [storyRows] = await connection.query<RowDataPacket[]>(
-            "SELECT s.story_id, s.user_id, s.close_friends_only FROM stories s WHERE s.story_id = ? AND s.expires_at > NOW()",
+            "SELECT s.story_id, s.user_id, s.view_count, s.close_friends_only FROM stories s WHERE s.story_id = ? AND s.expires_at > NOW()",
             [story_id]
         );
 
         if (storyRows.length === 0) {
-            return next(new AppError("Story không tồn tại hoặc đã hết hạn.", 404, ErrorCode.STORY_NOT_FOUND));
+            console.log(`Story ID ${story_id} không tồn tại hoặc đã hết hạn`);
+            res.status(200).json({ 
+                success: true, 
+                message: "Story không tồn tại hoặc đã hết hạn", 
+                view_count: 0
+            });
+            return;
         }
 
         const story = storyRows[0];
+        let view_count = story.view_count;
         
         if (story.close_friends_only && story.user_id !== viewer_id) {
             const [checkCloseFriend] = await connection.query<RowDataPacket[]>(
@@ -134,23 +192,58 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
 
         await connection.beginTransaction();
 
-        await connection.query(
-            "UPDATE stories SET view_count = view_count + 1 WHERE story_id = ?",
-            [story_id]
+        const [viewCheck] = await connection.query<RowDataPacket[]>(
+            "SELECT * FROM story_views WHERE story_id = ? AND viewer_id = ?",
+            [story_id, viewer_id]
         );
 
-        if (story.user_id !== viewer_id) {
-            await connection.query(
-                "INSERT INTO notifications (user_id, type, message, story_id, related_id) VALUES (?, 'story_view', ?, ?, ?)",
-                [story.user_id, `Người dùng đã xem story của bạn`, story_id, viewer_id]
-            );
+        if (viewCheck.length === 0) {
+            try {
+                await connection.query(
+                    "INSERT INTO story_views (story_id, viewer_id) VALUES (?, ?)",
+                    [story_id, viewer_id]
+                );
+
+                const [countResult] = await connection.query<RowDataPacket[]>(
+                    "SELECT COUNT(*) as total FROM story_views WHERE story_id = ?",
+                    [story_id]
+                );
+                
+                view_count = countResult[0].total;
+
+                await connection.query(
+                    "UPDATE stories SET view_count = ? WHERE story_id = ?",
+                    [view_count, story_id]
+                );
+
+                if (story.user_id !== viewer_id) {
+                    await connection.query(
+                        "INSERT INTO notifications (user_id, type, message, story_id, related_id) VALUES (?, 'story_view', ?, ?, ?)",
+                        [story.user_id, `Người dùng đã xem story của bạn`, story_id, viewer_id]
+                    );
+                }
+            } catch (insertError) {
+                console.error("Lỗi khi cập nhật lượt xem:", insertError);
+            }
         }
 
         await connection.commit();
-        res.status(200).json({ success: true, message: "Đã xem story" });
+        
+        res.status(200).json({ 
+            success: true, 
+            message: "Đã xem story", 
+            view_count 
+        });
+        return;
     } catch (error) {
+        console.error("Lỗi xử lý viewStory:", error);
         await connection.rollback(); 
-        next(error);
+        res.status(200).json({ 
+            success: true, 
+            message: "Đã xảy ra lỗi khi cập nhật lượt xem, nhưng vẫn đánh dấu là đã xem", 
+            view_count: 0 
+        });
+        return;
     } finally {
         connection.release();
     }

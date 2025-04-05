@@ -16,21 +16,13 @@ export const replyStorySchema = Joi.object({
 });
 
 export const addToHighlightSchema = Joi.object({
-    highlight_id: Joi.number().integer().when('highlight_title', {
-        is: Joi.exist(),
-        then: Joi.optional(),
-        otherwise: Joi.required()
-    }).messages({
-        'number.base': 'ID của highlight phải là số nguyên',
-        'any.required': 'Phải cung cấp highlight_id hoặc highlight_title'
+    highlight_id: Joi.number().integer().allow(null).messages({
+        'number.base': 'ID của highlight phải là số nguyên'
     }),
-    highlight_title: Joi.string().min(1).max(100).when('highlight_id', {
-        is: Joi.exist(),
-        then: Joi.optional(),
-        otherwise: Joi.required()
-    }).messages({
+    highlight_title: Joi.string().min(1).max(100).allow(null).messages({
         'string.min': 'Tiêu đề highlight phải có ít nhất 1 ký tự',
-        'string.max': 'Tiêu đề highlight không được vượt quá 100 ký tự',
-        'any.required': 'Phải cung cấp highlight_id hoặc highlight_title'
+        'string.max': 'Tiêu đề highlight không được vượt quá 100 ký tự'
     })
+}).or('highlight_id', 'highlight_title').messages({
+    'object.missing': 'Phải cung cấp highlight_id hoặc highlight_title'
 });

@@ -8,24 +8,29 @@ export interface Story {
   username: string;
   profile_picture: string;
   media_url: string;
-  caption: string;
   created_at: string;
   expires_at: string;
+  has_text: boolean;
+  sticker_data: string | null;
+  filter_data: string | null;
   view_count: number;
+  close_friends_only: boolean;
   is_viewed: boolean;
 }
 
 export interface StoryGroup {
-  user_id: number;
-  username: string;
-  profile_picture: string;
+  user: {
+    user_id: number;
+    username: string;
+    profile_picture: string;
+  };
   stories: Story[];
-  has_unviewed: boolean;
+  has_unviewed?: boolean;
 }
 
 export interface StoryResponse {
   success: boolean;
-  stories: Story[];
+  storyGroups: StoryGroup[];
 }
 
 export interface StoryReplyResponse {
@@ -50,8 +55,18 @@ export interface StoryHighlightResponse {
 class StoryService {
   async getStories(): Promise<StoryGroup[]> {
     try {
-      const response = await apiClient.get<StoryGroup[]>('/api/stories');
-      return response.data;
+      const response = await apiClient.get<{success: boolean, storyGroups: StoryGroup[]}>('/stories', {
+        params: {
+          user_id: 0 // Truyền user_id=0 để lấy tất cả story của người dùng đang follow
+        }
+      });
+      
+      console.log("API Response:", response.data);
+      if (response.data.success && response.data.storyGroups) {
+        return response.data.storyGroups;
+      }
+      
+      return [];
     } catch (error) {
       console.error('Lỗi khi lấy danh sách stories:', error);
       throw error;
@@ -60,7 +75,7 @@ class StoryService {
 
   async getStoryById(storyId: number): Promise<Story> {
     try {
-      const response = await apiClient.get<Story>(`/api/stories/${storyId}`);
+      const response = await apiClient.get<Story>(`/stories/${storyId}`);
       return response.data;
     } catch (error) {
       console.error(`Lỗi khi lấy story ID ${storyId}:`, error);
@@ -70,11 +85,29 @@ class StoryService {
 
   async createStory(formData: FormData): Promise<Story> {
     try {
-      const response = await apiClient.post<Story>('/api/stories', formData, {
+      console.log("StoryService: Bắt đầu gửi request createStory");
+      console.log("FormData:", formData);
+      
+      // Log nội dung của FormData để debug
+      // @ts-ignore
+      for (let [key, value] of formData._parts) {
+        if (typeof value === 'object' && value.uri) {
+          console.log(`FormData field ${key}:`, {
+            uri: value.uri,
+            name: value.name,
+            type: value.type
+          });
+        } else {
+          console.log(`FormData field ${key}:`, value);
+        }
+      }
+      
+      const response = await apiClient.post<Story>('/stories', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
+      console.log("StoryService: Đã nhận phản hồi từ server:", response.data);
       return response.data;
     } catch (error) {
       console.error('Lỗi khi tạo story:', error);
@@ -84,25 +117,27 @@ class StoryService {
 
   async deleteStory(storyId: number): Promise<void> {
     try {
-      await apiClient.delete(`/api/stories/${storyId}`);
+      await apiClient.delete(`/stories/${storyId}`);
     } catch (error) {
       console.error(`Lỗi khi xóa story ID ${storyId}:`, error);
       throw error;
     }
   }
 
-  async viewStory(storyId: number): Promise<void> {
+  async viewStory(storyId: number): Promise<any> {
     try {
-      await apiClient.post(`/api/stories/${storyId}/view`);
+      const response = await apiClient.post(`/stories/${storyId}/view`);
+      return response.data;
     } catch (error) {
       console.error(`Lỗi khi đánh dấu đã xem story ID ${storyId}:`, error);
       // Không throw lỗi để không ảnh hưởng đến trải nghiệm người dùng
+      return { success: false, view_count: 0 };
     }
   }
 
   async replyToStory(storyId: number, message: string): Promise<void> {
     try {
-      await apiClient.post(`/api/stories/${storyId}/reply`, { message });
+      await apiClient.post(`/stories/${storyId}/reply`, { message });
     } catch (error) {
       console.error(`Lỗi khi gửi phản hồi đến story ID ${storyId}:`, error);
       throw error;
@@ -116,7 +151,7 @@ class StoryService {
   ): Promise<StoryHighlightResponse['data']> {
     try {
       const response = await apiClient.post<StoryHighlightResponse>(
-        `/api/stories/${storyId}/highlight`,
+        `/stories/${storyId}/highlight`,
         { highlight_id: highlightId, highlight_title: highlightTitle }
       );
       return response.data.data;
