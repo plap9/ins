@@ -37,7 +37,6 @@ const StoryCreationScreen = () => {
         Alert.alert('Cần quyền truy cập', 'Ứng dụng cần quyền truy cập vào máy ảnh và thư viện ảnh để tạo story.');
         navigation.goBack();
       } else {
-        // Mở picker camera hoặc thư viện ngay khi màn hình được mở
         openMediaPicker();
       }
     }
@@ -56,7 +55,6 @@ const StoryCreationScreen = () => {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setMediaUri(result.assets[0].uri);
       } else {
-        // Nếu người dùng hủy chọn media, quay lại màn hình trước đó
         navigation.goBack();
       }
     } catch (error) {
@@ -99,7 +97,6 @@ const StoryCreationScreen = () => {
 
       const formData = new FormData();
       
-      // Xác định loại media
       let type = 'image/jpeg';
       if (mediaUri.endsWith('.mp4') || mediaUri.endsWith('.mov')) {
         type = 'video/mp4';
@@ -107,7 +104,6 @@ const StoryCreationScreen = () => {
         type = 'image/png';
       }
       
-      // Tên file từ URI
       const fileName = mediaUri.split('/').pop() || `story_${Date.now()}.jpg`;
       
       // @ts-ignore

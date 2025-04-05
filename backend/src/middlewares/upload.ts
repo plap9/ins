@@ -137,7 +137,15 @@
       10
     );
 
+    export const uploadStoryMedia = createUploadMiddleware(
+      'media',
+      [...FileTypes.POST],
+      FileSizeLimits.POST_VIDEO,
+      1
+    );
+
     export default {
       uploadAvatar,
-      uploadPostMedia
+      uploadPostMedia,
+      uploadStoryMedia
     };

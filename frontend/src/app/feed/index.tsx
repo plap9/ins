@@ -19,6 +19,7 @@ import {
   Entypo,
   SimpleLineIcons,
   FontAwesome5,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import apiClient from "~/services/apiClient";
@@ -27,6 +28,7 @@ import {
   BottomSheetModalProvider,
 } from "@gorhom/bottom-sheet";
 import { setRefreshFeedCallback, refreshFeed } from "~/services/feedService";
+import AuthContext from "~/app/context/AuthContext";
 
 import AllCaughtUpScreen from "./allCaughtUp";
 import PostListItem from "../../components/PostListItem";
@@ -55,13 +57,14 @@ interface Post {
 
 export default function FeedScreen() {
   const router = useRouter();
+  const { authData } = React.useContext(AuthContext);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [storyModalVisible, setStoryModalVisible] = useState<boolean>(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
   const [allCaughtUp, setAllCaughtUp] = useState(false);
-  const [showStoryButton, setShowStoryButton] = useState(true);
   const [showStoryLibrary, setShowStoryLibrary] = useState(false);
 
   const commentSheetRef = useRef<BottomSheetModal>(null);
@@ -215,14 +218,20 @@ export default function FeedScreen() {
     likeSheetRef.current?.present();
   }, []);
 
+  const openStoryLibrary = useCallback(() => {
+    console.log("Mở màn hình thư viện ảnh từ FeedScreen");
+    setShowStoryLibrary(true);
+  }, []);
+
+  const closeStoryLibrary = useCallback(() => {
+    console.log("Đóng màn hình thư viện ảnh");
+    setShowStoryLibrary(false);
+  }, []);
+
   const handleCreateStory = () => {
     console.log("Opening story library from feed");
     setShowStoryLibrary(true);
-  };
-
-  const handleCloseStoryLibrary = () => {
-    console.log("Closing story library");
-    setShowStoryLibrary(false);
+    setStoryModalVisible(false);
   };
 
   const handleOpenCamera = async () => {
@@ -233,10 +242,23 @@ export default function FeedScreen() {
         console.log("Chụp ảnh thành công:", photo);
         Alert.alert("Thành công", "Đã chụp ảnh thành công");
       }
+      setStoryModalVisible(false);
     } catch (error) {
       console.error("Lỗi khi chụp ảnh:", error);
       Alert.alert("Lỗi", "Không thể mở camera");
     }
+  };
+
+  const handleOpenMusicSelector = () => {
+    console.log("Mở trình chọn nhạc");
+    Alert.alert("Thông báo", "Chức năng nhạc đang được phát triển");
+    setStoryModalVisible(false);
+  };
+
+  const handleOpenTemplates = () => {
+    console.log("Mở mẫu story");
+    Alert.alert("Thông báo", "Chức năng mẫu đang được phát triển");
+    setStoryModalVisible(false);
   };
 
   return (
@@ -281,8 +303,12 @@ export default function FeedScreen() {
           onEndReached={loadMorePosts}
           onEndReachedThreshold={0.5}
           ListHeaderComponent={
-            <View className="border-b border-gray-100">
-              <StoriesList />
+            <View>
+              <StoriesList 
+                navigation={router}
+                userId={String(authData?.user?.user_id || 0)}
+                openStoryLibrary={() => setShowStoryLibrary(true)} 
+              />
             </View>
           }
           ListFooterComponent={renderFooter}
@@ -314,6 +340,7 @@ export default function FeedScreen() {
           }
         />
 
+        {/* Modal cho menu chính */}
         <Modal
           visible={modalVisible}
           transparent={true}
@@ -357,7 +384,7 @@ export default function FeedScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
-
+        
         <CommentBottomSheet
           ref={commentSheetRef}
           postId={selectedPostIdForComments}
@@ -365,51 +392,14 @@ export default function FeedScreen() {
         />
         <LikeBottomSheet ref={likeSheetRef} postId={selectedPostIdForLikes} />
 
-        {showStoryButton && (
-          <TouchableOpacity
-            style={{
-              position: 'absolute',
-              bottom: 30,
-              right: 30,
-              backgroundColor: '#0095f6',
-              padding: 15,
-              borderRadius: 30,
-              elevation: 5,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-            }}
-            onPress={() => {
-              Alert.alert(
-                "Tạo story",
-                "Chọn cách tạo story",
-                [
-                  { text: "Hủy", style: "cancel" },
-                  { 
-                    text: "Mở camera", 
-                    onPress: handleOpenCamera
-                  },
-                  { 
-                    text: "Chọn từ thư viện", 
-                    onPress: handleCreateStory
-                  }
-                ]
-              );
-            }}
-          >
-            <AntDesign name="plus" size={24} color="white" />
-          </TouchableOpacity>
-        )}
-
         <Modal
           visible={showStoryLibrary}
           animationType="slide"
-          onRequestClose={handleCloseStoryLibrary}
+          onRequestClose={closeStoryLibrary}
           presentationStyle="fullScreen"
           statusBarTranslucent={true}
         >
-          <StoryLibraryScreen onClose={handleCloseStoryLibrary} />
+          <StoryLibraryScreen onClose={closeStoryLibrary} />
         </Modal>
       </SafeAreaView>
     </BottomSheetModalProvider>

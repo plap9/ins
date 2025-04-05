@@ -138,6 +138,20 @@ CREATE TABLE `stories` (
 CREATE INDEX idx_stories_user_id ON stories(user_id);
 CREATE INDEX idx_stories_expires_at ON stories(expires_at);
 
+CREATE TABLE `story_views` (
+    `view_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+    `story_id` BIGINT(20) NOT NULL,
+    `viewer_id` BIGINT(20) NOT NULL,
+    `viewed_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
+    PRIMARY KEY (`view_id`),
+    UNIQUE KEY `uq_story_viewer` (`story_id`, `viewer_id`),
+    CONSTRAINT `story_views_ibfk_1` FOREIGN KEY (`story_id`) REFERENCES `stories` (`story_id`) ON DELETE CASCADE,
+    CONSTRAINT `story_views_ibfk_2` FOREIGN KEY (`viewer_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE INDEX idx_story_views_story_id ON story_views(story_id);
+CREATE INDEX idx_story_views_viewer_id ON story_views(viewer_id);
+
 CREATE TABLE `highlights` (
     `highlight_id` BIGINT(20) NOT NULL AUTO_INCREMENT,
     `user_id` BIGINT(20) NOT NULL,

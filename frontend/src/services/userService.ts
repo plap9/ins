@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { useAuth } from '../app/context/AuthContext';
 
 // Khai báo các interface
 export interface UserProfile {
@@ -85,6 +86,15 @@ export interface User extends UserProfile {}
 // Khai báo hằng số 
 export const MAX_AVATAR_SIZE_MB = 5;
 
+// Khởi tạo biến global để lưu trữ hàm cập nhật authData
+let _updateAuthUserData: ((userData: any) => Promise<void>) | null = null;
+
+// Hàm để đăng ký hàm cập nhật từ AuthContext
+export const registerAuthUpdateFunction = (updateFn: (userData: any) => Promise<void>) => {
+  _updateAuthUserData = updateFn;
+  console.log("[userService] Đã đăng ký hàm cập nhật AuthContext");
+};
+
 export const getUserProfile = async (userId: number): Promise<UserProfileResponse> => {
   try {
     console.log(`[userService] Gọi API getUserProfile với userId: ${userId}`);
@@ -116,6 +126,23 @@ export const updateUserProfile = async (userId: number, data: UpdateUserRequest)
     
     const response = await apiClient.put<UserUpdateResponse>(`/users/${userId}`, data);
     console.log(`[userService] Kết quả API updateUserProfile:`, response.data);
+    
+    // Nếu cập nhật thành công và có hàm cập nhật AuthContext
+    if (response.data.success && _updateAuthUserData) {
+      try {
+        // Cập nhật thông tin trong AuthContext
+        await _updateAuthUserData({
+          profile_picture: response.data.user.profile_picture,
+          username: response.data.user.username,
+          full_name: response.data.user.full_name
+        });
+        console.log('[userService] Đã cập nhật thông tin người dùng trong AuthContext');
+      } catch (authError) {
+        console.error('[userService] Lỗi khi cập nhật AuthContext:', authError);
+        // Không throw lỗi để vẫn trả về kết quả API thành công
+      }
+    }
+    
     return response.data;
   } catch (error) {
     console.error('[userService] Lỗi trong updateUserProfile:', error);

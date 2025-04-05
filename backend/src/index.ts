@@ -8,6 +8,7 @@ import user from "./routes/user";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import comment from "./routes/comment";
 import cacheRoutes from "./routes/cache";
+import story from "./routes/story";
 
 dotenv.config();
 const app = express();
@@ -42,6 +43,7 @@ app.use("/auth", authRouter);
 app.use("/users", user);
 app.use("/comments", comment);
 app.use("/cache", cacheRoutes);
+app.use("/stories", story);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

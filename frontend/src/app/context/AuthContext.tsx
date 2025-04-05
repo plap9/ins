@@ -23,6 +23,7 @@ type AuthContextData = {
   signIn: (data: any) => Promise<void>;
   signOut: () => Promise<void>;
   getToken: () => Promise<string | null>;
+  updateUserData: (userData: Partial<User>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -145,9 +146,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateUserData = async (userData: Partial<User>) => {
+    try {
+      if (!authData) {
+        throw new Error("Không có dữ liệu người dùng. Vui lòng đăng nhập lại.");
+      }
+
+      const updatedAuthData = { 
+        ...authData,
+        user: { 
+          ...authData.user,
+          ...userData 
+        }
+      };
+
+      await AsyncStorage.setItem("@AuthData", JSON.stringify(updatedAuthData));
+      
+      setAuthData(updatedAuthData);
+      
+      console.log("[AuthContext] Dữ liệu người dùng đã được cập nhật:", updatedAuthData.user);
+    } catch (error) {
+      console.error("[AuthContext] Lỗi khi cập nhật dữ liệu người dùng:", error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ authData, isLoading, signIn, signOut, getToken }}
+      value={{ authData, isLoading, signIn, signOut, getToken, updateUserData }}
     >
       {children}
     </AuthContext.Provider>

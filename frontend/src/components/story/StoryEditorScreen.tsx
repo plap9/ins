@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,13 +7,16 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  TextInput
+  TextInput,
+  Modal,
+  FlatList
 } from 'react-native';
 import { ImagePickerAsset } from 'expo-image-picker';
-import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome5, Entypo } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import StoryService from '../../services/storyService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 
 // Mock Video component để thay thế expo-av
 const Video = (props: any) => {
@@ -28,18 +31,32 @@ interface StoryEditorScreenProps {
   route?: { params: RouteParams };
   asset?: ImagePickerAsset;
   onClose?: () => void;
+  onStoryCreated?: () => void;
 }
 
-const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScreenProps) => {
+// Mẫu nhạc cho story
+const musicSamples = [
+  { id: '1', title: 'Nhạc Trending #1', artist: 'Artist 1', duration: '30s' },
+  { id: '2', title: 'Pop Hits', artist: 'Artist 2', duration: '15s' },
+  { id: '3', title: 'Dance Mix', artist: 'Artist 3', duration: '20s' },
+  { id: '4', title: 'Acoustic Vibes', artist: 'Artist 4', duration: '30s' },
+  { id: '5', title: 'EDM Party', artist: 'Artist 5', duration: '25s' },
+];
+
+// Mẫu hiệu ứng camera
+const cameraTemplates = [
+  { id: 'temp1', name: 'Bokeh', icon: 'camera' },
+  { id: 'temp2', name: 'Portrait', icon: 'camera-portrait' },
+  { id: 'temp3', name: 'Selfie', icon: 'camera-retro' },
+  { id: 'temp4', name: 'Night', icon: 'moon' },
+  { id: 'temp5', name: 'HDR', icon: 'adjust' },
+];
+
+const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }: StoryEditorScreenProps) => {
   const navigation = useNavigation();
   // Sử dụng asset từ prop hoặc từ route
   const routeParams = route?.params;
   const asset = propAsset || routeParams?.asset;
-  
-  if (!asset) {
-    console.error('Không có asset được cung cấp cho StoryEditorScreen');
-    return null;
-  }
   
   const [text, setText] = useState('');
   const [hasText, setHasText] = useState(false);
@@ -48,6 +65,16 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
   const [isCloseFriendsOnly, setIsCloseFriendsOnly] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showTools, setShowTools] = useState(true);
+  const [showMusicModal, setShowMusicModal] = useState(false);
+  const [selectedMusic, setSelectedMusic] = useState<string | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [mediaUri, setMediaUri] = useState<string | null>(asset ? asset.uri : null);
+
+  useEffect(() => {
+    if (!asset && !mediaUri) {
+      openMediaPicker();
+    }
+  }, []);
 
   const handleTextToggle = () => {
     setHasText(!hasText);
@@ -58,24 +85,77 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
     setIsCloseFriendsOnly(!isCloseFriendsOnly);
   };
 
+  const openMediaPicker = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 0.8,
+        videoMaxDuration: 30,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setMediaUri(result.assets[0].uri);
+      } else if (!mediaUri && !asset) {
+        // Nếu người dùng hủy chọn media và chưa có media nào, quay lại màn hình trước đó
+        if (onClose) {
+          onClose();
+        } else {
+          navigation.goBack();
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi chọn media:', error);
+      Alert.alert('Lỗi', 'Không thể chọn media. Vui lòng thử lại.');
+    }
+  };
+
+  const handleOpenCamera = async () => {
+    try {
+      setShowCameraModal(false);
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        quality: 0.8,
+        videoMaxDuration: 30,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setMediaUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Lỗi khi sử dụng camera:', error);
+      Alert.alert('Lỗi', 'Không thể sử dụng camera. Vui lòng thử lại.');
+    }
+  };
+
   const handleCreateStory = async () => {
     try {
       setIsUploading(true);
+      
+      if (!mediaUri) {
+        Alert.alert('Lỗi', 'Vui lòng chọn ảnh hoặc video cho story');
+        setIsUploading(false);
+        return;
+      }
       
       const formData = new FormData();
       
       // Xác định loại media
       let type = 'image/jpeg';
-      if (asset.uri.endsWith('.mp4') || asset.uri.endsWith('.mov')) {
+      if (mediaUri.endsWith('.mp4') || mediaUri.endsWith('.mov')) {
         type = 'video/mp4';
-      } else if (asset.uri.endsWith('.png')) {
+      } else if (mediaUri.endsWith('.png')) {
         type = 'image/png';
       }
       
+      const fileName = mediaUri.split('/').pop() || `story_${Date.now()}.jpg`;
+      console.log("File name:", fileName, "type:", type);
+      
       // @ts-ignore
-      formData.append('file', {
-        uri: asset.uri,
-        name: asset.fileName || `story_${Date.now()}.jpg`,
+      formData.append('media', {
+        uri: mediaUri,
+        name: fileName,
         type,
       });
       
@@ -87,7 +167,14 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
         formData.append('close_friends_only', 'true');
       }
       
-      await StoryService.createStory(formData);
+      if (selectedMusic) {
+        // Giả định rằng API của bạn hỗ trợ thêm nhạc vào story
+        formData.append('music_id', selectedMusic);
+      }
+      
+      console.log("Đang gửi dữ liệu story với URI:", mediaUri);
+      const response = await StoryService.createStory(formData);
+      console.log("Đã nhận phản hồi từ server:", response);
       
       Alert.alert(
         'Thành công',
@@ -95,6 +182,10 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
         [{ 
           text: 'OK', 
           onPress: () => {
+            if (onStoryCreated) {
+              onStoryCreated();
+            }
+            
             if (onClose) {
               onClose();
             } else {
@@ -104,6 +195,7 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
         }]
       );
     } catch (error: any) {
+      console.error("Lỗi khi tạo story:", error);
       Alert.alert('Lỗi', error.message || 'Không thể tạo story');
     } finally {
       setIsUploading(false);
@@ -117,6 +209,37 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
       navigation.goBack();
     }
   };
+
+  const renderMusicItem = ({ item }: { item: typeof musicSamples[0] }) => (
+    <TouchableOpacity 
+      className="flex-row items-center p-4 border-b border-gray-700"
+      onPress={() => {
+        setSelectedMusic(item.id);
+        setShowMusicModal(false);
+      }}
+    >
+      <MaterialIcons name="music-note" size={24} color="white" />
+      <View className="ml-3 flex-1">
+        <Text className="text-white font-medium">{item.title}</Text>
+        <Text className="text-gray-400 text-sm">{item.artist} • {item.duration}</Text>
+      </View>
+      {selectedMusic === item.id && (
+        <Ionicons name="checkmark-circle" size={24} color="#0095f6" />
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderCameraTemplate = ({ item }: { item: typeof cameraTemplates[0] }) => (
+    <TouchableOpacity 
+      className="items-center mx-3"
+      onPress={handleOpenCamera}
+    >
+      <View className="w-16 h-16 rounded-full bg-gray-800 items-center justify-center">
+        <FontAwesome5 name={item.icon} size={24} color="white" />
+      </View>
+      <Text className="text-white mt-2 text-xs">{item.name}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-black">
@@ -147,16 +270,24 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
       </View>
 
       <View className="flex-1 justify-center items-center">
-        {asset.type === 'video' ? (
-          <Video
-            source={{ uri: asset.uri }}
-            className="w-full h-full"
-            resizeMode="contain"
-            shouldPlay
-            isLooping
-          />
+        {mediaUri ? (
+          mediaUri.endsWith('.mp4') || mediaUri.endsWith('.mov') ? (
+            <Video
+              source={{ uri: mediaUri }}
+              className="w-full h-full"
+              resizeMode="contain"
+              shouldPlay
+              isLooping
+            />
+          ) : (
+            <Image source={{ uri: mediaUri }} className="w-full h-full" resizeMode="contain" />
+          )
         ) : (
-          <Image source={{ uri: asset.uri }} className="w-full h-full" resizeMode="contain" />
+          <View className="w-full h-full bg-gray-900 items-center justify-center">
+            <TouchableOpacity onPress={openMediaPicker}>
+              <Text className="text-white">Chọn ảnh hoặc video</Text>
+            </TouchableOpacity>
+          </View>
         )}
         
         {hasText && (
@@ -169,6 +300,16 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
             onChangeText={setText}
             autoFocus
           />
+        )}
+        
+        {selectedMusic && (
+          <View className="absolute bottom-5 left-0 right-0 flex-row items-center justify-center bg-black/50 p-3">
+            <MaterialIcons name="music-note" size={18} color="white" />
+            <Text className="text-white ml-2">{musicSamples.find(m => m.id === selectedMusic)?.title}</Text>
+            <TouchableOpacity onPress={() => setSelectedMusic(null)} className="ml-3">
+              <Ionicons name="close-circle" size={18} color="white" />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -190,9 +331,28 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
               <Text className="text-white mt-1 text-xs">Vẽ</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity className="items-center mr-5 w-15">
+            <TouchableOpacity 
+              className="items-center mr-5 w-15"
+              onPress={() => setShowMusicModal(true)}
+            >
               <MaterialIcons name="music-note" size={24} color="white" />
               <Text className="text-white mt-1 text-xs">Nhạc</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              className="items-center mr-5 w-15"
+              onPress={() => setShowCameraModal(true)}
+            >
+              <Ionicons name="camera" size={24} color="white" />
+              <Text className="text-white mt-1 text-xs">Camera</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              className="items-center mr-5 w-15"
+              onPress={openMediaPicker}
+            >
+              <MaterialIcons name="photo-library" size={24} color="white" />
+              <Text className="text-white mt-1 text-xs">Thư viện</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -202,7 +362,7 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
         <TouchableOpacity
           className={`bg-blue-500 rounded px-4 py-3 items-center ${isUploading ? 'opacity-50' : ''}`}
           onPress={handleCreateStory}
-          disabled={isUploading}
+          disabled={isUploading || !mediaUri}
         >
           {isUploading ? (
             <ActivityIndicator color="white" size="small" />
@@ -211,6 +371,73 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose }: StoryEditorScre
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Modal chọn nhạc */}
+      <Modal
+        visible={showMusicModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMusicModal(false)}
+      >
+        <View className="flex-1 bg-black/90">
+          <SafeAreaView className="flex-1">
+            <View className="flex-row justify-between items-center p-4 border-b border-gray-800">
+              <TouchableOpacity onPress={() => setShowMusicModal(false)}>
+                <Ionicons name="close" size={28} color="white" />
+              </TouchableOpacity>
+              <Text className="text-white text-lg font-bold">Chọn nhạc</Text>
+              <View style={{ width: 28 }} />
+            </View>
+            
+            <View className="px-4 py-2">
+              <TextInput
+                className="bg-gray-800 text-white px-4 py-2 rounded-full"
+                placeholder="Tìm kiếm bài hát..."
+                placeholderTextColor="gray"
+              />
+            </View>
+            
+            <FlatList
+              data={musicSamples}
+              renderItem={renderMusicItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            />
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Modal mẫu camera */}
+      <Modal
+        visible={showCameraModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowCameraModal(false)}
+      >
+        <View className="flex-1 bg-black/90 justify-end">
+          <SafeAreaView>
+            <View className="p-4 border-b border-gray-800">
+              <Text className="text-white text-lg font-bold text-center">Chọn hiệu ứng camera</Text>
+            </View>
+            
+            <FlatList
+              data={cameraTemplates}
+              renderItem={renderCameraTemplate}
+              keyExtractor={item => item.id}
+              horizontal
+              contentContainerStyle={{ paddingVertical: 20, paddingHorizontal: 10 }}
+              showsHorizontalScrollIndicator={false}
+            />
+            
+            <TouchableOpacity 
+              className="mx-4 my-6 p-4 bg-white/20 rounded-full items-center"
+              onPress={() => setShowCameraModal(false)}
+            >
+              <Text className="text-white font-bold">Đóng</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
