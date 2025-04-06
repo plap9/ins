@@ -127,8 +127,10 @@ export default function RestrictedAccountsScreen() {
       {/* Restrict Another Account Button */}
       <View className="p-4 border-t border-gray-200">
         <TouchableOpacity className="flex-row items-center justify-center p-3">
-          <Feather name="shield" size={20} color="#3897f0" className="mr-2" />
-          <Text className="text-blue-500 font-semibold ml-2">Restrict Another Account</Text>
+          <View className="mr-2">
+            <Feather name="shield" size={20} color="#3897f0" />
+          </View>
+          <Text className="text-blue-500 font-semibold">Restrict Another Account</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

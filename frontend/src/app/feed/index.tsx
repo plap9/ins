@@ -133,7 +133,6 @@ export default function FeedScreen() {
 
   useEffect(() => {
     setRefreshFeedCallback(() => {
-      console.log("Feed Screen: Đang refresh từ callback");
       onRefresh();
     });
 
@@ -148,7 +147,6 @@ export default function FeedScreen() {
   }, []);
 
   const onRefresh = useCallback(() => {
-    console.log("Feed Screen: Đang thực hiện refresh");
     
     setIsRefreshing(true);
     
@@ -158,7 +156,6 @@ export default function FeedScreen() {
     
     apiClient.get('/cache/clear/posts')
       .then(() => {
-        console.log('Đã xóa cache posts trước khi refresh');
         const timestamp = Date.now();
         
         return apiClient.get<{ message: string; posts: Post[] }>(`/posts?page=1&limit=20&_=${timestamp}`);
@@ -170,7 +167,6 @@ export default function FeedScreen() {
           profile_picture: p.profile_picture || null,
         }));
         
-        console.log(`Feed Screen: Đã nhận ${fetchedPosts.length} bài viết`);
         setPosts(fetchedPosts);
         
         if (fetchedPosts.length < 20) {
@@ -219,27 +215,22 @@ export default function FeedScreen() {
   }, []);
 
   const openStoryLibrary = useCallback(() => {
-    console.log("Mở màn hình thư viện ảnh từ FeedScreen");
     setShowStoryLibrary(true);
   }, []);
 
   const closeStoryLibrary = useCallback(() => {
-    console.log("Đóng màn hình thư viện ảnh");
     setShowStoryLibrary(false);
   }, []);
 
   const handleCreateStory = () => {
-    console.log("Opening story library from feed");
     setShowStoryLibrary(true);
     setStoryModalVisible(false);
   };
 
   const handleOpenCamera = async () => {
     try {
-      console.log("Mở camera từ feed...");
       const photo = await StoryService.takePhoto();
       if (photo) {
-        console.log("Chụp ảnh thành công:", photo);
         Alert.alert("Thành công", "Đã chụp ảnh thành công");
       }
       setStoryModalVisible(false);
@@ -250,13 +241,11 @@ export default function FeedScreen() {
   };
 
   const handleOpenMusicSelector = () => {
-    console.log("Mở trình chọn nhạc");
     Alert.alert("Thông báo", "Chức năng nhạc đang được phát triển");
     setStoryModalVisible(false);
   };
 
   const handleOpenTemplates = () => {
-    console.log("Mở mẫu story");
     Alert.alert("Thông báo", "Chức năng mẫu đang được phát triển");
     setStoryModalVisible(false);
   };

@@ -14,7 +14,6 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
         const { content, location } = req.body;
         const user_id = req.user?.user_id;
 
-        console.log("req.user:", req.user);
         if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const hasContent = content && content.trim() !== "";
@@ -91,7 +90,6 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             const { invalidateUserProfileCache, invalidatePostsListCache } = require('../../utils/cacheUtils');
             await invalidateUserProfileCache(user_id);
             await invalidatePostsListCache();
-            console.log(`Đã xóa cache profile của user_id ${user_id} và cache posts sau khi tạo post mới`);
         } catch (cacheError) {
             console.error('Lỗi khi xóa cache:', cacheError);
         }

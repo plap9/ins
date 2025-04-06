@@ -4,7 +4,6 @@ import { invalidateCacheKey } from "../utils/cacheUtils";
 
 const router: Router = express.Router();
 
-// Xóa toàn bộ cache
 router.get("/clear/all", authMiddleware, async (req: AuthRequest, res) => {
   try {
     await invalidateCacheKey("*");
@@ -15,13 +14,10 @@ router.get("/clear/all", authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Xóa cache liên quan đến posts
 router.get("/clear/posts", authMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Xóa cache với pattern key bắt đầu bằng "posts:"
     await invalidateCacheKey("posts:*");
     
-    // Trường hợp cache lưu theo user
     if (req.user?.user_id) {
       await invalidateCacheKey(`user:${req.user.user_id}:posts:*`);
     }

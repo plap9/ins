@@ -156,7 +156,6 @@ const CommentBottomSheet = forwardRef<
         if (isInitialLoadOrForce && !force && commentsCache.has(postIdToFetch) && cacheIsValid) {
           const cachedData = commentsCache.get(postIdToFetch);
           if (cachedData) {
-            console.log("Sử dụng cache cho postId:", postIdToFetch);
             setComments(cachedData.comments);
             setPage(cachedData.page);
             setTotalPages(cachedData.totalPages);
@@ -172,7 +171,6 @@ const CommentBottomSheet = forwardRef<
           parent_id: null,
         })) as GetCommentsResponse;
 
-        console.log("Dữ liệu comments nhận được:", data);
 
         const fetched = data.comments || [];
         const processedComments = fetched.map((c) => ({
@@ -187,7 +185,6 @@ const CommentBottomSheet = forwardRef<
           fetchPage >= data.pagination.totalPage;
 
         if (isInitialLoadOrForce) {
-          console.log("Cập nhật comments mới:", processedComments);
           setComments(processedComments);
         } else {
           setComments((prev) => [...prev, ...processedComments]);
@@ -215,7 +212,6 @@ const CommentBottomSheet = forwardRef<
 
   useEffect(() => {
     if (postId !== null) {
-      console.log(`Post ID changed: ${postId}. Fetching comments.`);
       currentPostIdRef.current = postId;
       if (currentPostIdRef.current !== postId) {
         setComments([]);
@@ -230,7 +226,6 @@ const CommentBottomSheet = forwardRef<
   }, [postId]);
 
   useEffect(() => {
-    console.log("Comments đã được cập nhật:", comments.length);
   }, [comments]);
 
   const loadMoreComments = useCallback(() => {
@@ -241,7 +236,6 @@ const CommentBottomSheet = forwardRef<
       page < totalPages
     ) {
       const nextPage = page + 1;
-      console.log(`Tải thêm trang comments: ${nextPage}`);
       setPage(nextPage);
       fetchCommentsForPost(postId, nextPage);
     }

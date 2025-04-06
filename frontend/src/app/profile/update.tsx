@@ -37,10 +37,6 @@ export default function UpdateProfile() {
             
             if (!result.canceled) {
                 const selectedImage = result.assets[0];
-                console.log(`[UpdateProfile] Đã chọn ảnh: ${selectedImage.uri}`);
-                console.log(`[UpdateProfile] Thông tin ảnh: width=${selectedImage.width || 'N/A'}, height=${selectedImage.height || 'N/A'}, 
-                            type=${selectedImage.type || 'N/A'}, fileSize=${selectedImage.fileSize || 'không rõ'} bytes`);
-                
                 if (!selectedImage.uri.startsWith('file:')) {
                     console.warn(`[UpdateProfile] URI của ảnh không phải là file local: ${selectedImage.uri}`);
                 }
@@ -77,7 +73,6 @@ export default function UpdateProfile() {
         fetchUserProfile();
     }, [userId]);
 
-    // Hàm chuyển đổi từ URI ảnh thành base64
     const getBase64FromUri = async (uri: string): Promise<string> => {
         try {
             const response = await fetch(uri);
@@ -89,7 +84,6 @@ export default function UpdateProfile() {
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     if (typeof reader.result === 'string') {
-                        // Lấy phần base64 sau prefix "data:image/jpeg;base64,"
                         const base64data = reader.result.split(',')[1];
                         resolve(base64data);
                     } else {
@@ -121,18 +115,12 @@ export default function UpdateProfile() {
                 gender
             };
             
-            // Nếu có ảnh mới, chuyển đổi thành base64 và đưa vào update data
             if (image && image.startsWith('file:')) {
                 try {
                     setUploadingText('Đang chuẩn bị ảnh...');
-                    console.log('[UpdateProfile] Bắt đầu chuyển đổi ảnh sang base64...');
                     
                     const base64Image = await getBase64FromUri(image);
-                    console.log('[UpdateProfile] Đã chuyển đổi ảnh thành base64, độ dài:', base64Image.length);
-                    
-                    // Thêm base64 vào update data
                     updateData.avatar_base64 = base64Image;
-                    console.log('[UpdateProfile] Đã thêm base64 vào dữ liệu cập nhật');
                 } catch (imageError) {
                     console.error('[UpdateProfile] Lỗi khi xử lý ảnh:', imageError);
                     Alert.alert('Lỗi', 'Không thể xử lý ảnh. Vui lòng thử lại sau.');
@@ -141,14 +129,9 @@ export default function UpdateProfile() {
                 }
             }
             
-            // Gửi tất cả dữ liệu trong một lần gọi API
             setUploadingText('Đang cập nhật thông tin...');
-            console.log('[UpdateProfile] Gửi dữ liệu cập nhật với kích thước:', JSON.stringify(updateData).length);
-            
             try {
                 const response = await updateUserProfile(userId, updateData);
-                console.log('[UpdateProfile] Cập nhật thành công:', response);
-                
                 Alert.alert('Thành công', 'Cập nhật hồ sơ thành công!');
                 router.back();
             } catch (updateError) {

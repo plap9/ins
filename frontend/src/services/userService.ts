@@ -1,7 +1,6 @@
 import apiClient from './apiClient';
 import { useAuth } from '../app/context/AuthContext';
 
-// Khai báo các interface
 export interface UserProfile {
   user_id: number;
   username: string;
@@ -83,23 +82,17 @@ interface UserSettingsUpdateResponse {
 
 export interface User extends UserProfile {}
 
-// Khai báo hằng số 
 export const MAX_AVATAR_SIZE_MB = 5;
 
-// Khởi tạo biến global để lưu trữ hàm cập nhật authData
 let _updateAuthUserData: ((userData: any) => Promise<void>) | null = null;
 
-// Hàm để đăng ký hàm cập nhật từ AuthContext
 export const registerAuthUpdateFunction = (updateFn: (userData: any) => Promise<void>) => {
   _updateAuthUserData = updateFn;
-  console.log("[userService] Đã đăng ký hàm cập nhật AuthContext");
 };
 
 export const getUserProfile = async (userId: number): Promise<UserProfileResponse> => {
   try {
-    console.log(`[userService] Gọi API getUserProfile với userId: ${userId}`);
     const response = await apiClient.get<UserProfileResponse>(`/users/${userId}`);
-    console.log(`[userService] Kết quả API getUserProfile:`, response.data);
     return response.data;
   } catch (error) {
     console.error('[userService] Lỗi trong getUserProfile:', error);
@@ -109,15 +102,9 @@ export const getUserProfile = async (userId: number): Promise<UserProfileRespons
 
 export const updateUserProfile = async (userId: number, data: UpdateUserRequest): Promise<UserUpdateResponse> => {
   try {
-    console.log(`[userService] Gọi API updateUserProfile với userId: ${userId}`);
-    
-    // Nếu có avatar_base64, kiểm tra kích thước
     if (data.avatar_base64) {
-      // Ước tính kích thước (1 ký tự base64 ~ 0.75 byte)
       const estimatedSizeInBytes = Math.ceil(data.avatar_base64.length * 0.75);
       const estimatedSizeInMB = estimatedSizeInBytes / (1024 * 1024);
-      
-      console.log(`[userService] Kích thước ảnh base64: ~${estimatedSizeInMB.toFixed(2)}MB`);
       
       if (estimatedSizeInMB > MAX_AVATAR_SIZE_MB) {
         throw new Error(`Kích thước avatar không được vượt quá ${MAX_AVATAR_SIZE_MB}MB`);
@@ -125,21 +112,15 @@ export const updateUserProfile = async (userId: number, data: UpdateUserRequest)
     }
     
     const response = await apiClient.put<UserUpdateResponse>(`/users/${userId}`, data);
-    console.log(`[userService] Kết quả API updateUserProfile:`, response.data);
-    
-    // Nếu cập nhật thành công và có hàm cập nhật AuthContext
     if (response.data.success && _updateAuthUserData) {
       try {
-        // Cập nhật thông tin trong AuthContext
         await _updateAuthUserData({
           profile_picture: response.data.user.profile_picture,
           username: response.data.user.username,
           full_name: response.data.user.full_name
         });
-        console.log('[userService] Đã cập nhật thông tin người dùng trong AuthContext');
       } catch (authError) {
         console.error('[userService] Lỗi khi cập nhật AuthContext:', authError);
-        // Không throw lỗi để vẫn trả về kết quả API thành công
       }
     }
     
@@ -220,9 +201,7 @@ export const searchUsers = async (query: string): Promise<User[]> => {
 
 export const getUserSettings = async (userId: number): Promise<UserSettingsResponse> => {
   try {
-    console.log(`[userService] Gọi API getUserSettings với userId: ${userId}`);
     const response = await apiClient.get<UserSettingsResponse>(`/users/${userId}/settings`);
-    console.log(`[userService] Kết quả API getUserSettings:`, response.data);
     return response.data;
   } catch (error) {
     console.error('[userService] Lỗi trong getUserSettings:', error);
@@ -232,9 +211,7 @@ export const getUserSettings = async (userId: number): Promise<UserSettingsRespo
 
 export const updateUserSettings = async (userId: number, data: UserSettingsData): Promise<UserSettingsUpdateResponse> => {
   try {
-    console.log(`[userService] Gọi API updateUserSettings với userId: ${userId}`);
     const response = await apiClient.put<UserSettingsUpdateResponse>(`/users/${userId}/settings`, data);
-    console.log(`[userService] Kết quả API updateUserSettings:`, response.data);
     return response.data;
   } catch (error) {
     console.error('[userService] Lỗi trong updateUserSettings:', error);

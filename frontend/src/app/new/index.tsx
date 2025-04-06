@@ -84,7 +84,6 @@ export default function CreatePostScreen() {
         processedUri = newUri;
       }
   
-      console.log("Processed URI:", processedUri);
       setSelectedImage(processedUri);
     }
   };
@@ -104,7 +103,6 @@ export default function CreatePostScreen() {
         let uploadFileName: string = `upload_${Date.now()}.jpg`;
 
         if (selectedImage.startsWith('data:')) {
-            console.log("Phát hiện data URI, đang chuyển đổi sang file URI...");
             const uriParts = selectedImage.split(',');
             const headerParts = uriParts[0].split(/[:;]/); 
 
@@ -130,7 +128,6 @@ export default function CreatePostScreen() {
             fileUriForUpload = temporaryFileUri; 
 
         } else if (selectedImage.startsWith('file://')) {
-            console.log("Phát hiện file URI:", selectedImage);
             fileUriForUpload = selectedImage; 
             uploadFileName = fileUriForUpload.split('/').pop() || `upload_${Date.now()}.jpg`;
             const fileExtension = uploadFileName.split('.').pop()?.toLowerCase();
@@ -157,14 +154,12 @@ export default function CreatePostScreen() {
             formData.append('location', location);
         }
 
-        console.log("Đang gửi POST /posts với FormData...");
         const response = await apiClient.post<PostResponse>('/posts', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             }, 
         });
 
-        console.log("Đăng bài thành công, đang xóa cache...");
         
         try {
             await apiClient.get(`/cache/clear/posts?_=${Date.now()}`);
@@ -196,7 +191,6 @@ export default function CreatePostScreen() {
     } finally {
         setIsUploading(false);
         if (temporaryFileUri) {
-           console.log(`Đang xóa file tạm: ${temporaryFileUri}`);
            FileSystem.deleteAsync(temporaryFileUri, { idempotent: true })
                .then(() => console.log("Đã xóa file tạm."))
                .catch(delError => console.error("Lỗi xóa file tạm:", delError));

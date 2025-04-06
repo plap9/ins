@@ -14,7 +14,6 @@ import { authMiddleware } from "../middlewares/authMiddleware";
 import { validate } from "../middlewares/validate";
 import { updateUserSchema } from "../validations/userValidation";
 import { uploadAvatar } from "../middlewares/upload";
-// import { invalidateUserCache } from "../controllers/user";
 
 const router: Router = express.Router();
 
@@ -27,7 +26,5 @@ router.get("/search", authMiddleware, getUsersBySearch);
 router.get("/:id/settings", authMiddleware, getUserSettings);
 router.put("/:id/settings", authMiddleware, updateUserSettings);
 
-// Tạm thời comment route này lại vì chưa có controller invalidateUserCache
-// router.get('/:id/invalidate-cache', authMiddleware, invalidateUserCache);
 
 export default router;
