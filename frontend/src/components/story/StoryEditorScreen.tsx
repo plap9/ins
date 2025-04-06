@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,16 +9,16 @@ import {
   Alert,
   TextInput,
   Modal,
-  FlatList
+  FlatList,
+  Platform
 } from 'react-native';
-import { ImagePickerAsset } from 'expo-image-picker';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome5, Entypo } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import StoryService from '../../services/storyService';
+import StoryService, { refreshStories } from '../../services/storyService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { ImagePickerAsset } from 'expo-image-picker';
 
-// Mock Video component để thay thế expo-av
 const Video = (props: any) => {
   return <Image {...props} />;
 };
@@ -27,14 +27,6 @@ interface RouteParams {
   asset: ImagePickerAsset;
 }
 
-interface StoryEditorScreenProps {
-  route?: { params: RouteParams };
-  asset?: ImagePickerAsset;
-  onClose?: () => void;
-  onStoryCreated?: () => void;
-}
-
-// Mẫu nhạc cho story
 const musicSamples = [
   { id: '1', title: 'Nhạc Trending #1', artist: 'Artist 1', duration: '30s' },
   { id: '2', title: 'Pop Hits', artist: 'Artist 2', duration: '15s' },
@@ -43,7 +35,6 @@ const musicSamples = [
   { id: '5', title: 'EDM Party', artist: 'Artist 5', duration: '25s' },
 ];
 
-// Mẫu hiệu ứng camera
 const cameraTemplates = [
   { id: 'temp1', name: 'Bokeh', icon: 'camera' },
   { id: 'temp2', name: 'Portrait', icon: 'camera-portrait' },
@@ -52,9 +43,15 @@ const cameraTemplates = [
   { id: 'temp5', name: 'HDR', icon: 'adjust' },
 ];
 
+interface StoryEditorScreenProps {
+  route?: { params: RouteParams };
+  asset?: ImagePickerAsset;
+  onClose?: (storyData: any) => void;
+  onStoryCreated?: (story: any) => void;
+}
+
 const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }: StoryEditorScreenProps) => {
   const navigation = useNavigation();
-  // Sử dụng asset từ prop hoặc từ route
   const routeParams = route?.params;
   const asset = propAsset || routeParams?.asset;
   
@@ -97,9 +94,8 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setMediaUri(result.assets[0].uri);
       } else if (!mediaUri && !asset) {
-        // Nếu người dùng hủy chọn media và chưa có media nào, quay lại màn hình trước đó
         if (onClose) {
-          onClose();
+          onClose(null);
         } else {
           navigation.goBack();
         }
@@ -141,7 +137,6 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       
       const formData = new FormData();
       
-      // Xác định loại media
       let type = 'image/jpeg';
       if (mediaUri.endsWith('.mp4') || mediaUri.endsWith('.mov')) {
         type = 'video/mp4';
@@ -161,6 +156,8 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       
       if (hasText && text.trim()) {
         formData.append('caption', text.trim());
+        formData.append('has_text', 'true');
+        formData.append('sticker_data', text.trim());
       }
       
       if (isCloseFriendsOnly) {
@@ -168,13 +165,27 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       }
       
       if (selectedMusic) {
-        // Giả định rằng API của bạn hỗ trợ thêm nhạc vào story
         formData.append('music_id', selectedMusic);
       }
       
-      console.log("Đang gửi dữ liệu story với URI:", mediaUri);
       const response = await StoryService.createStory(formData);
-      console.log("Đã nhận phản hồi từ server:", response);
+      
+      const storyData = {
+        success: true,
+        story_id: response.story_id,
+        media: response.media || [],
+        expires_at: response.expires_at,
+        has_text: hasText,
+        sticker_data: hasText ? text : null,
+        filter_data: filterData,
+        close_friends_only: isCloseFriendsOnly
+      };
+      
+      if (onStoryCreated) {
+        onStoryCreated(storyData);
+      }
+      
+      refreshStories();
       
       Alert.alert(
         'Thành công',
@@ -182,12 +193,8 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
         [{ 
           text: 'OK', 
           onPress: () => {
-            if (onStoryCreated) {
-              onStoryCreated();
-            }
-            
             if (onClose) {
-              onClose();
+              onClose(storyData);
             } else {
               navigation.navigate('Feed' as never);
             }
@@ -204,7 +211,7 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
 
   const handleBackPress = () => {
     if (onClose) {
-      onClose();
+      onClose(null);
     } else {
       navigation.goBack();
     }

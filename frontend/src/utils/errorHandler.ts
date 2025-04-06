@@ -1,8 +1,7 @@
-import type { AxiosError } from 'axios';
+import axios from 'axios';
 import { ErrorCode } from "@backend-types/errorCode";
 
 const ERROR_MESSAGES: Record<ErrorCode, string> = {
-  // Authentication Errors
   [ErrorCode.MISSING_CREDENTIALS]: "Vui lòng nhập đầy đủ thông tin",
   [ErrorCode.INVALID_CREDENTIALS]: "Thông tin đăng nhập không chính xác",
   [ErrorCode.ACCOUNT_NOT_FOUND]: "Tài khoản không tồn tại",
@@ -29,6 +28,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.UNSUPPORTED_FILE_TYPE]: "Loại file không hỗ trợ",
   [ErrorCode.FILE_DOWNLOAD_ERROR]: "Lỗi tải file",
   [ErrorCode.FILE_PROCESSING_ERROR]: "Lỗi xử lý file",
+  [ErrorCode.FILE_MISSING]: "File không tồn tại",
 
   // Validation Errors
   [ErrorCode.VALIDATION_ERROR]: "Dữ liệu không hợp lệ",
@@ -81,7 +81,7 @@ export const handleApiError = (error: unknown): {
   message: string;
   field?: string;
 } => {
-  const axiosError = error as AxiosError;
+  const axiosError = error as any;
   
   if (!axiosError.response) {
     return {

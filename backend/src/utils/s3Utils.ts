@@ -69,44 +69,71 @@ export const uploadToS3 = async (
     let Body: Buffer | Readable;
     
     if (typeof filePath === 'string') {
-      const { createReadStream } = await import('fs');
-      Body = createReadStream(filePath);
+      try {
+        const fs = await import('fs/promises');
+        const fileStats = await fs.stat(filePath);
+        
+        if (fileStats.size === 0) {
+          throw new Error(`File rỗng hoặc không tồn tại: ${filePath}`);
+        }
+        
+        const { createReadStream } = await import('fs');
+        Body = createReadStream(filePath);
+      } catch (fileError) {
+        throw new Error(`Không thể đọc file: ${(fileError as Error).message}`);
+      }
     } else {
+      if (!filePath || filePath.length === 0) {
+        throw new Error('Buffer rỗng hoặc không tồn tại');
+      }
       Body = filePath;
     }
 
     const finalKey = key || `${uuidv4()}`;
     const detectedContentType = contentType || await detectContentType(Body);
     
-    console.log(`[s3Utils] Tải lên file với content type: ${detectedContentType}, key: ${finalKey}`);
+    let fileExtension = '';
+    if (detectedContentType.includes('image/')) {
+      fileExtension = detectedContentType.split('/')[1];
+    } else if (detectedContentType.includes('video/')) {
+      fileExtension = detectedContentType.split('/')[1];
+    }
+    
+    const finalKeyWithExt = finalKey.includes('.') ? finalKey : `${finalKey}.${fileExtension}`;
+
+    let additionalHeaders: { [key: string]: string } = {
+      'Content-Type': detectedContentType
+    };
+    
+    if (detectedContentType.includes('image/') || detectedContentType.includes('video/')) {
+      additionalHeaders['Cache-Control'] = 'max-age=31536000'; 
+    }
 
     const command = new PutObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME,
-      Key: finalKey,
+      Key: finalKeyWithExt,
       Body,
       ContentType: detectedContentType,
-      ACL: 'private'
+      CacheControl: additionalHeaders['Cache-Control']
     });
 
     const result = await s3Client.send(command);
-    console.log(`[s3Utils] S3 response:`, result);
     
     await redisClient.setex(
-      `s3:${finalKey}`,
+      `s3:${finalKeyWithExt}`,
       86400,
       JSON.stringify({
-        key: finalKey,
+        key: finalKeyWithExt,
         contentType: detectedContentType,
         size: Buffer.isBuffer(Body) ? Body.length : null
       })
     );
 
-    const location = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${finalKey}`;
-    console.log(`[s3Utils] URL của file: ${location}`);
+    const location = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${finalKeyWithExt}`;
     
     return {
       Location: location,
-      Key: finalKey,
+      Key: finalKeyWithExt,
       ETag: result.ETag,
       Bucket: process.env.AWS_S3_BUCKET_NAME || ''
     };
@@ -154,25 +181,18 @@ export const uploadResizedImage = async (
   }
 ): Promise<UploadResult> => {
   try {
-    console.log(`[s3Utils] Bắt đầu xử lý ảnh với kích thước: ${buffer.length} bytes`);
-    console.log(`[s3Utils] Tùy chọn resize: width=${options.width}, height=${options.height}, quality=${options.quality}, format=${options.format}, key=${options.key || 'auto'}`);
-    
     const processedImage = sharp(buffer)
       .resize(options.width, options.height, { fit: 'contain' })
       .toFormat(options.format || 'jpeg')
       .jpeg({ quality: options.quality || 80 });
 
-    console.log(`[s3Utils] Đang chuyển đổi ảnh thành buffer...`);
     const processedBuffer = await processedImage.toBuffer();
-    console.log(`[s3Utils] Chuyển đổi ảnh hoàn tất, kích thước sau xử lý: ${processedBuffer.length} bytes`);
     
-    console.log(`[s3Utils] Đang tải ảnh lên S3...`);
     const result = await uploadToS3(
       processedBuffer,
       options.key,
       `image/${options.format || 'jpeg'}`
     );
-    console.log(`[s3Utils] Tải ảnh lên S3 thành công, URL: ${result.Location}`);
     
     return result;
   } catch (error) {

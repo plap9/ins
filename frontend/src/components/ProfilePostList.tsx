@@ -76,19 +76,9 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
       setError(null);
 
       try {
-        console.log(
-          `Đang lấy bài đăng của người dùng: ${userId}, kiểu: ${typeof userId}`
-        );
         const response = await apiClient.get<ApiResponse>(
           `/posts?user_id=${userId}&page=1&limit=50`
         );
-        console.log(
-          "API request URL:",
-          `/posts?user_id=${userId}&page=1&limit=50`
-        );
-        console.log("API response status:", response.status);
-        console.log("API response data:", JSON.stringify(response.data));
-
         if (response.data && response.data.posts) {
           const allPosts = response.data.posts;
 
@@ -105,10 +95,6 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
           );
 
           const userPosts = sortedPosts.filter((post) => {
-            console.log(
-              `Kiểm tra post ID ${post.post_id}, media_types:`,
-              post.media_types
-            );
             if (!post.media_types || post.media_types.length === 0) {
               return true;
             }
@@ -125,21 +111,9 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
               (type) => type && type.includes("video")
             );
           });
-
-          console.log(
-            `Số lượng posts: ${userPosts.length}, reels: ${userReels.length}`
-          );
-          console.log(
-            "Mẫu post đầu tiên:",
-            userPosts.length > 0
-              ? JSON.stringify(userPosts[0])
-              : "Không có post"
-          );
-
           setPosts(userPosts);
           setReels(userReels);
         } else {
-          console.log("Không có dữ liệu bài đăng");
           setPosts([]);
           setReels([]);
         }
@@ -308,7 +282,7 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
               (p) => p.post_id === selectedPost
             )}
             getItemLayout={(data, index) => ({
-              length: 500, // Ước tính chiều cao của một bài viết
+              length: 500, 
               offset: 500 * index,
               index,
             })}

@@ -24,10 +24,13 @@ import Animated, {
   withSequence,
   runOnJS
 } from 'react-native-reanimated';
+import { getAlternativeS3Url, isS3Url, getS3Url, getKeyFromS3Url, config } from '../../utils/config';
+import { useAuth } from '../../app/context/AuthContext';
 
-const Video = (props: any) => {
-  return <Image {...props} />;
-};
+// Video component không được sử dụng đúng cách nên tạm comment lại
+// const Video = (props: any) => {
+//   return <Image {...props} />;
+// };
 
 interface StoryViewerProps {
   storyId: number;
@@ -46,6 +49,7 @@ const StoryViewerScreen = ({
   onClose 
 }: StoryViewerProps) => {
   const navigation = useNavigation();
+  const { authData } = useAuth();
   
   const [stories, setStories] = useState<Story[]>(initialStories);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -57,7 +61,11 @@ const StoryViewerScreen = ({
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
-  const [shouldCompleteCurrentProgress, setShouldCompleteCurrentProgress] = useState(false); 
+  const [shouldCompleteCurrentProgress, setShouldCompleteCurrentProgress] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState<string>('');
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
   const progressValue = useSharedValue(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -66,6 +74,111 @@ const StoryViewerScreen = ({
   const storyCompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const currentStory = stories[currentIndex];
+
+  useEffect(() => {
+    if (currentStory) {
+      setImageLoadError(false);
+      setIsRetrying(false);
+      setRetryCount(0);
+      
+      const mediaSource = currentStory.media && currentStory.media.length > 0 
+        ? currentStory.media[0].media_url 
+        : currentStory.media_url;
+      
+      if (mediaSource) {
+        const fullUrl = mediaSource.startsWith('http') 
+          ? mediaSource 
+          : getS3Url(mediaSource);
+        
+        setMediaUrl(fullUrl);
+      }
+    }
+  }, [currentStory]);
+
+  const handleImageError = async () => {
+    
+    if (retryCount >= 3) {
+      setImageLoadError(true);
+      return;
+    }
+    
+    setRetryCount(retryCount + 1);
+    
+    if (isRetrying && retryCount > 1) {
+      setImageLoadError(true);
+      return;
+    }
+    
+    setIsRetrying(true);
+    
+    try {
+      pauseProgress();
+      
+      if (mediaUrl.includes('?')) {
+        const baseUrl = mediaUrl.split('?')[0];
+        setMediaUrl(baseUrl);
+        resumeProgress();
+        return;
+      }
+      
+      if (!authData?.token) {
+        setImageLoadError(true);
+        resumeProgress();
+        return;
+      }
+      
+      const key = getKeyFromS3Url(mediaUrl);
+      
+      if (retryCount === 1) {
+        const directUrl = `https://${config.AWS.S3_BUCKET_NAME}.s3.${config.AWS.REGION}.amazonaws.com/${key}`;
+        setMediaUrl(directUrl);
+        resumeProgress();
+        return;
+      }
+      
+      try {
+        const response = await fetch(
+          `${config.API_BASE_URL}/stories/presigned-url?key=${encodeURIComponent(key)}`,
+          { 
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authData.token}`
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          console.error("Lỗi HTTP khi lấy presigned URL:", response.status);
+          setImageLoadError(true);
+          resumeProgress();
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.presignedUrl) {
+          let alternativeUrl = data.presignedUrl;
+          if (alternativeUrl.includes('&amp;')) {
+            alternativeUrl = alternativeUrl.replace(/&amp;/g, '&');
+          }
+          setMediaUrl(alternativeUrl);
+          setImageLoadError(false);
+          resumeProgress();
+          return;
+        }
+      } catch (directError) {
+        console.error("Lỗi khi gọi API trực tiếp:", directError);
+      }
+      
+      setImageLoadError(true);
+    } catch (error) {
+      console.error("Lỗi khi lấy URL thay thế:", error);
+      setImageLoadError(true);
+    } finally {
+      resumeProgress();
+    }
+  };
 
   const calculateRemainingDuration = (): number => {
     if (progressValue.value === 0) return STORY_DURATION;
@@ -77,7 +190,6 @@ const StoryViewerScreen = ({
   };
 
   const pauseProgress = () => {
-    console.log("Pause progress called");
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -93,7 +205,6 @@ const StoryViewerScreen = ({
   };
 
   const resumeProgress = () => {
-    console.log("Resume progress called");
     if (!isReplying && !showOptions) {
       setIsPaused(false);
       const remainingDuration = calculateRemainingDuration();
@@ -105,7 +216,6 @@ const StoryViewerScreen = ({
       });
       
       timerRef.current = setTimeout(() => {
-        console.log("Safety timeout triggered");
         proceedToNextStory();
       }, remainingDuration + 500);
     }
@@ -120,8 +230,6 @@ const StoryViewerScreen = ({
   };
 
   const completeCurrentStory = () => {
-    console.log("Hoàn thành story hiện tại và chuyển tiếp");
-    
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -142,8 +250,6 @@ const StoryViewerScreen = ({
   };
   
   const proceedToNextStory = () => {
-    console.log("Chuyển đến story tiếp theo");
-    
     if (currentIndex < stories.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
@@ -152,14 +258,11 @@ const StoryViewerScreen = ({
   };
 
   const handleLongPressStart = () => {
-    console.log("Long press start detected");
     setIsLongPressed(true);
     pauseProgress();
   };
 
   const handleLongPressEnd = () => {
-    console.log("Long press end detected");
-    
     if (isLongPressed) {
       setIsLongPressed(false);
       
@@ -186,7 +289,6 @@ const StoryViewerScreen = ({
     setIsLiked(!isLiked);
     
     setTimeout(() => {
-      console.log(`Story ${currentStory.story_id} ${isLiked ? 'unliked' : 'liked'}`);
       resumeProgress();
     }, 300);
   };
@@ -224,16 +326,16 @@ const StoryViewerScreen = ({
 
   const getTimeLeft = (created_at: string, expires_at: string) => {
     const now = new Date();
-    const expiry = new Date(expires_at);
+    const created = new Date(created_at);
     
-    const hoursLeft = Math.max(0, Math.floor((expiry.getTime() - now.getTime()) / (1000 * 60 * 60)));
+    const hoursPassed = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60));
     
-    if (hoursLeft >= 24) {
-      return "24h";
-    } else if (hoursLeft <= 0) {
-      return "Hết hạn";
+    if (hoursPassed < 1) {
+      return "0h";
+    } else if (hoursPassed < 24) {
+      return `${hoursPassed}h`;
     } else {
-      return `${hoursLeft}h`;
+      return "24h";
     }
   };
 
@@ -242,8 +344,6 @@ const StoryViewerScreen = ({
   }));
 
   useEffect(() => {
-    console.log("Story changed to index:", currentIndex);
-    
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -317,8 +417,13 @@ const StoryViewerScreen = ({
     );
   }
 
-  const isVideo = currentStory.media_url?.includes('.mp4') || 
-                 currentStory.media_url?.includes('.mov');
+  const mediaSource = currentStory.media && currentStory.media.length > 0 
+    ? currentStory.media[0] 
+    : { media_url: currentStory.media_url, media_type: 'image' };
+    
+  const isVideo = mediaSource.media_type === 'video' || 
+                mediaSource.media_url?.includes('.mp4') || 
+                mediaSource.media_url?.includes('.mov');
 
   const handleLeftPress = () => {
     if (isLongPressed || isReplying || showOptions) return;
@@ -338,8 +443,16 @@ const StoryViewerScreen = ({
   const handleRightPress = () => {
     if (isLongPressed || isReplying || showOptions) return;
     
-    setShouldCompleteCurrentProgress(true);
-    startProgress();
+    if (currentIndex < stories.length - 1) {
+      progressValue.value = 0;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      handleClose();
+    }
   };
 
   const startProgress = () => {
@@ -360,7 +473,6 @@ const StoryViewerScreen = ({
     }
     
     const remainingDuration = calculateRemainingDuration();
-    console.log("Remaining duration:", remainingDuration);
     
     progressValue.value = withTiming(1, { 
       duration: remainingDuration
@@ -371,7 +483,6 @@ const StoryViewerScreen = ({
     });
     
     timerRef.current = setTimeout(() => {
-      console.log("Safety timeout triggered");
       if (!isLongPressed) {
         proceedToNextStory();
       }
@@ -386,23 +497,61 @@ const StoryViewerScreen = ({
       <View className="flex-1">
         {isVideo ? (
           <View className="w-full h-[85%] flex-1">
-            <Video
-              ref={videoRef}
-              source={{ uri: currentStory.media_url }}
-              className="flex-1"
-              resizeMode="contain"
-              shouldPlay={!isPaused}
-              isLooping
-              isMuted={false}
-            />
+            {mediaUrl ? (
+              <Image
+                source={{ uri: mediaUrl }}
+                className="flex-1"
+                resizeMode="contain"
+                onLoadStart={() => {
+                }}
+                onLoadEnd={() => {
+                }}
+                onLoad={() => {
+                  setImageLoadError(false);
+                }}
+                onError={(e) => {
+                  handleImageError();
+                }}
+              />
+            ) : (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="#ffffff" />
+              </View>
+            )}
+            {imageLoadError && (
+              <View className="absolute top-0 left-0 right-0 bottom-0 items-center justify-center">
+                <Text className="text-white text-base">Không thể tải video</Text>
+              </View>
+            )}
           </View>
         ) : (
           <View className="w-full h-[85%] flex-1">
-            <Image 
-              source={{ uri: currentStory.media_url }} 
-              className="flex-1"
-              resizeMode="contain"
-            />
+            {mediaUrl ? (
+              <Image 
+                source={{ uri: mediaUrl }} 
+                className="flex-1"
+                resizeMode="contain"
+                onLoadStart={() => {
+                }}
+                onLoadEnd={() => {
+                }}
+                onLoad={() => {
+                  setImageLoadError(false);
+                }}
+                onError={(e) => {
+                  handleImageError();
+                }}
+              />
+            ) : (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="#ffffff" />
+              </View>
+            )}
+            {imageLoadError && (
+              <View className="absolute top-0 left-0 right-0 bottom-0 items-center justify-center">
+                <Text className="text-white text-base">Không thể tải hình ảnh</Text>
+              </View>
+            )}
           </View>
         )}
           
@@ -462,7 +611,7 @@ const StoryViewerScreen = ({
                   Alert.alert("Ẩn story", "Đã ẩn story này");
                 }}
               >
-                <Feather name="eye-off" size={20} color="white" className="mr-2" />
+                <Feather name="eye-off" size={20} color="white" />
                 <Text className="text-white ml-2">Ẩn story</Text>
               </TouchableOpacity>
               
@@ -473,7 +622,7 @@ const StoryViewerScreen = ({
                   Alert.alert("Báo cáo", "Đã gửi báo cáo");
                 }}
               >
-                <Feather name="flag" size={20} color="white" className="mr-2" />
+                <Feather name="flag" size={20} color="white" />
                 <Text className="text-white ml-2">Báo cáo</Text>
               </TouchableOpacity>
             </View>
@@ -560,7 +709,7 @@ const StoryViewerScreen = ({
           onPress={handleLeftPress}
           onLongPress={handleLongPressStart}
           onPressOut={handleLongPressEnd}
-          delayLongPress={200} // Giảm thời gian phát hiện long press
+          delayLongPress={200}
         >
           <View className="flex-1" />
         </TouchableWithoutFeedback>
@@ -570,7 +719,7 @@ const StoryViewerScreen = ({
           onPress={handleRightPress}
           onLongPress={handleLongPressStart}
           onPressOut={handleLongPressEnd}
-          delayLongPress={200} // Giảm thời gian phát hiện long press
+          delayLongPress={200}
         >
           <View className="flex-1" />
         </TouchableWithoutFeedback>

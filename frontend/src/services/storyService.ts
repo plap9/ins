@@ -1,13 +1,21 @@
 import apiClient from './apiClient';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { getKeyFromS3Url } from '../utils/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export interface Media {
+  media_id: number;
+  story_id: number;
+  media_url: string;
+  media_type: string;
+}
 
 export interface Story {
   story_id: number;
   user_id: number;
   username: string;
   profile_picture: string;
-  media_url: string;
   created_at: string;
   expires_at: string;
   has_text: boolean;
@@ -16,6 +24,8 @@ export interface Story {
   view_count: number;
   close_friends_only: boolean;
   is_viewed: boolean;
+  media?: Media[];
+  media_url?: string;
 }
 
 export interface StoryGroup {
@@ -52,18 +62,117 @@ export interface StoryHighlightResponse {
   };
 }
 
+interface PresignedUrlResponse {
+  success: boolean;
+  presignedUrl?: string;
+  key?: string;
+  message?: string;
+  metadata?: any;
+  expiresIn?: number;
+}
+
+let refreshStoriesCallback: (() => void) | null = null;
+let lastStoriesRefreshTime = 0;
+const STORIES_REFRESH_THROTTLE_MS = 2000;
+
+export const setRefreshStoriesCallback = (callback: () => void) => {
+  refreshStoriesCallback = callback;
+};
+
+export const refreshStories = () => {
+  const now = Date.now();
+  
+  if (now - lastStoriesRefreshTime < STORIES_REFRESH_THROTTLE_MS) {
+    return;
+  }
+  
+  lastStoriesRefreshTime = now;
+  
+  if (refreshStoriesCallback) {
+    const callback = refreshStoriesCallback;
+    
+    try {
+      console.log('Refreshing stories...');
+      callback();
+    } catch (error) {
+      console.warn('Lỗi khi refresh stories:', error);
+    }
+  } else {
+    console.warn('Hàm refresh stories chưa được đăng ký');
+  }
+};
+
 class StoryService {
+  private async getToken(): Promise<string | null> {
+    try {
+      const authData = await AsyncStorage.getItem('@AuthData');
+      if (authData) {
+        const parsed = JSON.parse(authData);
+        return parsed.token || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Lỗi khi lấy token:', error);
+      return null;
+    }
+  }
+  
+  async getPresignedUrl(key: string): Promise<string> {
+    try {
+      if (key.includes('amazonaws.com/')) {
+        key = getKeyFromS3Url(key);
+      }
+      const token = await this.getToken();
+      
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await apiClient.get<PresignedUrlResponse>('/stories/presigned-url', {
+        params: {
+          key,
+          expiresIn: 3600 
+        },
+        headers: headers
+      });
+      
+      if (response.data && response.data.success && response.data.presignedUrl) {
+        return response.data.presignedUrl;
+      } else {
+        throw new Error(response.data?.message || 'Không thể lấy presigned URL');
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy presigned URL:', error);
+      throw error;
+    }
+  }
+
   async getStories(): Promise<StoryGroup[]> {
     try {
       const response = await apiClient.get<{success: boolean, storyGroups: StoryGroup[]}>('/stories', {
         params: {
-          user_id: 0 // Truyền user_id=0 để lấy tất cả story của người dùng đang follow
+          user_id: 0 
         }
       });
       
-      console.log("API Response:", response.data);
       if (response.data.success && response.data.storyGroups) {
-        return response.data.storyGroups;
+        const storyGroups = response.data.storyGroups.map(group => {
+          const updatedStories = group.stories.map(story => {
+            if (story.media && story.media.length > 0) {
+              return {
+                ...story,
+                media_url: story.media[0].media_url
+              };
+            }
+            return story;
+          });
+          return {
+            ...group,
+            stories: updatedStories
+          };
+        });
+        return storyGroups;
       }
       
       return [];
@@ -85,10 +194,6 @@ class StoryService {
 
   async createStory(formData: FormData): Promise<Story> {
     try {
-      console.log("StoryService: Bắt đầu gửi request createStory");
-      console.log("FormData:", formData);
-      
-      // Log nội dung của FormData để debug
       // @ts-ignore
       for (let [key, value] of formData._parts) {
         if (typeof value === 'object' && value.uri) {
@@ -107,7 +212,6 @@ class StoryService {
           'Content-Type': 'multipart/form-data',
         },
       });
-      console.log("StoryService: Đã nhận phản hồi từ server:", response.data);
       return response.data;
     } catch (error) {
       console.error('Lỗi khi tạo story:', error);
@@ -130,7 +234,6 @@ class StoryService {
       return response.data;
     } catch (error) {
       console.error(`Lỗi khi đánh dấu đã xem story ID ${storyId}:`, error);
-      // Không throw lỗi để không ảnh hưởng đến trải nghiệm người dùng
       return { success: false, view_count: 0 };
     }
   }

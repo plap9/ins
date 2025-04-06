@@ -96,7 +96,6 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (authData?.user?.user_id) {
-      console.log("Thiết lập userId:", authData.user.user_id);
       setUserId(authData.user.user_id);
     } else {
       console.error("Không tìm thấy user_id trong authData:", authData);

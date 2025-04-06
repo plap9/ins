@@ -4,13 +4,13 @@ import { RowDataPacket, ResultSetHeader } from "mysql2";
 import { AppError } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { AuthRequest } from "../../middlewares/authMiddleware";
+import { generatePresignedUrl, getS3Metadata } from "../../utils/s3Utils";
 
 export const getStories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const user_id = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
         const current_user_id = (req as AuthRequest).user?.user_id;
 
-        console.log("getStories - Request params:", { user_id, current_user_id });
 
         if (user_id === undefined) {
             return next(new AppError("Thiếu thông số user_id", 400, ErrorCode.VALIDATION_ERROR));
@@ -19,7 +19,6 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
         let sql = `
             SELECT
                 s.story_id,
-                s.media_url,
                 s.created_at,
                 s.expires_at,
                 s.has_text,
@@ -30,9 +29,13 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
                 u.user_id,
                 u.username,
                 u.profile_picture,
-                EXISTS (SELECT 1 FROM story_views sv WHERE sv.story_id = s.story_id AND sv.viewer_id = ?) as is_viewed
+                EXISTS (SELECT 1 FROM story_views sv WHERE sv.story_id = s.story_id AND sv.viewer_id = ?) as is_viewed,
+                m.media_id,
+                m.media_url,
+                m.media_type
             FROM stories s
             INNER JOIN users u ON s.user_id = u.user_id
+            LEFT JOIN media m ON s.story_id = m.story_id
             WHERE s.expires_at > NOW()`;
         
         const queryParams: any[] = [current_user_id];
@@ -56,13 +59,10 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
             return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
         }
         
-        sql += " ORDER BY s.created_at DESC";
+        sql += " ORDER BY s.created_at ASC";
 
-        console.log("SQL Query:", sql);
-        console.log("Query params:", queryParams);
 
         const [stories] = await pool.query<RowDataPacket[]>(sql, queryParams);
-        console.log(`Tìm thấy ${stories.length} stories`);
 
         const storyGroups: any[] = [];
         const userStories: Record<number, any> = {};
@@ -83,25 +83,54 @@ export const getStories = async (req: Request, res: Response, next: NextFunction
                 storyGroups.push(userStories[userId]);
             }
             
-            userStories[userId].stories.push({
-                story_id: story.story_id,
-                media_url: story.media_url,
-                created_at: story.created_at,
-                expires_at: story.expires_at,
-                has_text: story.has_text,
-                sticker_data: story.sticker_data,
-                filter_data: story.filter_data,
-                view_count: story.view_count,
-                close_friends_only: story.close_friends_only,
-                is_viewed: story.is_viewed === 1
-            });
+            const existingStoryIndex = userStories[userId].stories.findIndex(
+                (s: any) => s.story_id === story.story_id
+            );
             
-            if (story.is_viewed === 0) {
-                userStories[userId].has_unviewed = true;
+            if (existingStoryIndex === -1) {
+                const storyObj = {
+                    story_id: story.story_id,
+                    created_at: story.created_at,
+                    expires_at: story.expires_at,
+                    has_text: story.has_text,
+                    sticker_data: story.sticker_data,
+                    filter_data: story.filter_data,
+                    view_count: story.view_count,
+                    close_friends_only: story.close_friends_only,
+                    is_viewed: story.is_viewed === 1,
+                    media: story.media_id ? [{
+                        media_id: story.media_id,
+                        media_url: story.media_url,
+                        media_type: story.media_type,
+                        story_id: story.story_id
+                    }] : []
+                };
+                
+                if (story.is_viewed === 0) {
+                    userStories[userId].has_unviewed = true;
+                }
+                
+                userStories[userId].stories.push(storyObj);
+            } 
+            else if (story.media_id) {
+                const existingMedia = userStories[userId].stories[existingStoryIndex].media || [];
+                const mediaExists = existingMedia.some((m: any) => m.media_id === story.media_id);
+                
+                if (!mediaExists) {
+                    if (!userStories[userId].stories[existingStoryIndex].media) {
+                        userStories[userId].stories[existingStoryIndex].media = [];
+                    }
+                    
+                    userStories[userId].stories[existingStoryIndex].media.push({
+                        media_id: story.media_id,
+                        media_url: story.media_url,
+                        media_type: story.media_type,
+                        story_id: story.story_id
+                    });
+                }
             }
         });
 
-        console.log(`Đã nhóm thành ${storyGroups.length} story groups`);
         res.status(200).json({ success: true, storyGroups });
     } catch (error) {
         console.error("Error in getStories:", error);
@@ -159,7 +188,6 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
         const viewer_id = req.user?.user_id;
         if (!viewer_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
-        console.log(`Đánh dấu đã xem story ID ${story_id} bởi user ${viewer_id}`);
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
             "SELECT s.story_id, s.user_id, s.view_count, s.close_friends_only FROM stories s WHERE s.story_id = ? AND s.expires_at > NOW()",
@@ -167,7 +195,6 @@ export const viewStory = async (req: AuthRequest, res: Response, next: NextFunct
         );
 
         if (storyRows.length === 0) {
-            console.log(`Story ID ${story_id} không tồn tại hoặc đã hết hạn`);
             res.status(200).json({ 
                 success: true, 
                 message: "Story không tồn tại hoặc đã hết hạn", 
@@ -325,7 +352,7 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         if (!user_id) return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
 
         const [storyRows] = await connection.query<RowDataPacket[]>(
-            "SELECT story_id, media_url FROM stories WHERE story_id = ? AND user_id = ?",
+            "SELECT s.story_id, m.media_url FROM stories s JOIN media m ON s.story_id = m.story_id WHERE s.story_id = ? AND s.user_id = ? LIMIT 1",
             [story_id, user_id]
         );
 
@@ -387,5 +414,71 @@ export const addStoryToHighlight = async (req: AuthRequest, res: Response, next:
         next(error);
     } finally {
         connection.release();
+    }
+};
+
+export const getPresignedUrl = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const key = req.query.key as string;
+        
+        if (!key) {
+            return next(new AppError("Thiếu thông số key", 400, ErrorCode.VALIDATION_ERROR));
+        }
+        
+        
+        let s3Key = key;
+        if (s3Key.includes('amazonaws.com/')) {
+            s3Key = s3Key.split('amazonaws.com/')[1];
+        }
+        
+        const expiresIn = req.query.expiresIn ? parseInt(req.query.expiresIn as string) : 3600;
+        
+        try {
+            const presignedUrl = await generatePresignedUrl(s3Key, expiresIn);
+            let metadata = null;
+            
+            try {
+                metadata = await getS3Metadata(s3Key);
+            } catch (metadataError) {
+            }
+            
+            res.status(200).json({
+                success: true,
+                presignedUrl,
+                key: s3Key,
+                metadata,
+                expiresIn
+            });
+            
+        } catch (error) {
+            console.error(`[story] Lỗi khi tạo presigned URL:`, error);
+            res.status(200).json({
+                success: false,
+                message: `Không thể tạo presigned URL: ${(error as Error).message}`,
+                key: s3Key
+            });
+        }
+    } catch (error) {
+        console.error(`[story] Lỗi trong getPresignedUrl:`, error);
+        next(error);
+    }
+};
+
+export const getStoryUrlForVerification = async (storyId: number, userId: number): Promise<string | null> => {
+    try {
+        
+        const [storyResults] = await pool.query<RowDataPacket[]>(
+            "SELECT s.story_id, m.media_url FROM stories s JOIN media m ON s.story_id = m.story_id WHERE s.story_id = ? AND s.user_id = ? LIMIT 1",
+            [storyId, userId]
+        );
+        
+        if (storyResults.length === 0) {
+            return null;
+        }
+        
+        return storyResults[0].media_url;
+    } catch (error) {
+        console.error("Lỗi khi tìm URL của story:", error);
+        return null;
     }
 };

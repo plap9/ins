@@ -45,19 +45,12 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
             return next(new AppError("Tham số 'user_id' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
         }
 
-        console.log(`[userUpdateController] Request body:`, req.body);
-        console.log(`[userUpdateController] File upload:`, req.file ? 'Có' : 'Không');
-        
         await connection.beginTransaction();
 
         let avatarUrl: string | undefined;
 
-        // Kiểm tra nếu có ảnh được gửi thông qua multipart/form-data
         if (req.file) {
-            console.log(`[userUpdateController] Nhận được file upload: ${req.file.originalname}, size: ${req.file.size} bytes, mimetype: ${req.file.mimetype}`);
             try {
-                console.log(`[userUpdateController] Bắt đầu xử lý và upload ảnh...`);
-                // Tạo key với prefix profile/ để lưu vào folder riêng trên S3
                 const fileKey = `profile/${Date.now()}_${userId}`;
                 const result = await uploadResizedImage(
                     req.file.buffer, 
@@ -67,23 +60,17 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
                     }
                 );
                 avatarUrl = result.Location;
-                console.log(`[userUpdateController] Upload ảnh thành công, URL: ${avatarUrl}`);
             } catch (error) {
                 console.error(`[userUpdateController] Lỗi khi upload ảnh:`, error);
                 await connection.rollback();
                 return next(new AppError('Không thể upload ảnh', 500, ErrorCode.FILE_PROCESSING_ERROR));
             }
         } 
-        // Kiểm tra nếu có ảnh được gửi dưới dạng base64 trong JSON body
         else if (req.body.avatar_base64) {
             try {
-                console.log(`[userUpdateController] Nhận được ảnh dạng base64, độ dài: ${req.body.avatar_base64.length}`);
                 
-                // Chuyển đổi base64 thành buffer
                 const imageBuffer = Buffer.from(req.body.avatar_base64, 'base64');
-                console.log(`[userUpdateController] Đã chuyển đổi base64 thành buffer, kích thước: ${imageBuffer.length} bytes`);
                 
-                // Upload ảnh lên S3 với prefix profile/
                 const fileKey = `profile/${Date.now()}_${userId}`;
                 const result = await uploadResizedImage(
                     imageBuffer, 
@@ -94,9 +81,6 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
                 );
                 avatarUrl = result.Location;
                 
-                console.log(`[userUpdateController] Upload ảnh base64 thành công, URL: ${avatarUrl}`);
-                
-                // Xóa trường avatar_base64 khỏi body để không lưu vào DB
                 delete req.body.avatar_base64;
             } catch (error) {
                 console.error(`[userUpdateController] Lỗi khi xử lý ảnh base64:`, error);
@@ -124,16 +108,12 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         
         const fieldsToUpdate = Object.keys(updateFields).filter(key => updateFields[key] !== undefined);
         
-        // Nếu chỉ upload avatar mà không có thay đổi trong body
         if (fieldsToUpdate.length === 0 && !avatarUrl) {
-            console.log(`[userUpdateController] Không có dữ liệu nào để cập nhật.`);
             await connection.rollback();
             return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
         }
         
-        // Nếu chỉ upload avatar mà không có thay đổi dữ liệu khác, vẫn tiếp tục
         if (avatarUrl && fieldsToUpdate.length === 0) {
-            console.log(`[userUpdateController] Chỉ cập nhật avatar.`);
             updateFields.profile_picture = avatarUrl;
             fieldsToUpdate.push('profile_picture');
         }
@@ -153,19 +133,14 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         updateQuery += " WHERE user_id = ?";
         queryParams.push(userId);
 
-        console.log(`[userUpdateController] SQL Query: ${updateQuery}`);
-        console.log(`[userUpdateController] Query params:`, queryParams);
-
         const [result] = await connection.query(updateQuery, queryParams);
 
         if ((result as any).affectedRows === 0) {
-            console.log(`[userUpdateController] Không có dòng nào được cập nhật.`);
             await connection.rollback();
             return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", 404, ErrorCode.USER_NOT_FOUND));
         }
 
         await connection.commit();
-        console.log(`[userUpdateController] Commit transaction thành công.`);
 
         await invalidateUserProfileCache(userId);
 
@@ -196,7 +171,6 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
             await cacheUserProfile(userId, updatedUser[0]);
         }
 
-        console.log(`[userUpdateController] Cập nhật thành công cho user ${userId}`);
         res.status(200).json({ 
             success: true, 
             message: "Cập nhật thông tin thành công.",

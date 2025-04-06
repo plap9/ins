@@ -164,7 +164,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       setAuthData(updatedAuthData);
       
-      console.log("[AuthContext] Dữ liệu người dùng đã được cập nhật:", updatedAuthData.user);
     } catch (error) {
       console.error("[AuthContext] Lỗi khi cập nhật dữ liệu người dùng:", error);
       throw error;

@@ -48,7 +48,6 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         } else {
             try {
                 await invalidateCacheKey(cacheKey);
-                console.log(`Đã xóa cache key: ${cacheKey} do force refresh`);
             } catch (err) {
                 console.warn("Không thể xóa cache:", err);
             }
@@ -81,9 +80,7 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         sqlQuery += whereClause;
         sqlQuery += ` GROUP BY p.post_id ORDER BY p.created_at DESC LIMIT ${safeLimit} OFFSET ${offset}`;
 
-        console.log("SQL Query:", sqlQuery, "Params:", queryParams);
         const [posts] = await pool.query<RowDataPacket[]>(sqlQuery, queryParams);
-        console.log(`Tìm thấy ${posts.length} bài viết`);
 
         const formattedPosts = posts.map(post => {
             console.log(`Post ${post.post_id}:`, {

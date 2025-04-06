@@ -40,21 +40,17 @@
 
     export const createFileFilter = (allowedTypes: string[]) => {
       return (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
-        console.log(`[upload] Kiểm tra file: ${file.originalname}, mimetype: ${file.mimetype}`);
         
         const mimeType = file.mimetype.split('/')[1];
         if (allowedTypes.includes(mimeType)) {
-          console.log(`[upload] File hợp lệ theo mimetype: ${mimeType}`);
           cb(null, true);
           return;
         }
         
         const fileExt = path.extname(file.originalname).toLowerCase().replace(".", "");
         if (allowedTypes.includes(fileExt)) {
-          console.log(`[upload] File hợp lệ theo extension: ${fileExt}`);
           cb(null, true);
         } else {
-          console.log(`[upload] File không hợp lệ: ${fileExt}. Loại cho phép: ${allowedTypes.join(', ')}`);
           cb(
             new AppError(
               `Chỉ hỗ trợ các định dạng: ${allowedTypes.join(", ")}`,

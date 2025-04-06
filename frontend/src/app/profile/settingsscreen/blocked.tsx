@@ -132,11 +132,13 @@ export default function BlockedAccountsScreen() {
         }
       />
       
-      {/* Block New Account Button */}
+      {/* Block Another Account Button */}
       <View className="p-4 border-t border-gray-200">
         <TouchableOpacity className="flex-row items-center justify-center p-3">
-          <Feather name="user-x" size={20} color="#3897f0" className="mr-2" />
-          <Text className="text-blue-500 font-semibold ml-2">Block Another Account</Text>
+          <View className="mr-2">
+            <Feather name="user-x" size={20} color="#3897f0" />
+          </View>
+          <Text className="text-blue-500 font-semibold">Block Another Account</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

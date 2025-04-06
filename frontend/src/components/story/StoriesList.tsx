@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons, AntDesign } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
-import StoryService, { StoryGroup, Story } from '../../services/storyService';
+import StoryService, { StoryGroup, Story, setRefreshStoriesCallback } from '../../services/storyService';
 import AuthContext, { useAuth } from '../../app/context/AuthContext';
 import StoryLibraryScreen from './StoryLibraryScreen';
 import StoryEditorScreen from './StoryEditorScreen';
@@ -52,7 +52,7 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
     }
   }, [updateUserData]);
 
-  const fetchStories = async (showFullLoading = true) => {
+  const fetchStories = useCallback(async (showFullLoading = true) => {
     try {
       if (showFullLoading) {
         setIsLoading(true);
@@ -67,7 +67,7 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchStories();
@@ -85,23 +85,90 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
   };
 
   useEffect(() => {
-    console.log("AuthData đã thay đổi, avatar mới:", authData?.user?.profile_picture);
   }, [authData]);
 
-  const handleStoryCreated = useCallback(() => {
-    console.log("Story mới đã được tạo, cập nhật danh sách");
-    fetchStories(false);
-  }, []);
+  const handleStoryCreated = useCallback(async (newStory?: any) => {
+    
+    if (newStory && newStory.success && newStory.story_id && newStory.media) {
+      try {
+        const currentUser = authData?.user;
+        if (!currentUser || !currentUser.user_id) {
+          await fetchStories(false);
+          return;
+        }
+        
+        let userStoryGroupIndex = storyGroups.findIndex(group => 
+          group.user.user_id === currentUser.user_id
+        );
+        
+        const newStoryObj: Story = {
+          story_id: newStory.story_id,
+          created_at: new Date().toISOString(),
+          expires_at: newStory.expires_at,
+          has_text: newStory.has_text || false, 
+          sticker_data: newStory.sticker_data || null,
+          filter_data: newStory.filter_data || null,
+          view_count: 0,
+          close_friends_only: newStory.close_friends_only || false,
+          is_viewed: false,
+          media: newStory.media,
+          media_url: newStory.media[0]?.media_url,
+          user_id: currentUser.user_id,
+          username: currentUser.username || "",
+          profile_picture: currentUser.profile_picture || ""
+        };
+        
+        const updatedStoryGroups = [...storyGroups];
+        
+        if (userStoryGroupIndex >= 0) {
+          const updatedStories = [...updatedStoryGroups[userStoryGroupIndex].stories];
+          updatedStories.unshift(newStoryObj);
+          
+          updatedStoryGroups[userStoryGroupIndex] = {
+            ...updatedStoryGroups[userStoryGroupIndex],
+            stories: updatedStories,
+            has_unviewed: true
+          };
+          
+          if (userStoryGroupIndex > 0) {
+            const userGroup = updatedStoryGroups.splice(userStoryGroupIndex, 1)[0];
+            updatedStoryGroups.unshift(userGroup);
+          }
+        } else {
+          const newStoryGroup: StoryGroup = {
+            user: {
+              user_id: currentUser.user_id,
+              username: currentUser.username || "",
+              profile_picture: currentUser.profile_picture || 'https://via.placeholder.com/150'
+            },
+            stories: [newStoryObj],
+            has_unviewed: true
+          };
+          updatedStoryGroups.unshift(newStoryGroup);
+        }
+        
+        console.log("Cập nhật state với story mới:", updatedStoryGroups.length, "story groups");
+        setStoryGroups(updatedStoryGroups);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        setError(null);
+        
+      } catch (error) {
+        console.error("Lỗi khi cập nhật story mới:", error);
+        await fetchStories(false);
+      }
+    } else {
+      console.log("Không có dữ liệu story hợp lệ, tải lại từ server");
+      await fetchStories(false);
+    }
+  }, [storyGroups, authData, fetchStories]);
 
   const currentProfilePicture = useMemo(() => {
     return authData?.user?.profile_picture || 'https://via.placeholder.com/150';
   }, [authData?.user?.profile_picture]);
 
   const handleCreateStory = () => {
-    console.log("Đang mở thư viện ảnh để tạo story...");
-    
     if (openStoryLibrary) {
-      console.log("Gọi hàm openStoryLibrary từ prop");
       openStoryLibrary();
       return;
     }
@@ -116,7 +183,6 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
       }).then((result) => {
         console.log("Kết quả chọn ảnh trực tiếp:", result);
         if (!result.canceled && result.assets.length > 0) {
-          console.log("Chọn ảnh thành công:", result.assets[0]);
           setSelectedAsset(result.assets[0]);
         }
       }).catch((error) => {
@@ -130,7 +196,6 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
   };
 
   const handleCloseLibrary = () => {
-    console.log("Đóng màn hình tạo story");
     setShowLibrary(false);
   };
 
@@ -152,8 +217,10 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
     setShowStoryViewer(true);
   };
 
-  const handleCloseEditor = () => {
-    console.log("Đóng StoryEditor");
+  const handleCloseEditor = (newStoryData?: any) => {
+    if (newStoryData) {
+      handleStoryCreated(newStoryData);
+    }
     setSelectedAsset(null);
   };
 
@@ -165,16 +232,12 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
 
   const handleOpenCamera = async () => {
     try {
-      console.log("Mở camera từ modal");
       const photo = await StoryService.takePhoto();
       if (photo) {
-        console.log("Chụp ảnh thành công:", photo);
-        
         setShowLibrary(false);
         
         setTimeout(() => {
           setSelectedAsset(photo);
-          console.log("Đã set selectedAsset:", photo);
         }, 300);
       }
     } catch (error) {
@@ -185,7 +248,6 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
 
   const handleChooseFromLibrary = async () => {
     try {
-      console.log("Mở thư viện ảnh trực tiếp");
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: true,
@@ -193,13 +255,10 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
       });
 
       if (!result.canceled) {
-        console.log("Đã chọn media:", result.assets[0]);
-        
         setShowLibrary(false);
         
         setTimeout(() => {
           setSelectedAsset(result.assets[0]);
-          console.log("Đã set selectedAsset:", result.assets[0]);
         }, 300);
       }
     } catch (error) {
@@ -209,21 +268,26 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
   };
   
   const handleOpenLibrary = () => {
-    console.log("Mở thư viện ảnh");
     setShowLibrary(false);
     setIsLibraryOpen(true);
   };
 
   const handleCloseLibrary2 = () => {
-    console.log("Đóng thư viện ảnh");
     setIsLibraryOpen(false);
   };
 
   const handleSelectAssetFromLibrary = (asset: ImagePickerAsset) => {
-    console.log("Đã nhận asset từ thư viện:", asset);
     setSelectedAsset(asset);
     setIsLibraryOpen(false);
   };
+
+  useEffect(() => {
+    setRefreshStoriesCallback(fetchStories);
+    
+    return () => {
+      setRefreshStoriesCallback(() => {});
+    };
+  }, [fetchStories]);
 
   if (isLoading && !isRefreshing) {
     return (
@@ -434,10 +498,7 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
         >
           <StoryEditorScreen 
             asset={selectedAsset} 
-            onClose={() => {
-              setSelectedAsset(null);
-              handleStoryCreated();
-            }}
+            onClose={handleCloseEditor}
           />
         </Modal>
       )}
@@ -479,4 +540,4 @@ const StoriesList = ({ openStoryLibrary, userId, navigation }: StoriesListProps)
   );
 };
 
-export default StoriesList; 
+export default StoriesList;

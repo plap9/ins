@@ -30,14 +30,12 @@ export const refreshFeed = () => {
   const now = Date.now();
   
   if (now - lastRefreshTime < REFRESH_THROTTLE_MS) {
-    console.log('Bỏ qua refresh vì đã refresh gần đây');
     return;
   }
   
   lastRefreshTime = now;
   
   if (refreshFeedCallback) {
-    console.log('Gọi hàm refresh feed từ feedService');
     const callback = refreshFeedCallback; 
     
     try {
