@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
   Alert,
   Platform,
   Pressable,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  SafeAreaView,
+  Keyboard
 } from 'react-native';
 
 import { Ionicons, MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
@@ -22,15 +24,14 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSequence,
-  runOnJS
+  runOnJS,
+  cancelAnimation,
+  withSpring,
+  Easing
 } from 'react-native-reanimated';
 import { getAlternativeS3Url, isS3Url, getS3Url, getKeyFromS3Url, config } from '../../utils/config';
 import { useAuth } from '../../app/context/AuthContext';
-
-// Video component không được sử dụng đúng cách nên tạm comment lại
-// const Video = (props: any) => {
-//   return <Image {...props} />;
-// };
+import { Video, ResizeMode } from 'expo-av';
 
 interface StoryViewerProps {
   storyId: number;
@@ -40,7 +41,7 @@ interface StoryViewerProps {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const STORY_DURATION = 10000;
+const DEFAULT_STORY_DURATION = 10000; // Thời gian mặc định cho ảnh (10 giây)
 
 const StoryViewerScreen = ({ 
   storyId, 
@@ -66,12 +67,21 @@ const StoryViewerScreen = ({
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [completedStories, setCompletedStories] = useState<number[]>([]);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const scaleAnim = useSharedValue(0);
+  const opacityAnim = useSharedValue(0);
   
   const progressValue = useSharedValue(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<any>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const storyCompleteTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  const animationRef = useRef<any>(null);
   
   const currentStory = stories[currentIndex];
 
@@ -96,7 +106,6 @@ const StoryViewerScreen = ({
   }, [currentStory]);
 
   const handleImageError = async () => {
-    
     if (retryCount >= 3) {
       setImageLoadError(true);
       return;
@@ -159,8 +168,8 @@ const StoryViewerScreen = ({
         
         if (data.success && data.presignedUrl) {
           let alternativeUrl = data.presignedUrl;
-          if (alternativeUrl.includes('&amp;')) {
-            alternativeUrl = alternativeUrl.replace(/&amp;/g, '&');
+          if (alternativeUrl.includes('&')) {
+            alternativeUrl = alternativeUrl.replace(/&/g, '&');
           }
           setMediaUrl(alternativeUrl);
           setImageLoadError(false);
@@ -181,10 +190,13 @@ const StoryViewerScreen = ({
   };
 
   const calculateRemainingDuration = (): number => {
-    if (progressValue.value === 0) return STORY_DURATION;
+    // Sử dụng thời lượng video nếu đang xem video, ngược lại sử dụng thời gian mặc định
+    const totalDuration = isVideo && videoDuration > 0 ? videoDuration : DEFAULT_STORY_DURATION;
     
-    const elapsed = progressValue.value * STORY_DURATION;
-    const remaining = STORY_DURATION - elapsed;
+    if (progressValue.value === 0) return totalDuration;
+    
+    const elapsed = progressValue.value * totalDuration;
+    const remaining = totalDuration - elapsed;
     
     return Math.max(remaining, 1000);
   };
@@ -200,7 +212,9 @@ const StoryViewerScreen = ({
       storyCompleteTimerRef.current = null;
     }
     
-    progressValue.value = withTiming(progressValue.value, { duration: 0 });
+    cancelAnimation(progressValue);
+    // Giữ nguyên giá trị progress hiện tại
+    progressValue.value = progressValue.value;
     setIsPaused(true);
   };
 
@@ -211,13 +225,17 @@ const StoryViewerScreen = ({
       
       progressValue.value = withTiming(1, { 
         duration: remainingDuration
-      }, () => {
-        runOnJS(proceedToNextStory)();
+      }, (finished) => {
+        if (finished && !isLongPressed) {
+          runOnJS(proceedToNextStory)();
+        }
       });
       
       timerRef.current = setTimeout(() => {
-        proceedToNextStory();
-      }, remainingDuration + 500);
+        if (!isLongPressed) {
+          proceedToNextStory();
+        }
+      }, remainingDuration + 200);
     }
   };
 
@@ -250,7 +268,20 @@ const StoryViewerScreen = ({
   };
   
   const proceedToNextStory = () => {
+    // Khi chuyển story thì hủy bỏ toàn bộ animation và timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    cancelAnimation(progressValue);
+    
     if (currentIndex < stories.length - 1) {
+      // Reset trạng thái video trước khi chuyển sang story mới
+      setIsVideoReady(false);
+      setVideoDuration(0);
+      progressValue.value = 0;
+      
       setCurrentIndex(currentIndex + 1);
     } else {
       handleClose();
@@ -260,6 +291,14 @@ const StoryViewerScreen = ({
   const handleLongPressStart = () => {
     setIsLongPressed(true);
     pauseProgress();
+    
+    if (isVideo && videoRef.current) {
+      try {
+        videoRef.current.pauseAsync();
+      } catch (error) {
+        console.error("Lỗi khi pause video:", error);
+      }
+    }
   };
 
   const handleLongPressEnd = () => {
@@ -268,6 +307,14 @@ const StoryViewerScreen = ({
       
       if (!isReplying && !showOptions) {
         resumeProgress();
+        
+        if (isVideo && videoRef.current && !isPaused) {
+          try {
+            videoRef.current.playAsync();
+          } catch (error) {
+            console.error("Lỗi khi play video:", error);
+          }
+        }
       }
     }
   };
@@ -288,6 +335,27 @@ const StoryViewerScreen = ({
     
     setIsLiked(!isLiked);
     
+    if (!isLiked) {
+      setShowLikeAnimation(true);
+      scaleAnim.value = 0;
+      opacityAnim.value = 0;
+      
+      scaleAnim.value = withSequence(
+        withTiming(0.5, { duration: 0 }),
+        withTiming(1.2, { duration: 200 }),
+        withTiming(1, { duration: 200 })
+      );
+      
+      opacityAnim.value = withTiming(1, { duration: 200 });
+      
+      setTimeout(() => {
+        opacityAnim.value = withTiming(0, { duration: 300 });
+        setTimeout(() => {
+          setShowLikeAnimation(false);
+        }, 300);
+      }, 1000);
+    }
+    
     setTimeout(() => {
       resumeProgress();
     }, 300);
@@ -305,6 +373,14 @@ const StoryViewerScreen = ({
       setIsPaused(false);
       startProgress();
       
+      if (isVideo && videoRef.current && !isPaused) {
+        try {
+          videoRef.current.playAsync();
+        } catch (error) {
+          console.error("Lỗi khi play video:", error);
+        }
+      }
+      
       Alert.alert('Thành công', 'Đã gửi phản hồi.');
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể gửi phản hồi');
@@ -318,8 +394,22 @@ const StoryViewerScreen = ({
     setIsPaused(!isPaused);
     
     if (showOptions) {
+      if (isVideo && videoRef.current && !isPaused) {
+        try {
+          videoRef.current.playAsync();
+        } catch (error) {
+          console.error("Lỗi khi play video:", error);
+        }
+      }
       startProgress();
     } else {
+      if (isVideo && videoRef.current) {
+        try {
+          videoRef.current.pauseAsync();
+        } catch (error) {
+          console.error("Lỗi khi pause video:", error);
+        }
+      }
       pauseProgress();
     }
   };
@@ -385,15 +475,24 @@ const StoryViewerScreen = ({
     setIsReplying(false);
     setShowOptions(false);
     setShouldCompleteCurrentProgress(false);
+    setIsVideoReady(false);
+    setIsBuffering(true);
     
+    // Reset progress bar
+    cancelAnimation(progressValue);
     progressValue.value = 0;
     
-    const timer = setTimeout(() => {
-      startProgress();
-    }, 100);
+    // Không bắt đầu progress bar cho video ngay lập tức
+    // Sẽ bắt đầu sau khi video load xong trong handleVideoLoad
+    if (!isVideo) {
+      // Chỉ bắt đầu progress bar ngay cho ảnh
+      const timer = setTimeout(() => {
+        startProgress();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
     
     return () => {
-      clearTimeout(timer);
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -429,11 +528,18 @@ const StoryViewerScreen = ({
     if (isLongPressed || isReplying || showOptions) return;
     
     if (currentIndex > 0) {
-      progressValue.value = 0;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      
+      cancelAnimation(progressValue);
+      progressValue.value = 0;
+      
+      // Reset các trạng thái video
+      setIsVideoReady(false);
+      setVideoDuration(0);
+      
       setCurrentIndex(currentIndex - 1);
     } else {
       handleClose();
@@ -444,15 +550,32 @@ const StoryViewerScreen = ({
     if (isLongPressed || isReplying || showOptions) return;
     
     if (currentIndex < stories.length - 1) {
-      progressValue.value = 0;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      
+      cancelAnimation(progressValue);
+      progressValue.value = 0;
+      
+      // Reset các trạng thái video
+      setIsVideoReady(false);
+      setVideoDuration(0);
+      
       setCurrentIndex(currentIndex + 1);
     } else {
       handleClose();
     }
+  };
+
+  const handleReply = () => {
+    setIsReplying(true);
+    setIsPaused(true);
+    pauseProgress();
+    
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   const startProgress = () => {
@@ -473,6 +596,7 @@ const StoryViewerScreen = ({
     }
     
     const remainingDuration = calculateRemainingDuration();
+    const totalDuration = isVideo && videoDuration > 0 ? videoDuration : DEFAULT_STORY_DURATION;
     
     progressValue.value = withTiming(1, { 
       duration: remainingDuration
@@ -486,245 +610,419 @@ const StoryViewerScreen = ({
       if (!isLongPressed) {
         proceedToNextStory();
       }
-    }, remainingDuration + 500)
+    }, remainingDuration + 200)
   };
 
+  const handleAnimationComplete = useCallback((finished?: boolean) => {
+    if (finished) {
+      setCompletedStories(prev => [...prev, currentIndex]);
+      
+      if (currentIndex < stories.length - 1) {
+        progressValue.value = 0;
+        setCurrentIndex(prev => prev + 1);
+      } else {
+        handleClose();
+      }
+    }
+  }, [currentIndex, stories.length, handleClose]);
+
+  const handleVideoLoad = useCallback((status: any) => {
+    console.log("Video đã load, status:", status);
+    try {
+      if (status && status.isLoaded && status.durationMillis) {
+        const duration = status.durationMillis;
+        console.log(`Đã lấy được thời lượng video: ${duration}ms`);
+        setVideoDuration(duration);
+        setIsVideoReady(true);
+        setIsBuffering(status.isBuffering || false);
+
+        // Reset progress bar when new video loads
+        progressValue.value = 0;
+        
+        // Bắt đầu progress bar nếu video sẵn sàng và không bị tạm dừng
+        if (!isPaused && !isLongPressed) {
+          startProgress();
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi xử lý sự kiện load video:", error);
+    }
+  }, [isPaused, isLongPressed]);
+
+  const handleVideoUpdate = useCallback((status: any) => {
+    try {
+      if (status && status.isLoaded) {
+        setIsBuffering(status.isBuffering || false);
+        
+        // Cập nhật progress bar theo tiến độ video nếu cần thiết
+        if (!isPaused && !isLongPressed && status.positionMillis && videoDuration > 0) {
+          const progress = status.positionMillis / videoDuration;
+          // Chỉ cập nhật giá trị progress nếu video đang chạy và khác xa với giá trị hiện tại
+          if (status.isPlaying && Math.abs(progress - progressValue.value) > 0.05) {
+            progressValue.value = progress;
+          }
+        }
+        
+        if (status.didJustFinish) {
+          console.log("Video đã kết thúc");
+          proceedToNextStory();
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi xử lý sự kiện update video:", error);
+    }
+  }, [proceedToNextStory, isPaused, isLongPressed, videoDuration]);
+
+  const handleRefreshVideo = useCallback(async () => {
+    setImageLoadError(false);
+    setIsBuffering(true);
+    try {
+      if (currentStory.media_url) {
+        const s3Key = getKeyFromS3Url(currentStory.media_url);
+        const newSignedUrl = await StoryService.getPresignedUrl(s3Key);
+        setMediaUrl(`${newSignedUrl}&_t=${Date.now()}`);
+      }
+    } catch (error) {
+      console.error("Không thể refresh video:", error);
+      setImageLoadError(true);
+    }
+  }, [currentStory.media_url]);
+
+  const formatTime = useCallback((milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }, []);
+
+  useEffect(() => {
+    cancelAnimation(progressValue);
+    
+    progressValue.value = 0;
+    
+    if (isVideo) {
+      if (isVideoReady && !isPaused) {
+        // Với video, startProgress sẽ được gọi sau khi video đã load
+        // và lấy được thời lượng thực tế trong handleVideoLoad
+      }
+    } else {
+      if (!isPaused) {
+        // Với ảnh, dùng thời gian mặc định
+        startProgress();
+      }
+    }
+    
+    return () => {
+      cancelAnimation(progressValue);
+    };
+  }, [currentIndex, isVideo, isVideoReady, isPaused, progressValue]);
+
+  useEffect(() => {
+    if (isVideo && isVideoReady && !isPaused && !isLongPressed) {
+      startProgress();
+    }
+  }, [isVideoReady, isVideo, isPaused, isLongPressed, startProgress]);
+
+  const heartAnimStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scaleAnim.value }],
+      opacity: opacityAnim.value,
+    };
+  });
+
   return (
-    <View className="flex-1 bg-black">
+    <SafeAreaView className="flex-1 bg-black">
       <StatusBar style="light" />
       
-      {/* Story Content */}
       <View className="flex-1">
-        {isVideo ? (
-          <View className="w-full h-[85%] flex-1">
-            {mediaUrl ? (
-              <Image
-                source={{ uri: mediaUrl }}
-                className="flex-1"
-                resizeMode="contain"
-                onLoadStart={() => {
-                }}
-                onLoadEnd={() => {
-                }}
-                onLoad={() => {
-                  setImageLoadError(false);
-                }}
-                onError={(e) => {
-                  handleImageError();
-                }}
-              />
-            ) : (
-              <View className="flex-1 items-center justify-center">
-                <ActivityIndicator size="large" color="#ffffff" />
-              </View>
-            )}
-            {imageLoadError && (
-              <View className="absolute top-0 left-0 right-0 bottom-0 items-center justify-center">
-                <Text className="text-white text-base">Không thể tải video</Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View className="w-full h-[85%] flex-1">
-            {mediaUrl ? (
-              <Image 
-                source={{ uri: mediaUrl }} 
-                className="flex-1"
-                resizeMode="contain"
-                onLoadStart={() => {
-                }}
-                onLoadEnd={() => {
-                }}
-                onLoad={() => {
-                  setImageLoadError(false);
-                }}
-                onError={(e) => {
-                  handleImageError();
-                }}
-              />
-            ) : (
-              <View className="flex-1 items-center justify-center">
-                <ActivityIndicator size="large" color="#ffffff" />
-              </View>
-            )}
-            {imageLoadError && (
-              <View className="absolute top-0 left-0 right-0 bottom-0 items-center justify-center">
-                <Text className="text-white text-base">Không thể tải hình ảnh</Text>
-              </View>
-            )}
-          </View>
-        )}
-          
-        {/* Overlay Content */}
-        <View className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none">
-          {/* Progress Bar - Hiển thị thanh tiến trình cho tất cả story của người dùng hiện tại */}
-          <View className="flex-row px-2 pt-10">
-            {stories.map((story, index) => (
-              <View key={index} className="flex-1 h-1 bg-gray-500/50 mx-0.5 rounded-full overflow-hidden">
-                <Animated.View 
-                  className="h-full bg-white"
-                  style={[
-                    index === currentIndex && progressStyle,
-                    index < currentIndex && { width: '100%' },
-                    index > currentIndex && { width: '0%' }
-                  ]}
+        <View className="w-full px-2 pt-10 flex-row space-x-0.5 z-10">
+          {stories.map((_, index) => (
+            <View 
+              key={`progress-${index}`} 
+              className="flex-1 h-[2px] bg-gray-500/50 rounded-full overflow-hidden"
+            >
+              {currentIndex === index && (
+                <Animated.View
+                  className="h-full bg-white rounded-full"
+                  style={progressStyle}
                 />
-              </View>
-            ))}
+              )}
+              {(completedStories.includes(index) || index < currentIndex) && (
+                <View className="h-full w-full bg-white rounded-full" />
+              )}
+            </View>
+          ))}
+        </View>
+        
+        <View className="flex-row justify-between items-center px-4 py-2">
+          <View className="flex-row items-center">
+            <Image 
+              source={{ 
+                uri: currentStory.profile_picture || 'https://via.placeholder.com/40'
+              }} 
+              className="w-8 h-8 rounded-full" 
+            />
+            <View className="ml-2">
+              <Text className="text-white font-medium">{currentStory.username}</Text>
+              <Text className="text-gray-400 text-xs">
+                {new Date(currentStory.created_at).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </Text>
+            </View>
           </View>
           
-          {/* Header with User Info and Close Button */}
-          <View className="flex-row items-center justify-between px-4 pt-4 pointer-events-auto">
-            <View className="flex-row items-center">
-              <Image 
-                source={{ uri: currentStory.username && currentStory.profile_picture 
-                  ? currentStory.profile_picture 
-                  : 'https://via.placeholder.com/150'
-                }} 
-                className="w-10 h-10 rounded-full border border-white bg-transparent"
+          <TouchableOpacity onPress={handleClose}>
+            <Ionicons name="close" size={28} color="white" />
+          </TouchableOpacity>
+        </View>
+        
+        <View className="flex-1 justify-center">
+          {isVideo ? (
+            <Video
+              ref={videoRef}
+              source={{ uri: mediaUrl || '' }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={!isPaused && isVideoReady}
+              isMuted={false}
+              isLooping={false}
+              progressUpdateIntervalMillis={100}
+              onLoadStart={() => {
+                console.log("Video bắt đầu tải");
+                setIsBuffering(true);
+                setIsVideoReady(false);
+              }}
+              onLoad={handleVideoLoad}
+              onPlaybackStatusUpdate={handleVideoUpdate}
+              onError={(error: any) => {
+                console.error("Lỗi khi phát video:", error);
+                setImageLoadError(true);
+                setIsBuffering(false);
+                if (!isPaused) {
+                  startProgress();
+                }
+              }}
+            />
+          ) : (
+            <Image 
+              source={{ uri: mediaUrl || '' }}
+              className="w-full h-full"
+              resizeMode={ResizeMode.CONTAIN}
+              onLoadStart={() => setIsBuffering(true)}
+              onLoad={() => {
+                setIsBuffering(false);
+                if (!isPaused && !isLongPressed) {
+                  cancelAnimation(progressValue);
+                  progressValue.value = 0;
+                  startProgress();
+                }
+              }}
+              onError={() => {
+                setImageLoadError(true);
+                setIsBuffering(false);
+              }}
+            />
+          )}
+
+          {isBuffering && !isVideo && !isVideoReady && (
+            <View className="absolute inset-0 items-center justify-center bg-black/30">
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
+
+          {imageLoadError && (
+            <View className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <Text className="text-white text-center px-4">
+                Không thể tải nội dung. Vui lòng thử lại sau.
+              </Text>
+              <TouchableOpacity 
+                className="mt-4 bg-blue-500 px-4 py-2 rounded-lg"
+                onPress={handleRefreshVideo}
+              >
+                <Text className="text-white">Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {showLikeAnimation && (
+            <View className="absolute inset-0 items-center justify-center">
+              <Animated.View
+                className="items-center justify-center"
+                style={heartAnimStyle}
+              >
+                <MaterialIcons name="favorite" size={120} color="#e31b23" />
+              </Animated.View>
+            </View>
+          )}
+
+          {isLiked && !showLikeAnimation && (
+            <View className="absolute bottom-24 right-6">
+              <MaterialIcons name="favorite" size={40} color="#e31b23" />
+            </View>
+          )}
+
+          {!isReplying && (
+            <View className="absolute inset-0 flex-row">
+              <TouchableOpacity 
+                activeOpacity={1}
+                className="w-1/3 h-full"
+                onPress={handleLeftPress}
+                onLongPress={handleLongPressStart}
+                onPressOut={handleLongPressEnd}
               />
-              <View className="ml-3">
-                <Text className="text-white font-bold">{currentStory.username || "Người dùng"}</Text>
-                <Text className="text-white text-xs opacity-80">
-                  {getTimeLeft(currentStory.created_at, currentStory.expires_at)}
+              
+              <TouchableOpacity 
+                activeOpacity={1}
+                className="w-1/3 h-full"
+                onPress={toggleOptions}
+                onLongPress={handleLongPressStart}
+                onPressOut={handleLongPressEnd}
+              />
+              
+              <TouchableOpacity 
+                activeOpacity={1}
+                className="w-1/3 h-full"
+                onPress={handleRightPress}
+                onLongPress={handleLongPressStart}
+                onPressOut={handleLongPressEnd}
+              />
+            </View>
+          )}
+
+          {showOptions && (
+            <View className="absolute inset-0 bg-black/70 items-center justify-center">
+              <View className="w-4/5 bg-gray-800 rounded-xl p-4">
+                <Text className="text-white text-center text-lg font-medium mb-4">
+                  Tùy chọn
+                </Text>
+                
+                <TouchableOpacity 
+                  className="flex-row items-center py-3 border-b border-gray-700"
+                  onPress={() => {
+                    toggleOptions();
+                    Alert.alert('Thành công', 'Đã lưu story');
+                  }}
+                >
+                  <Feather name="download" size={20} color="white" />
+                  <Text className="text-white ml-3">Lưu story</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  className="flex-row items-center py-3 border-b border-gray-700"
+                  onPress={() => {
+                    toggleOptions();
+                    Alert.alert('Đã báo cáo', 'Cảm ơn bạn đã gửi báo cáo');
+                  }}
+                >
+                  <Feather name="flag" size={20} color="white" />
+                  <Text className="text-white ml-3">Báo cáo</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  className="flex-row items-center py-3"
+                  onPress={toggleOptions}
+                >
+                  <Feather name="x" size={20} color="white" />
+                  <Text className="text-white ml-3">Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {isReplying && (
+            <View className="absolute bottom-0 left-0 right-0 bg-black/90 p-4">
+              <View className="flex-row items-center mb-1">
+                <Image 
+                  source={{ 
+                    uri: currentStory.profile_picture || 'https://via.placeholder.com/40'
+                  }} 
+                  className="w-8 h-8 rounded-full mr-2" 
+                />
+                <Text className="text-white font-medium">{currentStory.username}</Text>
+              </View>
+              
+              <View className="flex-row items-center mt-2">
+                <TextInput
+                  ref={inputRef}
+                  className="flex-1 bg-transparent border border-white/50 text-white px-4 py-2 rounded-full mr-3"
+                  placeholder="Trả lời..."
+                  placeholderTextColor="#ffffff99"
+                  value={replyText}
+                  onChangeText={setReplyText}
+                  autoCapitalize="none"
+                  multiline
+                  maxLength={1000}
+                  style={{ maxHeight: 100 }}
+                />
+                
+                <TouchableOpacity 
+                  className={`${replyText.trim() ? 'bg-transparent' : 'bg-transparent'} w-10 h-10 rounded-full items-center justify-center`}
+                  onPress={handleSendReply}
+                  disabled={isSendingReply || !replyText.trim()}
+                >
+                  {isSendingReply ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Ionicons name="send" size={24} color="white" />
+                  )}
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity 
+                className="mt-3 self-center bg-transparent px-4 py-2 rounded-lg"
+                onPress={() => {
+                  setIsReplying(false);
+                  setIsPaused(false);
+                  setReplyText('');
+                  Keyboard.dismiss();
+                  resumeProgress();
+                }}
+              >
+                <Text className="text-gray-400 font-medium">Hủy</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {!isReplying && (
+          <View className="px-4 pb-8 pt-2 flex-row justify-between items-center">
+            <TouchableOpacity 
+              className="flex-1 mr-3"
+              onPress={handleReply}
+              activeOpacity={0.8}
+            >
+              <View className="bg-transparent border border-white/50 px-4 py-4 rounded-full flex-row items-center">
+                <Text className="text-white/70">
+                  Trả lời {currentStory.username}...
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
             
-            <View className="flex-row items-center">
-              <TouchableOpacity onPress={toggleOptions} className="mr-4">
-                <Feather name="more-horizontal" size={24} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleClose}>
-                <Ionicons name="close" size={28} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          {/* Options Menu */}
-          {showOptions && (
-            <View className="absolute top-24 right-4 bg-gray-800 rounded-lg py-2 px-1 z-50 pointer-events-auto">
-              <TouchableOpacity 
-                className="flex-row items-center px-4 py-3"
-                onPress={() => {
-                  toggleOptions();
-                  Alert.alert("Ẩn story", "Đã ẩn story này");
-                }}
-              >
-                <Feather name="eye-off" size={20} color="white" />
-                <Text className="text-white ml-2">Ẩn story</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                className="flex-row items-center px-4 py-3"
-                onPress={() => {
-                  toggleOptions();
-                  Alert.alert("Báo cáo", "Đã gửi báo cáo");
-                }}
-              >
-                <Feather name="flag" size={20} color="white" />
-                <Text className="text-white ml-2">Báo cáo</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {/* Caption if exists - Caption là thông tin văn bản cho story */}
-          {currentStory.has_text && (
-            <View className="absolute bottom-44 left-0 right-0 px-4">
-              <Text className="text-white text-base">{currentStory.sticker_data || ''}</Text>
-            </View>
-          )}
-        </View>
-          
-        {/* Interaction Area - Positioned at the bottom */}
-        <View className="absolute bottom-0 left-0 right-0 bg-black/60 pt-2 pb-6 px-4">
-          {/* Hiển thị số lượt xem phía trên */}
-          <View className="items-end mb-2">
-            <Text className="text-white text-xs opacity-70">
-              {currentStory.view_count || 0} lượt xem
-            </Text>
-          </View>
-          
-          {/* Reply Input và nút Like nằm song song */}
-          {isReplying ? (
-            <View className="flex-1 flex-row items-center bg-white/20 rounded-full px-4 py-2">
-              <TextInput
-                className="flex-1 text-white"
-                placeholder="Trả lời..."
-                placeholderTextColor="rgba(255, 255, 255, 0.7)"
-                value={replyText}
-                onChangeText={setReplyText}
-                autoFocus
+            <TouchableOpacity 
+              onPress={handleLike}
+              className="w-10 h-10 items-center justify-center"
+            >
+              <MaterialIcons 
+                name={isLiked ? "favorite" : "favorite-border"} 
+                size={28} 
+                color={isLiked ? "#e31b23" : "white"} 
               />
-              <TouchableOpacity 
-                onPress={handleLike} 
-                className="mx-2 h-10 w-10 items-center justify-center"
-              >
-                <AntDesign 
-                  name={isLiked ? "heart" : "hearto"} 
-                  size={24} 
-                  color={isLiked ? "#FF3040" : "white"} 
-                />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={handleSendReply}
-                disabled={isSendingReply || !replyText.trim()}
-              >
-                {isSendingReply ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Ionicons name="send" size={24} color="white" />
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View className="flex-1 flex-row items-center">
-              <TouchableOpacity
-                className="flex-1 flex-row items-center bg-white/20 rounded-full px-4 py-3"
-                onPress={toggleReplyInput}
-              >
-                <Text className="text-white opacity-70">Trả lời...</Text>
-                <View className="flex-1" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                onPress={handleLike} 
-                className="ml-2 h-12 w-12 items-center justify-center"
-              >
-                <AntDesign 
-                  name={isLiked ? "heart" : "hearto"} 
-                  size={28} 
-                  color={isLiked ? "#FF3040" : "white"} 
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              className="w-10 h-10 items-center justify-center"
+              onPress={() => {
+                if (!showOptions) toggleOptions();
+              }}
+            >
+              <Feather name="send" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-
-      {/* Gesture areas for left and right navigation AND long press */}
-      <View className="absolute top-0 bottom-0 left-0 right-0 flex-row z-20">
-        {/* Left area - go to previous story */}
-        <TouchableWithoutFeedback 
-          onPress={handleLeftPress}
-          onLongPress={handleLongPressStart}
-          onPressOut={handleLongPressEnd}
-          delayLongPress={200}
-        >
-          <View className="flex-1" />
-        </TouchableWithoutFeedback>
-        
-        {/* Right area - go to next story */}
-        <TouchableWithoutFeedback 
-          onPress={handleRightPress}
-          onLongPress={handleLongPressStart}
-          onPressOut={handleLongPressEnd}
-          delayLongPress={200}
-        >
-          <View className="flex-1" />
-        </TouchableWithoutFeedback>
-      </View>
-    </View>
+    </SafeAreaView>
   );
 };
 

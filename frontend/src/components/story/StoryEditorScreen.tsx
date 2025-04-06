@@ -18,10 +18,7 @@ import StoryService, { refreshStories } from '../../services/storyService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePickerAsset } from 'expo-image-picker';
-
-const Video = (props: any) => {
-  return <Image {...props} />;
-};
+import { Video, ResizeMode } from 'expo-av';
 
 interface RouteParams {
   asset: ImagePickerAsset;
@@ -282,7 +279,7 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
             <Video
               source={{ uri: mediaUri }}
               className="w-full h-full"
-              resizeMode="contain"
+              resizeMode={ResizeMode.CONTAIN}
               shouldPlay
               isLooping
             />
