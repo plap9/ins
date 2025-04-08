@@ -41,7 +41,7 @@ interface StoryViewerProps {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const DEFAULT_STORY_DURATION = 10000; // Thời gian mặc định cho ảnh (10 giây)
+const DEFAULT_STORY_DURATION = 10000; 
 
 const StoryViewerScreen = ({ 
   storyId, 
@@ -190,7 +190,6 @@ const StoryViewerScreen = ({
   };
 
   const calculateRemainingDuration = (): number => {
-    // Sử dụng thời lượng video nếu đang xem video, ngược lại sử dụng thời gian mặc định
     const totalDuration = isVideo && videoDuration > 0 ? videoDuration : DEFAULT_STORY_DURATION;
     
     if (progressValue.value === 0) return totalDuration;
@@ -213,7 +212,6 @@ const StoryViewerScreen = ({
     }
     
     cancelAnimation(progressValue);
-    // Giữ nguyên giá trị progress hiện tại
     progressValue.value = progressValue.value;
     setIsPaused(true);
   };
@@ -268,7 +266,6 @@ const StoryViewerScreen = ({
   };
   
   const proceedToNextStory = () => {
-    // Khi chuyển story thì hủy bỏ toàn bộ animation và timer
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -277,7 +274,6 @@ const StoryViewerScreen = ({
     cancelAnimation(progressValue);
     
     if (currentIndex < stories.length - 1) {
-      // Reset trạng thái video trước khi chuyển sang story mới
       setIsVideoReady(false);
       setVideoDuration(0);
       progressValue.value = 0;
@@ -417,10 +413,11 @@ const StoryViewerScreen = ({
   const getTimeLeft = (created_at: string, expires_at: string) => {
     const now = new Date();
     const created = new Date(created_at);
+    const expires = new Date(expires_at);
     
     const hoursPassed = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60));
     
-    if (hoursPassed < 1) {
+    if (hoursPassed <= 0) {
       return "0h";
     } else if (hoursPassed < 24) {
       return `${hoursPassed}h`;
@@ -478,14 +475,10 @@ const StoryViewerScreen = ({
     setIsVideoReady(false);
     setIsBuffering(true);
     
-    // Reset progress bar
     cancelAnimation(progressValue);
     progressValue.value = 0;
     
-    // Không bắt đầu progress bar cho video ngay lập tức
-    // Sẽ bắt đầu sau khi video load xong trong handleVideoLoad
     if (!isVideo) {
-      // Chỉ bắt đầu progress bar ngay cho ảnh
       const timer = setTimeout(() => {
         startProgress();
       }, 100);
@@ -536,7 +529,6 @@ const StoryViewerScreen = ({
       cancelAnimation(progressValue);
       progressValue.value = 0;
       
-      // Reset các trạng thái video
       setIsVideoReady(false);
       setVideoDuration(0);
       
@@ -558,7 +550,6 @@ const StoryViewerScreen = ({
       cancelAnimation(progressValue);
       progressValue.value = 0;
       
-      // Reset các trạng thái video
       setIsVideoReady(false);
       setVideoDuration(0);
       
@@ -636,10 +627,8 @@ const StoryViewerScreen = ({
         setIsVideoReady(true);
         setIsBuffering(status.isBuffering || false);
 
-        // Reset progress bar when new video loads
         progressValue.value = 0;
         
-        // Bắt đầu progress bar nếu video sẵn sàng và không bị tạm dừng
         if (!isPaused && !isLongPressed) {
           startProgress();
         }
@@ -654,10 +643,8 @@ const StoryViewerScreen = ({
       if (status && status.isLoaded) {
         setIsBuffering(status.isBuffering || false);
         
-        // Cập nhật progress bar theo tiến độ video nếu cần thiết
         if (!isPaused && !isLongPressed && status.positionMillis && videoDuration > 0) {
           const progress = status.positionMillis / videoDuration;
-          // Chỉ cập nhật giá trị progress nếu video đang chạy và khác xa với giá trị hiện tại
           if (status.isPlaying && Math.abs(progress - progressValue.value) > 0.05) {
             progressValue.value = progress;
           }
@@ -702,12 +689,9 @@ const StoryViewerScreen = ({
     
     if (isVideo) {
       if (isVideoReady && !isPaused) {
-        // Với video, startProgress sẽ được gọi sau khi video đã load
-        // và lấy được thời lượng thực tế trong handleVideoLoad
       }
     } else {
       if (!isPaused) {
-        // Với ảnh, dùng thời gian mặc định
         startProgress();
       }
     }
@@ -765,10 +749,7 @@ const StoryViewerScreen = ({
             <View className="ml-2">
               <Text className="text-white font-medium">{currentStory.username}</Text>
               <Text className="text-gray-400 text-xs">
-                {new Date(currentStory.created_at).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                {getTimeLeft(currentStory.created_at, currentStory.expires_at)}
               </Text>
             </View>
           </View>

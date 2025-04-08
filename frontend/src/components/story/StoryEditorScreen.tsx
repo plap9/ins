@@ -142,11 +142,22 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       }
       
       const fileName = mediaUri.split('/').pop() || `story_${Date.now()}.jpg`;
-      console.log("File name:", fileName, "type:", type);
+      
+      // Lấy thông tin file
+      const fileInfo = await fetch(mediaUri);
+      const fileSize = fileInfo.headers.get('content-length');
+      const fileSizeMB = fileSize ? (parseInt(fileSize) / (1024 * 1024)).toFixed(2) : 'unknown';
+      
+      console.log("Thông tin file:", {
+        fileName,
+        type,
+        size: `${fileSizeMB}MB`,
+        uri: mediaUri
+      });
       
       // @ts-ignore
       formData.append('media', {
-        uri: mediaUri,
+        uri: Platform.OS === 'ios' ? mediaUri.replace('file://', '') : mediaUri,
         name: fileName,
         type,
       });

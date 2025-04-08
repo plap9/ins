@@ -132,8 +132,16 @@ export default function UpdateProfile() {
             setUploadingText('Đang cập nhật thông tin...');
             try {
                 const response = await updateUserProfile(userId, updateData);
-                Alert.alert('Thành công', 'Cập nhật hồ sơ thành công!');
-                router.back();
+                if (response.success) {
+                    // Cập nhật AuthContext với thông tin mới
+                    if (authData?.user) {
+                        authData.user.profile_picture = response.user.profile_picture;
+                        authData.user.username = response.user.username;
+                        authData.user.full_name = response.user.full_name;
+                    }
+                    Alert.alert('Thành công', 'Cập nhật hồ sơ thành công!');
+                    router.back();
+                }
             } catch (updateError) {
                 console.error('[UpdateProfile] Lỗi khi cập nhật hồ sơ:', updateError);
                 Alert.alert('Lỗi', 'Không thể cập nhật hồ sơ. Vui lòng thử lại sau.');
