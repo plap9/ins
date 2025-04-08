@@ -194,13 +194,30 @@ class StoryService {
 
   async createStory(formData: FormData): Promise<Story> {
     try {
+      const token = await this.getToken();
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // Log chi tiết FormData
+      console.log("FormData trước khi gửi:", {
+        headers: {
+          ...headers,
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 120000
+      });
+      
       // @ts-ignore
       for (let [key, value] of formData._parts) {
         if (typeof value === 'object' && value.uri) {
           console.log(`FormData field ${key}:`, {
             uri: value.uri,
             name: value.name,
-            type: value.type
+            type: value.type,
+            size: value.size || 'unknown'
           });
         } else {
           console.log(`FormData field ${key}:`, value);
@@ -209,9 +226,12 @@ class StoryService {
       
       const response = await apiClient.post<Story>('/stories', formData, {
         headers: {
+          ...headers,
           'Content-Type': 'multipart/form-data',
         },
+        timeout: 120000
       });
+      
       return response.data;
     } catch (error) {
       console.error('Lỗi khi tạo story:', error);

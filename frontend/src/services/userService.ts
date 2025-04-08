@@ -115,6 +115,7 @@ export const updateUserProfile = async (userId: number, data: UpdateUserRequest)
     if (response.data.success && _updateAuthUserData) {
       try {
         await _updateAuthUserData({
+          ...response.data.user,
           profile_picture: response.data.user.profile_picture,
           username: response.data.user.username,
           full_name: response.data.user.full_name

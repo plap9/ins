@@ -80,6 +80,7 @@ export default function ProfileScreen() {
   const [userId, setUserId] = useState<number | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [discoverPeople, setDiscoverPeople] = useState<Person[]>(discoverPeopleData);
   const handleRemovePerson = (id: string) => {
@@ -103,24 +104,24 @@ export default function ProfileScreen() {
   }, [authData]);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!userId) return;
-      
-      try {
-        const response = await getUserProfile(userId);
-        setProfile(response.user);
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-        setProfile(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (userId) {
-      fetchProfile();
+    if (authData?.user?.user_id) {
+      fetchUserProfile();
     }
-  }, [userId]);
+  }, [authData?.user?.profile_picture]);
+
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await getUserProfile(authData?.user?.user_id || 0);
+      setProfile(response.user);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+      setError('Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
