@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  FlatList
+  FlatList,
+  Modal,
+  Dimensions,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
@@ -24,14 +27,21 @@ import StoryList from '~/components/StoryList';
 import DiscoverPersonItem, { Person } from '~/components/DiscoverPerson';
 import { searchUsers } from '~/services/searchService';
 import ProfilePostList from "~/components/ProfilePostList";
+import PostListItem from "~/components/PostListItem";
 import * as userService from '~/services/userService';
 import storyService from '~/services/storyService';
 import * as postService from '~/services/postService';
+import { getS3Url } from "~/utils/config";
+import { likePost, unlikePost, getPostLikes } from "~/services/likeService";
+import { getComments } from "~/services/commentService";
+import CommentBottomSheet from "~/components/CommentBottomSheet";
+import LikeBottomSheet from "~/components/LikeBottomSheet";
+import { BottomSheetModal, BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 type UserProfileRouteParams = {
-  username: string;
-}
-
+    username: string;
+  }
+  
 interface Story {
   id: string;
   image: string;
@@ -58,6 +68,7 @@ interface Highlight {
   cover_image_url: string | null;
   story_count: number;
 }
+
 interface Post {
   id: number;
   caption: string;
@@ -68,6 +79,18 @@ interface Post {
   }>;
   created_at: string;
   user_id: number;
+  like_count?: number;
+  comment_count?: number;
+  is_liked?: boolean;
+}
+
+interface LikeResponse {
+  success: boolean;
+  likes: Array<{
+    user_id: number;
+    username: string;
+    profile_picture?: string;
+  }>;
 }
 
 const UserProfileScreen = () => {
@@ -85,6 +108,20 @@ const UserProfileScreen = () => {
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
   const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
+  
+  // State cho modal
+  const [showPostModal, setShowPostModal] = useState<boolean>(false);
+  const [selectedPost, setSelectedPost] = useState<number | null>(null);
+  const [selectedPostsCollection, setSelectedPostsCollection] = useState<Post[]>([]);
+  
+  // References cho BottomSheet
+  const commentBottomSheetRef = useRef<BottomSheetModal>(null);
+  const likeBottomSheetRef = useRef<BottomSheetModal>(null);
+  const [commentPostId, setCommentPostId] = useState<number | null>(null);
+  const [likePostId, setLikePostId] = useState<number | null>(null);
+  
+  const screenWidth = Dimensions.get("window").width;
+  const itemSize = screenWidth / 3;
 
   const fetchUserData = async () => {
     try {
@@ -149,7 +186,10 @@ const UserProfileScreen = () => {
                   }))
                 : [{ id: 0, media_url: post.media_urls as string, media_type: 'image' }],
               created_at: post.created_at,
-              user_id: post.user_id
+              user_id: post.user_id,
+              like_count: post.like_count,
+              comment_count: post.comment_count,
+              is_liked: post.is_liked
             })));
           }
         } catch (postsError) {
@@ -181,7 +221,10 @@ const UserProfileScreen = () => {
                   }))
                 : [{ id: 0, media_url: post.media_urls as string, media_type: 'image' }],
               created_at: post.created_at,
-              user_id: post.user_id
+              user_id: post.user_id,
+              like_count: post.like_count,
+              comment_count: post.comment_count,
+              is_liked: post.is_liked
             })));
           }
         } catch (savedError) {
@@ -228,206 +271,439 @@ const UserProfileScreen = () => {
     } finally {
       setIsLoadingFollow(false);
     }
+    };
+  
+    const pathname = usePathname();
+  
+    const handleShare = async () => {
+      const fullUrl = `http://localhost:8081${pathname}`;
+      await Clipboard.setStringAsync(fullUrl);
+      alert('Đường dẫn đã được copy vào clipboard!');
+    };
+  
+  // Thêm các hàm xử lý modal
+  const handlePostPress = (postId: number) => {
+    const currentPosts = activeTab === 'posts' ? posts : savedPosts;
+    const post = currentPosts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const sortedPosts = [...currentPosts].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    setSelectedPost(postId);
+    setSelectedPostsCollection(sortedPosts);
+    setShowPostModal(true);
   };
 
-  const pathname = usePathname();
-  
-  const handleShare = async () => {
-    const fullUrl = `http://localhost:8081${pathname}`;
-    await Clipboard.setStringAsync(fullUrl);
-    alert('Đường dẫn đã được copy vào clipboard!');
+  const handleCloseModal = () => {
+    setShowPostModal(false);
+    setSelectedPost(null);
+  };
+
+  // Update post data khi có thay đổi like/comment
+  const handleCommentAdded = (updatedPostId: number) => {
+    setPosts((prev) => {
+      const updated = [...prev];
+      const postIndex = updated.findIndex(p => p.id === updatedPostId);
+      if (postIndex !== -1) {
+        updated[postIndex] = {
+          ...updated[postIndex],
+          comment_count: (updated[postIndex].comment_count || 0) + 1
+        };
+      }
+      return updated;
+    });
+  };
+
+  // Xử lý khi nhấn vào số lượt like
+  const handleLikeCountPress = (postId: number) => {
+    setLikePostId(postId);
+    likeBottomSheetRef.current?.present();
+  };
+
+  // Xử lý khi nhấn vào biểu tượng comment
+  const handleCommentPress = (postId: number) => {
+    setCommentPostId(postId);
+    commentBottomSheetRef.current?.present();
   };
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-white">
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#0000ff" />
-          <Text className="mt-4 text-gray-500">Đang tải thông tin người dùng...</Text>
-        </View>
-      </SafeAreaView>
+      <BottomSheetModalProvider>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0095F6" />
+            <Text style={{ marginTop: 16, color: '#8E8E8E', fontSize: 14 }}>Đang tải thông tin người dùng...</Text>
+          </View>
+        </SafeAreaView>
+      </BottomSheetModalProvider>
     );
   }
 
   if (!user || error) {
     return (
-      <SafeAreaView className="flex-1 bg-white">
-        <View className="flex-1 justify-center items-center p-4">
-          <Text className="text-lg text-center mb-4">
-            {error || "Không tìm thấy người dùng"}
-          </Text>
-          <TouchableOpacity 
-            className="bg-blue-500 py-2 px-4 rounded-lg"
-            onPress={() => router.back()}
-          >
-            <Text className="text-white font-bold">Quay lại</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <BottomSheetModalProvider>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+            <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 16, color: '#262626' }}>
+              {error || "Không tìm thấy người dùng"}
+            </Text>
+            <TouchableOpacity 
+              style={{ backgroundColor: '#0095F6', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+              onPress={() => router.back()}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 }}>Quay lại</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </BottomSheetModalProvider>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
-      <View className="bg-white flex-row items-center justify-between px-4 py-2 border-b border-gray-200">
-        {/* Button back */}
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="black" />
-        </TouchableOpacity>
-
-        {/* Username */}
-        <Text className="text-xl font-bold">{user.username}</Text>
-           
-        {/* Buttons (right side) */}
-        <View className="flex-row items-center">
-          <TouchableOpacity className="mr-5">
-            <Fontisto name="bell" size={24} color="black" />
-          </TouchableOpacity>
-
-          <TouchableOpacity>
-            <MaterialCommunityIcons name="dots-horizontal" size={24} color="black" />
-          </TouchableOpacity>
+    <BottomSheetModalProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        {/* Header */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          paddingHorizontal: 16, 
+          paddingVertical: 12,
+          borderBottomWidth: 0.5,
+          borderBottomColor: '#DBDBDB'
+        }}>
+          {/* Back button */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
+              <Ionicons name="chevron-back" size={28} color="#262626" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#262626' }}>{user.username}</Text>
+          </View>
+          
+          {/* Right side buttons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity style={{ marginRight: 20 }} onPress={handleShare}>
+              <Feather name="send" size={24} color="#262626" />
+            </TouchableOpacity>
+                <TouchableOpacity>
+              <Feather name="more-vertical" size={24} color="#262626" />
+                </TouchableOpacity>
+            </View>
         </View>
-      </View>
-           
-      <ScrollView>
-        <View className="bg-white p-4">
-          <StatusBar style="auto" />
-          {/* Avatar and stats */}
-          <View className="flex-row items-center mb-4">
+             
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 16 }}>
+            <StatusBar style="dark" />
+            
+            {/* Profile info section */}
+            <View style={{ flexDirection: 'row', paddingVertical: 16, alignItems: 'center' }}>
+              {/* Profile picture */}
+              <View style={{ marginRight: 28 }}>
             <Image
-              source={{ uri: user.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" }}
-              className="w-20 h-20 rounded-full border border-gray-300 overflow-hidden"
-              style={{ aspectRatio: 1 }}
-            />
-            <View className="flex-1 ml-4">
-              {/* Stats */}
-              <View className="flex-row justify-between w-full">
-                <TouchableOpacity className="items-center flex-1">
-                  <Text className="text-lg font-bold">{user.posts_count}</Text>
-                  <Text className="text-gray-500 text-xs">bài viết</Text>
+                  source={{ uri: user.avatar_url || "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" }}
+                  style={{ 
+                    width: 86, 
+                    height: 86, 
+                    borderRadius: 43,
+                    borderWidth: 0.5,
+                    borderColor: '#DBDBDB'
+                  }}
+                />
+              </View>
+              
+            {/* Stats */}
+              <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-around' }}>
+                <TouchableOpacity style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#262626' }}>{user.posts_count}</Text>
+                  <Text style={{ fontSize: 14, color: '#262626' }}>Bài viết</Text>
                 </TouchableOpacity>
-                <TouchableOpacity className="items-center flex-1">
-                  <Text className="text-lg font-bold">{user.followers_count}</Text>
-                  <Text className="text-gray-500 text-xs">người theo dõi</Text>
+                
+                <TouchableOpacity style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#262626' }}>{user.followers_count}</Text>
+                  <Text style={{ fontSize: 14, color: '#262626' }}>Người theo dõi</Text>
                 </TouchableOpacity>
-                <TouchableOpacity className="items-center flex-1">
-                  <Text className="text-lg font-bold">{user.following_count}</Text>
-                  <Text className="text-gray-500 text-xs">đang theo dõi</Text>
+                
+                <TouchableOpacity style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#262626' }}>{user.following_count}</Text>
+                  <Text style={{ fontSize: 14, color: '#262626' }}>Đang theo dõi</Text>
                 </TouchableOpacity>
               </View>
             </View>
+            
+            {/* Bio section */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#262626' }}>{user.full_name}</Text>
+              {user.bio && <Text style={{ fontSize: 14, color: '#262626', marginTop: 2 }}>{user.bio}</Text>}
           </View>
-
-          {/* Username and Bio */}
-          <View className="mb-4">
-            <Text className="text-lg font-bold">{user.full_name}</Text>
-            {user.bio && <Text className="text-gray-500">{user.bio}</Text>}
-          </View>
-
-          {/* Username text with @ */}
-          <View className="mb-2">
-            <Text className="text-sm font-medium">
-              <Text style={{ fontWeight: 'bold' }}>@</Text> {user.username}
-            </Text>
-          </View>
-
-          {/* Follow/Message buttons */}
-          <View className="flex-row mb-4">
-            <TouchableOpacity 
-              className={`flex-1 py-2 rounded-lg mr-2 ${isFollowing ? 'bg-gray-200' : 'bg-blue-500'}`}
-              onPress={handleFollow}
-              disabled={isLoadingFollow}
-            >
-              <Text className={`text-center font-bold ${isFollowing ? 'text-black' : 'text-white'}`}>
-                {isLoadingFollow ? 'Đang xử lý...' : (isFollowing ? 'Đang theo dõi' : 'Theo dõi')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity className="flex-1 py-2 rounded-lg bg-gray-200">
-              <Text className="text-center font-bold">Nhắn tin</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Highlights */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            className="mb-4"
-          >
-            {isLoadingHighlights ? (
-              <ActivityIndicator size="small" color="#000" />
-            ) : highlights.length > 0 ? (
-              highlights.map((highlight) => (
-                <TouchableOpacity 
-                  key={highlight.highlight_id} 
-                  className="items-center mr-4"
-                >
-                  <View className="w-16 h-16 rounded-full border border-gray-300 overflow-hidden mb-1">
-                    <Image
-                      source={{ uri: highlight.cover_image_url || 'https://via.placeholder.com/80' }}
-                      className="w-full h-full"
-                    />
-                  </View>
-                  <Text className="text-xs">{highlight.title}</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <Text className="text-gray-500">Chưa có highlights</Text>
-            )}
-          </ScrollView>
-
-          {/* Tabs */}
-          <View className="flex-row border-t border-gray-200">
-            <TouchableOpacity 
-              className={`flex-1 items-center py-3 ${activeTab === 'posts' ? 'border-t-2 border-black' : ''}`}
-              onPress={() => setActiveTab('posts')}
-            >
-              <Ionicons 
-                name="grid" 
-                size={24} 
-                color={activeTab === 'posts' ? 'black' : 'gray'} 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              className={`flex-1 items-center py-3 ${activeTab === 'saved' ? 'border-t-2 border-black' : ''}`}
-              onPress={() => setActiveTab('saved')}
-            >
-              <Ionicons 
-                name="bookmark" 
-                size={24} 
-                color={activeTab === 'saved' ? 'black' : 'gray'} 
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Posts Grid */}
-          {isLoadingPosts || isLoadingSaved ? (
-            <ActivityIndicator size="large" color="#000" className="my-8" />
-          ) : (
-            <View className="flex-row flex-wrap">
-              {(activeTab === 'posts' ? posts : savedPosts).map((post) => (
-                <TouchableOpacity 
-                  key={post.id} 
-                  className="w-1/3 aspect-square p-0.5"
-                  onPress={() => router.push(`/post/${post.id}`)}
-                >
-                  <Image
-                    source={{ uri: post.media[0]?.media_url || 'https://via.placeholder.com/150' }}
-                    className="w-full h-full"
-                  />
-                  {post.media.length > 1 && (
-                    <View className="absolute top-2 right-2">
-                      <Ionicons name="images" size={16} color="white" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+            
+            {/* Action buttons */}
+            <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+              <TouchableOpacity 
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: isFollowing ? '#EFEFEF' : '#0095F6', 
+                  borderRadius: 8, 
+                  paddingVertical: 7,
+                  marginRight: 4,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onPress={handleFollow}
+                disabled={isLoadingFollow}
+              >
+                <Text style={{ 
+                  color: isFollowing ? '#262626' : '#FFFFFF', 
+                  fontWeight: '600',
+                  fontSize: 14
+                }}>
+                  {isLoadingFollow ? 'Đang xử lý...' : (isFollowing ? 'Đang theo dõi' : 'Theo dõi')}
+                </Text>
+          </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: '#EFEFEF', 
+                  borderRadius: 8, 
+                  paddingVertical: 7,
+                  marginLeft: 4,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Text style={{ color: '#262626', fontWeight: '600', fontSize: 14 }}>Nhắn tin</Text>
+          </TouchableOpacity>
+              
+          <TouchableOpacity 
+                style={{ 
+                  width: 30, 
+                  backgroundColor: '#EFEFEF', 
+                  borderRadius: 8, 
+                  marginLeft: 8,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Ionicons name="person-add-outline" size={18} color="#262626" />
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+        
+            {/* Highlights */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 16, paddingVertical: 8 }}
+            >
+              {isLoadingHighlights ? (
+                <ActivityIndicator size="small" color="#262626" style={{ marginRight: 16 }} />
+              ) : highlights.length > 0 ? (
+                highlights.map((highlight) => (
+                  <TouchableOpacity 
+                    key={highlight.highlight_id} 
+                    style={{ alignItems: 'center', marginRight: 16 }}
+                  >
+                    <View style={{ 
+                      width: 64, 
+                      height: 64, 
+                      borderRadius: 32, 
+                      borderWidth: 1, 
+                      borderColor: '#DBDBDB', 
+                      overflow: 'hidden',
+                      marginBottom: 4,
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Image
+                        source={{ uri: highlight.cover_image_url || 'https://via.placeholder.com/80' }}
+                        style={{ width: 60, height: 60, borderRadius: 30 }}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#262626' }}>{highlight.title}</Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={{ color: '#8E8E8E', fontSize: 14 }}>Chưa có highlights</Text>
+              )}
+            </ScrollView>
+            
+            {/* Tabs */}
+            <View style={{ 
+              flexDirection: 'row', 
+              borderTopWidth: 0.5, 
+              borderTopColor: '#DBDBDB'
+            }}>
+              <TouchableOpacity 
+                style={{ 
+                  flex: 1, 
+                  alignItems: 'center', 
+                  paddingVertical: 10, 
+                  borderBottomWidth: activeTab === 'posts' ? 1 : 0,
+                  borderBottomColor: activeTab === 'posts' ? '#262626' : 'transparent'
+                }}
+                onPress={() => setActiveTab('posts')}
+              >
+                <Ionicons 
+                  name="grid-outline" 
+                  size={24} 
+                  color={activeTab === 'posts' ? '#262626' : '#8E8E8E'} 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ 
+                  flex: 1, 
+                  alignItems: 'center', 
+                  paddingVertical: 10,
+                  borderBottomWidth: activeTab === 'saved' ? 1 : 0,
+                  borderBottomColor: activeTab === 'saved' ? '#262626' : 'transparent'
+                }}
+                onPress={() => setActiveTab('saved')}
+              >
+                <Ionicons 
+                  name="bookmark-outline" 
+                  size={24} 
+                  color={activeTab === 'saved' ? '#262626' : '#8E8E8E'} 
+                />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Posts Grid */}
+            {isLoadingPosts || isLoadingSaved ? (
+              <View style={{ paddingVertical: 32, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#262626" />
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -1 }}>
+                {(activeTab === 'posts' ? posts : savedPosts).map((post) => (
+                  <TouchableOpacity 
+                    key={post.id} 
+                    style={{ width: '33.33%', aspectRatio: 1, padding: 1 }}
+                    onPress={() => handlePostPress(post.id)}
+                  >
+                    <Image
+                      source={{ uri: post.media[0]?.media_url || 'https://via.placeholder.com/150' }}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                    {post.media.length > 1 && (
+                      <View style={{ position: 'absolute', top: 8, right: 8 }}>
+                        <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+          </View>
+        )}
+        
+            {/* Empty state for no posts */}
+            {!isLoadingPosts && !isLoadingSaved && 
+             ((activeTab === 'posts' && posts.length === 0) || 
+              (activeTab === 'saved' && savedPosts.length === 0)) && (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Feather name={activeTab === 'posts' ? 'camera' : 'bookmark'} size={40} color="#8E8E8E" />
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#262626', marginTop: 16 }}>
+                  {activeTab === 'posts' ? 'Chưa có bài viết' : 'Chưa có bài viết đã lưu'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Modal hiển thị chi tiết bài viết */}
+        <Modal
+          visible={showPostModal}
+          animationType="slide"
+          onRequestClose={handleCloseModal}
+        >
+          <BottomSheetModalProvider>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+              <View style={{ 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                padding: 12, 
+                borderBottomWidth: 0.5, 
+                borderBottomColor: '#DBDBDB' 
+              }}>
+                <TouchableOpacity onPress={handleCloseModal} style={{ padding: 8 }}>
+                  <Text style={{ color: '#0095F6', fontWeight: '600' }}>Đóng</Text>
+                </TouchableOpacity>
+                <Text style={{ 
+                  flex: 1, 
+                  textAlign: 'center', 
+                  fontSize: 16, 
+                  fontWeight: '600', 
+                  color: '#262626' 
+                }}>
+                  Bài viết
+                </Text>
+                <View style={{ width: 50 }}></View>
+              </View>
+
+              <FlatList
+                data={selectedPostsCollection}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <PostListItem
+                    posts={{
+                      post_id: item.id,
+                      content: item.caption,
+                      media_urls: item.media.map(m => m.media_url),
+                      media_types: item.media.map(m => m.media_type),
+                      created_at: item.created_at,
+                      user_id: Number(user?.id),
+                      username: user?.username || '',
+                      profile_picture: user?.avatar_url || '',
+                      like_count: item.like_count || 0,
+                      comment_count: item.comment_count || 0,
+                      is_liked: item.is_liked || false,
+                      post_privacy: 'public',
+                      updated_at: item.created_at
+                    }}
+                    onLikeCountPress={handleLikeCountPress}
+                    onCommentPress={handleCommentPress}
+                  />
+                )}
+                initialScrollIndex={selectedPostsCollection.findIndex(
+                  (p) => p.id === selectedPost
+                )}
+                getItemLayout={(data, index) => ({
+                  length: 500, 
+                  offset: 500 * index,
+                  index,
+                })}
+                showsVerticalScrollIndicator={true}
+              />
+              
+              {/* BottomSheets bên trong modal */}
+              <CommentBottomSheet 
+                ref={commentBottomSheetRef}
+                postId={commentPostId}
+                onCommentAdded={handleCommentAdded}
+              />
+
+              <LikeBottomSheet
+                ref={likeBottomSheetRef}
+                postId={likePostId}
+              />
+            </View>
+          </BottomSheetModalProvider>
+        </Modal>
+
+        {/* BottomSheets ở bên ngoài modal chỉ cho profile */}
+        <CommentBottomSheet 
+          ref={commentBottomSheetRef}
+          postId={commentPostId}
+          onCommentAdded={handleCommentAdded}
+        />
+
+        <LikeBottomSheet
+          ref={likeBottomSheetRef}
+          postId={likePostId}
+        />
     </SafeAreaView>
+    </BottomSheetModalProvider>
   );
 };
 

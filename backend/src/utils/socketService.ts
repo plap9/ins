@@ -22,6 +22,7 @@ class SocketService {
   private activeUsers: Map<number, UserSocket> = new Map();
   private activeRooms: Map<string, Room> = new Map();
   private rtcPeers: Map<string, Set<number>> = new Map();
+  private customSocketHandlers: ((socket: Socket, userId: number) => void)[] = [];
 
   constructor(server: HTTPServer) {
     this.io = new Server(server, {
@@ -65,6 +66,11 @@ class SocketService {
       this.setupWebRTCListeners(socket, userId);
       
       this.setupStatusListeners(socket, userId);
+      
+      // Chạy các handler tùy chỉnh đã đăng ký
+      this.customSocketHandlers.forEach(handler => {
+        handler(socket, userId);
+      });
     });
   }
 
@@ -402,6 +408,14 @@ class SocketService {
     });
   }
 
+  public getUserSocket(userId: number): Socket | null {
+    const userSocket = this.activeUsers.get(userId);
+    if (userSocket) {
+      return this.io.sockets.sockets.get(userSocket.socketId) || null;
+    }
+    return null;
+  }
+
   public notifyUserStatusChange(userId: number, status: 'online' | 'away' | 'busy' | 'offline'): void {
     const rooms = Array.from(this.activeRooms.values())
       .filter(room => room.users.includes(userId))
@@ -413,6 +427,10 @@ class SocketService {
         status
       });
     }
+  }
+
+  public registerSocketHandler(handler: (socket: Socket, userId: number) => void): void {
+    this.customSocketHandlers.push(handler);
   }
 
   public broadcastEvent(event: string, data: any): void {
