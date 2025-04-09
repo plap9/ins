@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import {
   getUserProfile,
+  getUserByUsername,
   // searchUsers,
   // getUserPosts,
   // followUser,
@@ -18,6 +19,7 @@ import { uploadAvatar } from "../middlewares/upload";
 const router: Router = express.Router();
 
 router.get("/:id", authMiddleware, getUserProfile);
+router.get("/username/:username", authMiddleware, getUserByUsername);
 
 router.put("/:id", authMiddleware, validate(updateUserSchema), uploadAvatar, updateUserProfile);
 

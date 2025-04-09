@@ -9,7 +9,8 @@ import {
     viewStory, 
     replyToStory, 
     addStoryToHighlight,
-    getPresignedUrl
+    getPresignedUrl,
+    getUserHighlights
 } from "../controllers/stories/storyQueryController";
 import { storySchema, replyStorySchema, addToHighlightSchema } from "../validations/storyValidation";
 
@@ -22,5 +23,6 @@ router.post("/:id/view", authMiddleware, viewStory);
 router.post("/:id/reply", authMiddleware, validate(replyStorySchema), replyToStory);
 router.post("/:id/highlight", authMiddleware, validate(addToHighlightSchema), addStoryToHighlight);
 router.get("/presigned-url", authMiddleware, getPresignedUrl);
+router.get("/highlights", authMiddleware, getUserHighlights);
 
 export default router;

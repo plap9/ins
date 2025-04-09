@@ -482,3 +482,88 @@ export const getStoryUrlForVerification = async (storyId: number, userId: number
         return null;
     }
 };
+
+export const getUserHighlights = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const userId = req.query.user_id ? parseInt(req.query.user_id as string, 10) : undefined;
+        const username = req.query.username as string | undefined;
+        const current_user_id = (req as AuthRequest).user?.user_id;
+
+        if (!userId && !username) {
+            return next(new AppError("Thiếu thông số user_id hoặc username", 400, ErrorCode.VALIDATION_ERROR));
+        }
+
+        let targetUserId = userId;
+        if (username && !userId) {
+            const [userRows] = await pool.query<RowDataPacket[]>(
+                "SELECT user_id FROM users WHERE username = ?",
+                [username]
+            );
+            
+            if (userRows.length === 0) {
+                return next(new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND));
+            }
+            
+            targetUserId = userRows[0].user_id;
+        }
+
+        const [highlights] = await pool.query<RowDataPacket[]>(
+            `SELECT 
+                h.highlight_id,
+                h.title,
+                h.cover_image_url,
+                h.created_at,
+                h.updated_at
+            FROM highlights h
+            WHERE h.user_id = ?
+            ORDER BY h.created_at DESC`,
+            [targetUserId]
+        );
+
+        const highlightsWithThumbnails = await Promise.all(
+            highlights.map(async (highlight) => {
+                if (!highlight.cover_image_url) {
+                    const [storyRows] = await pool.query<RowDataPacket[]>(
+                        `SELECT m.media_url
+                        FROM highlight_stories hs
+                        JOIN stories s ON hs.story_id = s.story_id
+                        JOIN media m ON s.story_id = m.story_id
+                        WHERE hs.highlight_id = ?
+                        ORDER BY hs.added_at DESC
+                        LIMIT 1`,
+                        [highlight.highlight_id]
+                    );
+
+                    if (storyRows.length > 0) {
+                        highlight.cover_image_url = storyRows[0].media_url;
+                    }
+                }
+                return highlight;
+            })
+        );
+
+        const highlightsWithCounts = await Promise.all(
+            highlightsWithThumbnails.map(async (highlight) => {
+                const [[countResult]] = await pool.query<RowDataPacket[]>(
+                    `SELECT COUNT(*) as story_count 
+                    FROM highlight_stories 
+                    WHERE highlight_id = ?`,
+                    [highlight.highlight_id]
+                );
+                
+                return {
+                    ...highlight,
+                    story_count: countResult?.story_count || 0
+                };
+            })
+        );
+
+        res.status(200).json({
+            success: true,
+            highlights: highlightsWithCounts
+        });
+    } catch (error) {
+        console.error("Error in getUserHighlights:", error);
+        next(error);
+    }
+};

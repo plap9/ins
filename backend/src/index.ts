@@ -9,6 +9,7 @@ import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import comment from "./routes/comment";
 import cacheRoutes from "./routes/cache";
 import story from "./routes/story";
+import search from "./routes/search";
 
 dotenv.config();
 const app = express();
@@ -24,8 +25,8 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:19006',
     'exp://192.168.1.31:8081',
-    /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Cho phép tất cả IP trong mạng 192.168.x.x
-    'http://192.168.63.181:5000' // Thêm IP của server
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+    'http://192.168.63.181:5000'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -46,6 +47,7 @@ app.use("/users", user);
 app.use("/comments", comment);
 app.use("/cache", cacheRoutes);
 app.use("/stories", story);
+app.use("/search", search);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
