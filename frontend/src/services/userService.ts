@@ -25,7 +25,21 @@ export interface UserProfile {
 
 interface UserProfileResponse {
   success: boolean;
-  user: UserProfile;
+  user?: UserProfile;
+  data?: {
+    id: number | string;
+    username: string;
+    full_name: string;
+    avatar_url: string | null;
+    bio: string | null;
+    is_private: boolean;
+    created_at?: string;
+    updated_at?: string;
+    followers_count: number;
+    following_count: number;
+    posts_count: number;
+    is_following?: boolean;
+  };
   source?: string;
 }
 
@@ -132,9 +146,9 @@ export const updateUserProfile = async (userId: number, data: UpdateUserRequest)
   }
 };
 
-export const getUser = async (userId: number): Promise<User> => {
+export const getUser = async (userId: number): Promise<User | null> => {
   const response = await getUserProfile(userId);
-  return response.user;
+  return response.user || null;
 };
 
 export const updateUser = async (userId: number, updateData: UpdateUserRequest): Promise<User> => {
@@ -216,6 +230,16 @@ export const updateUserSettings = async (userId: number, data: UserSettingsData)
     return response.data;
   } catch (error) {
     console.error('[userService] Lỗi trong updateUserSettings:', error);
+    throw error;
+  }
+};
+
+export const getUserByUsername = async (username: string): Promise<UserProfileResponse> => {
+  try {
+    const response = await apiClient.get<UserProfileResponse>(`/users/username/${username}`);
+    return response.data;
+  } catch (error) {
+    console.error('[userService] Lỗi trong getUserByUsername:', error);
     throw error;
   }
 };

@@ -62,6 +62,20 @@ export interface StoryHighlightResponse {
   };
 }
 
+export interface Highlight {
+  highlight_id: number;
+  title: string;
+  cover_image_url: string | null;
+  created_at: string;
+  updated_at: string;
+  story_count: number;
+}
+
+export interface HighlightsResponse {
+  success: boolean;
+  highlights: Highlight[];
+}
+
 interface PresignedUrlResponse {
   success: boolean;
   presignedUrl?: string;
@@ -281,6 +295,41 @@ class StoryService {
     } catch (error) {
       console.error(`Lỗi khi thêm story vào highlight:`, error);
       throw error;
+    }
+  }
+
+  async getHighlightById(highlightId: number): Promise<Highlight | null> {
+    try {
+      const response = await apiClient.get<HighlightsResponse>(`/stories/highlight/${highlightId}`);
+      if (response.data.success && response.data.highlights.length > 0) {
+        return response.data.highlights[0];
+      }
+      return null;
+    } catch (error) {
+      console.error(`Lỗi khi lấy highlight ID ${highlightId}:`, error);
+      return null;
+    }
+  }
+
+  async getUserHighlights(userId?: number, username?: string): Promise<Highlight[]> {
+    try {
+      const params: Record<string, string | number> = {};
+      if (userId) {
+        params.user_id = userId;
+      }
+      if (username) {
+        params.username = username;
+      }
+
+      const response = await apiClient.get<HighlightsResponse>('/stories/highlights', { params });
+      if (response.data.success && response.data.highlights) {
+        return response.data.highlights;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Lỗi khi lấy highlights của người dùng:', error);
+      return [];
     }
   }
 

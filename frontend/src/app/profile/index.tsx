@@ -113,11 +113,17 @@ export default function ProfileScreen() {
     try {
       setLoading(true);
       const response = await getUserProfile(authData?.user?.user_id || 0);
-      setProfile(response.user);
-      setError(null);
+      if (response.success && response.user) {
+        setProfile(response.user);
+        setError(null);
+      } else {
+        setProfile(null);
+        setError('Không tìm thấy thông tin người dùng');
+      }
     } catch (err) {
       console.error('Error fetching user profile:', err);
       setError('Failed to load profile');
+      setProfile(null);
     } finally {
       setLoading(false);
     }
