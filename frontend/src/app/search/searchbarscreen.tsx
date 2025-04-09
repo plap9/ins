@@ -53,40 +53,7 @@ const SearchScreen = () => {
         setShowHistory(false);
         try {
           const results = await searchUsers(searchQuery);
-          const filteredResults = results.filter(user => {
-            const query = searchQuery.toLowerCase().trim();
-            const username = user.username.toLowerCase();
-            const fullName = user.fullName.toLowerCase();
-
-            if (/\d|[^a-zA-Z0-9]/.test(query)) {
-              return username === query || username.includes(query);
-            }
-
-            const queryChars = query.split('');
-            const usernameChars = username.split('');
-            const fullNameChars = fullName.split('');
-
-            const isMatch = (text: string[], query: string[]) => {
-              if (query.length === 0) return true;
-              if (text.length < query.length) return false;
-              
-              for (let i = 0; i <= text.length - query.length; i++) {
-                let match = true;
-                for (let j = 0; j < query.length; j++) {
-                  if (text[i + j] !== query[j]) {
-                    match = false;
-                    break;
-                  }
-                }
-                if (match) return true;
-              }
-              return false;
-            };
-
-            return isMatch(usernameChars, queryChars) || isMatch(fullNameChars, queryChars);
-          });
-          
-          setSearchResults(filteredResults);
+          setSearchResults(results);
         } catch (error) {
           console.error("Lỗi khi tìm kiếm:", error);
         } finally {
@@ -96,7 +63,7 @@ const SearchScreen = () => {
         setSearchResults([]);
         setShowHistory(true);
       }
-    }, 300);
+    }, 200);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
@@ -150,6 +117,9 @@ const SearchScreen = () => {
     router.push(`/profile/${username}`);
   };
 
+  // Lấy 5 mục lịch sử gần nhất
+  const recentHistory = searchHistory.slice(0, 5);
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Header với thanh tìm kiếm */}
@@ -181,7 +151,7 @@ const SearchScreen = () => {
       </View>
 
       {/* Hiển thị lịch sử tìm kiếm */}
-      {showHistory && searchHistory.length > 0 && (
+      {showHistory && (
         <View className="flex-1">
           <View className="flex-row justify-between items-center p-4">
             <Text className="font-semibold text-base">Gần đây</Text>
@@ -190,7 +160,7 @@ const SearchScreen = () => {
             </TouchableOpacity>
           </View>
           <FlatList
-            data={searchHistory}
+            data={recentHistory}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity 
@@ -262,8 +232,7 @@ const SearchScreen = () => {
           )}
         </View>
       )}
-
-      {/* Hiển thị "Không có lịch sử tìm kiếm" nếu không có lịch sử */}
+      
       {showHistory && searchHistory.length === 0 && (
         <View className="flex-1 justify-center items-center">
           <Ionicons name="search" size={40} color="gray" />
