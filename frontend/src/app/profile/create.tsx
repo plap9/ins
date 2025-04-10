@@ -33,7 +33,6 @@ export default function CreatePostScreen() {
 
     setIsUploading(true);
     
-    // Simulate upload delay
     setTimeout(() => {
       setIsUploading(false);
       Alert.alert(

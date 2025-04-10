@@ -92,7 +92,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
             }
             
             const [mediaResult] = await connection.query<OkPacket>(
-                "INSERT INTO media (story_id, media_url, media_type, post_id) VALUES (?, ?, ?, NULL)",
+                "INSERT INTO media (story_id, media_url, media_type, content_type) VALUES (?, ?, ?, 'story')",
                 [story_id, s3Result.Location, media_type]
             );
             

@@ -215,41 +215,82 @@ class StoryService {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
-      // Log chi tiết FormData
       console.log("FormData trước khi gửi:", {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 120000
+        timeout: 300000 
       });
       
-      // @ts-ignore
-      for (let [key, value] of formData._parts) {
-        if (typeof value === 'object' && value.uri) {
-          console.log(`FormData field ${key}:`, {
-            uri: value.uri,
-            name: value.name,
-            type: value.type,
-            size: value.size || 'unknown'
-          });
-        } else {
-          console.log(`FormData field ${key}:`, value);
+      try {
+        // @ts-ignore - FormData._parts là thuộc tính không tiêu chuẩn của React Native FormData
+        const parts = formData._parts;
+        if (parts && Array.isArray(parts)) {
+          for (let i = 0; i < parts.length; i++) {
+            const [key, value] = parts[i];
+            
+            if (typeof value === 'object' && value !== null && 'uri' in value) {
+              const { uri, type, name } = value as { uri?: string; type?: string; name?: string };
+              const isVideo = type && type.includes('video');
+              
+              console.log(`FormData field ${key}:`, {
+                uri: uri ? uri.substring(0, 100) + (uri.length > 100 ? '...' : '') : '[undefined]',
+                name,
+                type,
+                isVideo
+              });
+              
+              if (isVideo) {
+                console.log("Đang upload video, quá trình này có thể mất nhiều thời gian...");
+              }
+            } else {
+              console.log(`FormData field ${key}:`, value);
+            }
+          }
         }
+      } catch (formDataError) {
+        console.log("Không thể log chi tiết FormData:", formDataError);
       }
+      
+      const uploadTimeout = 300000; 
       
       const response = await apiClient.post<Story>('/stories', formData, {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 120000
+        timeout: uploadTimeout,
+        // @ts-ignore - onUploadProgress có trong axios nhưng có thể không được khai báo đầy đủ trong type
+        onUploadProgress: (progressEvent: { loaded: number; total?: number }) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            console.log(`Upload tiến độ: ${percentCompleted}%`);
+          }
+        }
       });
       
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi khi tạo story:', error);
-      throw error;
+      
+      if (error.message && error.message.includes('timeout')) {
+        throw new Error('Upload bị quá thời gian. File có thể quá lớn hoặc kết nối mạng không ổn định.');
+      }
+      
+      if (error.response) {
+        const errorMessage = error.response.data?.message || 'Lỗi từ server';
+        const errorCode = error.response.status;
+        console.error(`Server trả về lỗi [${errorCode}]:`, errorMessage);
+        
+        if (errorCode === 413) {
+          throw new Error('File quá lớn. Vui lòng giảm kích thước video hoặc chọn file nhỏ hơn.');
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      throw new Error('Lỗi kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.');
     }
   }
 

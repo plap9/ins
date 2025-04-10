@@ -52,7 +52,7 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             const media_type = file.mimetype.startsWith("image") ? "image" : "video";
 
             await connection.query(
-                "INSERT INTO media (post_id, media_url, media_type) VALUES (?, ?, ?)",
+                "INSERT INTO media (post_id, media_url, media_type, content_type) VALUES (?, ?, ?, 'post')",
                 [post_id, uploadResult.Location, media_type]
             );
         }
@@ -78,7 +78,7 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
                 const media_type = file.mimetype.startsWith("image") ? "image" : "video";
 
                 await connection.query(
-                    "INSERT INTO media (post_id, media_url, media_type) VALUES (?, ?, ?)",
+                    "INSERT INTO media (post_id, media_url, media_type, content_type) VALUES (?, ?, ?, 'post')",
                     [post_id, uploadResult.Location, media_type]
                 );
             }

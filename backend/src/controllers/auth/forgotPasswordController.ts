@@ -6,10 +6,8 @@ import { ErrorCode } from "../../types/errorCode";
 import { createController } from "../../utils/errorUtils";
 import bcrypt from "bcryptjs";
 
-// Xử lý yêu cầu quên mật khẩu
 const forgotPasswordHandler = async (req: Request, res: Response): Promise<void> => {
-  const { contact } = req.body; // Email hoặc số điện thoại
-
+  const { contact } = req.body;
   if (!contact) {
     throw new AppException(
       "Vui lòng cung cấp email hoặc số điện thoại", 
@@ -30,10 +28,9 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
     );
   }
 
-  // Tạo mã reset ngẫu nhiên
   const resetToken = crypto.randomBytes(32).toString("hex");
-  const resetCode = Math.floor(100000 + Math.random() * 900000).toString(); // Mã 6 số
-  const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const resetExpires = new Date(Date.now() + 15 * 60 * 1000); 
 
   const [users] = await connection.query(
     "SELECT id FROM users WHERE email = ? OR phone_number = ?",
@@ -50,11 +47,9 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
 
   const userId = (users as any[])[0].id;
 
-  // Bắt đầu giao dịch
   await connection.beginTransaction();
 
   try {
-    // Lưu thông tin reset password vào database
     await connection.execute(
       `UPDATE users SET 
        reset_token = ?, 
@@ -64,14 +59,9 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
       [resetToken, resetCode, resetExpires, userId]
     );
 
-    // Gửi mã xác nhận qua email hoặc SMS
     if (isEmail) {
-      // TODO: Integrate with actual email service
-      // sendEmail(contact, resetCode);
       console.log(`[DEV] Gửi mã reset ${resetCode} đến email ${contact}`);
     } else {
-      // TODO: Integrate with actual SMS service
-      // sendSMS(contact, resetCode);
       console.log(`[DEV] Gửi mã reset ${resetCode} đến số điện thoại ${contact}`);
     }
 
@@ -93,7 +83,6 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
   }
 };
 
-// Xác nhận mã reset và cập nhật mật khẩu mới
 const resetPasswordHandler = async (req: Request, res: Response): Promise<void> => {
   const { resetToken, code, newPassword } = req.body;
 
@@ -105,7 +94,6 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
     );
   }
 
-  // Kiểm tra độ dài và độ phức tạp của mật khẩu
   if (newPassword.length < 8) {
     throw new AppException(
       "Mật khẩu phải có ít nhất 8 ký tự", 
@@ -115,7 +103,6 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
     );
   }
 
-  // Tìm người dùng với mã reset
   const [users] = await connection.query(
     `SELECT id, reset_expires, reset_code FROM users 
      WHERE reset_token = ? AND reset_expires > NOW()`,
@@ -132,7 +119,6 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
 
   const user = (users as any[])[0];
 
-  // Kiểm tra mã xác nhận
   if (user.reset_code !== code) {
     throw new AppException(
       "Mã xác nhận không chính xác", 
@@ -142,14 +128,11 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
     );
   }
 
-  // Băm mật khẩu mới
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  // Bắt đầu giao dịch
   await connection.beginTransaction();
 
   try {
-    // Cập nhật mật khẩu và xóa thông tin reset
     await connection.execute(
       `UPDATE users SET 
        password = ?, 

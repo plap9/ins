@@ -1,4 +1,5 @@
 import socketService from './socketService';
+import turnService from './turnService';
 
 interface PeerConnection {
   connection: RTCPeerConnection;
@@ -16,15 +17,22 @@ class WebRTCService {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' }
-    // {
-    //   urls: 'turn:your-turn-server.com:3478',
-    //   username: 'username',
-    //   credential: 'password'
-    // }
   ];
+  private iceServersInitialized: boolean = false;
 
   constructor() {
     this.setupSocketListeners();
+    this.initializeIceServers();
+  }
+
+  private async initializeIceServers(): Promise<void> {
+    try {
+      this.iceServers = await turnService.getIceServers();
+      this.iceServersInitialized = true;
+      console.log('Ice servers initialized with TURN support');
+    } catch (error) {
+      console.error('Không thể khởi tạo TURN servers:', error);
+    }
   }
 
   private setupSocketListeners() {
@@ -35,10 +43,22 @@ class WebRTCService {
     socketService.onCall('user-left', this.handleUserLeft.bind(this));
     socketService.onCall('ended', this.handleCallEnded.bind(this));
     socketService.onCall('media-state', this.handleMediaStateChange.bind(this));
+
+    socketService.onCall('config', (config: { iceServers: RTCIceServer[], iceTransportPolicy: RTCIceTransportPolicy }) => {
+      if (config.iceServers && config.iceServers.length > 0) {
+        this.iceServers = config.iceServers;
+        this.iceServersInitialized = true;
+        console.log('Đã nhận cấu hình ICE từ server:', config.iceServers);
+      }
+    });
   }
 
   public async startCall(roomId: string, mediaType: 'audio' | 'video' = 'audio'): Promise<boolean> {
     try {
+      if (!this.iceServersInitialized) {
+        await this.initializeIceServers();
+      }
+
       this.currentRoomId = roomId;
       
       const constraints: MediaStreamConstraints = {
@@ -59,6 +79,10 @@ class WebRTCService {
 
   public async acceptCall(roomId: string, rtcSessionId: string, mediaType: 'audio' | 'video' = 'audio'): Promise<boolean> {
     try {
+      if (!this.iceServersInitialized) {
+        await this.initializeIceServers();
+      }
+
       this.currentRoomId = roomId;
       this.currentSessionId = rtcSessionId;
       
@@ -89,20 +113,24 @@ class WebRTCService {
     }
   }
 
-  private handleUserJoined(data: { roomId: string, userId: number, rtcSessionId: string }): void {
+  private async handleUserJoined(data: { roomId: string, userId: number, rtcSessionId: string }): Promise<void> {
     if (this.currentRoomId !== data.roomId) return;
     
     this.currentSessionId = data.rtcSessionId;
     
-    this.createPeerConnection(data.userId);
+    await this.createPeerConnection(data.userId);
     
     if (this.localStream) {
       this.createAndSendOffer(data.userId);
     }
   }
 
-  private createPeerConnection(userId: number): void {
+  private async createPeerConnection(userId: number): Promise<void> {
     try {
+      if (!this.iceServersInitialized) {
+        await this.initializeIceServers();
+      }
+
       const peerConnection = new RTCPeerConnection({ iceServers: this.iceServers });
       
       const remoteStream = new MediaStream();
@@ -124,6 +152,25 @@ class WebRTCService {
           remoteStream.addTrack(track);
         });
       };
+
+      peerConnection.oniceconnectionstatechange = () => {
+        const connectionState = peerConnection.iceConnectionState;
+        console.log(`ICE connection state với user ${userId}: ${connectionState}`);
+        
+        if (connectionState === 'failed') {
+          console.warn(`Kết nối ICE với user ${userId} thất bại, thử khởi động lại`);
+          
+          if (this.currentRoomId && this.currentSessionId) {
+            socketService.emit('call:ice-failed', {
+              roomId: this.currentRoomId,
+              rtcSessionId: this.currentSessionId,
+              target: userId
+            });
+            
+            this.restartIceConnection(userId);
+          }
+        }
+      };
       
       this.peerConnections.set(userId, {
         connection: peerConnection,
@@ -135,6 +182,28 @@ class WebRTCService {
     } catch (error) {
       console.error('Lỗi khi tạo kết nối peer:', error);
     }
+  }
+
+  public async restartIceConnection(userId: number): Promise<void> {
+    try {
+      this.iceServers = await turnService.getIceServers();
+      
+      const peerData = this.peerConnections.get(userId);
+      if (!peerData || !this.currentRoomId) return;
+      
+      const offer = await peerData.connection.createOffer({ iceRestart: true });
+      await peerData.connection.setLocalDescription(offer);
+      
+      socketService.sendOffer(this.currentRoomId, userId, offer);
+      
+      console.log(`Đã khởi động lại kết nối ICE với user ${userId}`);
+    } catch (error) {
+      console.error('Lỗi khi khởi động lại kết nối ICE:', error);
+    }
+  }
+
+  public async testTurnConnection(): Promise<{success: boolean, message: string}> {
+    return turnService.testTurnConnection();
   }
 
   private async createAndSendOffer(userId: number): Promise<void> {
@@ -156,7 +225,7 @@ class WebRTCService {
     
     try {
       if (!this.peerConnections.has(data.senderId)) {
-        this.createPeerConnection(data.senderId);
+        await this.createPeerConnection(data.senderId);
       }
       
       const peerData = this.peerConnections.get(data.senderId);
@@ -206,30 +275,31 @@ class WebRTCService {
   }
 
   private handleCallEnded(data: { roomId: string, endedBy: number, rtcSessionId: string }): void {
-    if (this.currentRoomId !== data.roomId || this.currentSessionId !== data.rtcSessionId) return;
-    
-    this.cleanupCall();
+    if (this.currentRoomId === data.roomId && this.currentSessionId === data.rtcSessionId) {
+      this.cleanupCall();
+    }
   }
 
   private cleanupPeerConnection(userId: number): void {
     const peerData = this.peerConnections.get(userId);
-    if (!peerData) return;
-    
-    peerData.connection.close();
-    this.peerConnections.delete(userId);
+    if (peerData) {
+      peerData.connection.close();
+      this.peerConnections.delete(userId);
+    }
   }
 
   private cleanupCall(): void {
+    for (const userId of this.peerConnections.keys()) {
+      this.cleanupPeerConnection(userId);
+    }
+    
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream.getTracks().forEach(track => {
+        track.stop();
+      });
       this.localStream = null;
     }
     
-    this.peerConnections.forEach((peerData, userId) => {
-      this.cleanupPeerConnection(userId);
-    });
-    
-    this.peerConnections.clear();
     this.currentRoomId = null;
     this.currentSessionId = null;
   }
@@ -238,28 +308,28 @@ class WebRTCService {
   }
 
   public toggleAudio(enable: boolean): void {
-    if (this.localStream) {
-      this.localStream.getAudioTracks().forEach(track => {
+    if (this.localStream && this.currentRoomId) {
+      const audioTracks = this.localStream.getAudioTracks();
+      
+      audioTracks.forEach(track => {
         track.enabled = enable;
       });
       
-      if (this.currentRoomId) {
-        const videoEnabled = this.localStream.getVideoTracks().some(track => track.enabled);
-        socketService.updateMediaState(this.currentRoomId, videoEnabled, enable);
-      }
+      const videoEnabled = this.localStream.getVideoTracks().some(track => track.enabled);
+      socketService.updateMediaState(this.currentRoomId, videoEnabled, enable);
     }
   }
 
   public toggleVideo(enable: boolean): void {
-    if (this.localStream) {
-      this.localStream.getVideoTracks().forEach(track => {
+    if (this.localStream && this.currentRoomId) {
+      const videoTracks = this.localStream.getVideoTracks();
+      
+      videoTracks.forEach(track => {
         track.enabled = enable;
       });
       
-      if (this.currentRoomId) {
-        const audioEnabled = this.localStream.getAudioTracks().some(track => track.enabled);
-        socketService.updateMediaState(this.currentRoomId, enable, audioEnabled);
-      }
+      const audioEnabled = this.localStream.getAudioTracks().some(track => track.enabled);
+      socketService.updateMediaState(this.currentRoomId, enable, audioEnabled);
     }
   }
 

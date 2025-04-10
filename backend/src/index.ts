@@ -13,6 +13,7 @@ import cacheRoutes from "./routes/cache";
 import story from "./routes/story";
 import search from "./routes/search";
 import messageRoutes from "./routes/messageRoutes";
+import webrtcRoutes from "./routes/webrtcRoutes";
 import SocketService from './utils/socketService';
 import { initializeSocketService as initMessageSocketService } from './controllers/messages/messageController';
 import { initializeSocketService as initSocketHandlers, setupMessageSocketHandlers } from './controllers/messages/messageSocketController';
@@ -80,6 +81,7 @@ app.use("/cache", cacheRoutes);
 app.use("/stories", story);
 app.use("/search", search);
 app.use("/messages", messageRoutes);
+app.use("/api/webrtc", webrtcRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

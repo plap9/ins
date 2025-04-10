@@ -25,7 +25,6 @@ interface Message {
   time: string;
 }
 
-// Dữ liệu giả, chú ý: tin nhắn của mình có name là "You"
 const messagesData: Message[] = [
   { id: 1, name: "Lập", message: "Xin chào! Đây là tin nhắn đầu tiên.", time: "10:00 AM" },
   { id: 2, name: "You", message: "Chào bạn! Mình đến rồi.", time: "10:05 AM" },
@@ -51,7 +50,6 @@ export default function ChatDetailScreen() {
     setNewMessage("");
   };
 
-  // Giả sử đối phương là tin nhắn không phải của "You"
   const conversationPartner =
     messages.find((msg) => msg.name !== "You")?.name || "Chat";
 

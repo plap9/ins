@@ -4,16 +4,12 @@ import { ErrorCode } from "../../types/errorCode";
 import { createController } from "../../utils/errorUtils";
 import connection from "../../config/db";
 
-// Extend Request interface để thêm user property
 interface AuthRequest extends Request {
   user?: {
     id: number;
   };
 }
 
-/**
- * Lấy thông tin profile người dùng
- */
 const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   const { userId } = req.params;
   const currentUserId = req.user?.id;
@@ -26,7 +22,6 @@ const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void>
     );
   }
 
-  // Kiểm tra người dùng có tồn tại
   const [users] = await connection.query(
     `SELECT id, username, name, email, phone_number, avatar, bio, website, 
             gender, is_private, is_verified, created_at 
@@ -45,9 +40,7 @@ const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void>
 
   const user = (users as any[])[0];
 
-  // Kiểm tra quyền truy cập vào tài khoản riêng tư
   if (user.is_private && parseInt(userId) !== currentUserId) {
-    // Kiểm tra xem người dùng hiện tại có theo dõi không
     const [follows] = await connection.query(
       "SELECT * FROM follows WHERE follower_id = ? AND followed_id = ? AND status = 'accepted'",
       [currentUserId, userId]
@@ -62,7 +55,6 @@ const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void>
     }
   }
 
-  // Lấy thông tin số lượng theo dõi và người theo dõi
   const [followersCount] = await connection.query(
     "SELECT COUNT(*) as count FROM follows WHERE followed_id = ? AND status = 'accepted'",
     [userId]
@@ -73,19 +65,16 @@ const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void>
     [userId]
   );
 
-  // Lấy thông tin số lượng bài viết
   const [postsCount] = await connection.query(
     "SELECT COUNT(*) as count FROM posts WHERE user_id = ?",
     [userId]
   );
 
-  // Kiểm tra xem người dùng hiện tại có đang theo dõi không
   const [followStatus] = await connection.query(
     "SELECT status FROM follows WHERE follower_id = ? AND followed_id = ?",
     [currentUserId, userId]
   );
 
-  // Trả về dữ liệu profile
   res.json({
     status: "success",
     data: {
@@ -102,9 +91,6 @@ const getProfileHandler = async (req: AuthRequest, res: Response): Promise<void>
   });
 };
 
-/**
- * Cập nhật thông tin profile người dùng
- */
 const updateProfileHandler = async (req: AuthRequest, res: Response): Promise<void> => {
   const currentUserId = req.user?.id;
   
@@ -132,7 +118,6 @@ const updateProfileHandler = async (req: AuthRequest, res: Response): Promise<vo
     );
   }
 
-  // Chuẩn bị dữ liệu cập nhật
   const updateFields = [];
   const params = [];
 
@@ -161,14 +146,11 @@ const updateProfileHandler = async (req: AuthRequest, res: Response): Promise<vo
     params.push(is_private);
   }
 
-  // Thêm userId vào cuối mảng tham số
   params.push(currentUserId);
 
-  // Bắt đầu giao dịch
   await connection.beginTransaction();
 
   try {
-    // Cập nhật thông tin người dùng
     const [result] = await connection.execute(
       `UPDATE users 
        SET ${updateFields.join(", ")}, 
@@ -185,7 +167,6 @@ const updateProfileHandler = async (req: AuthRequest, res: Response): Promise<vo
       );
     }
 
-    // Lấy thông tin người dùng đã cập nhật
     const [users] = await connection.query(
       `SELECT id, username, name, email, phone_number, avatar, bio, website, 
               gender, is_private, is_verified, created_at, updated_at

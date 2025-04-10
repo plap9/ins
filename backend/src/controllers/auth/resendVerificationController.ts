@@ -37,7 +37,7 @@ export const resendVerification = async (req: Request, res: Response, next: Next
 
         const user = users[0];
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const verificationExpires = new Date(Date.now() + 3 * 60 * 1000); // 3 phút
+        const verificationExpires = new Date(Date.now() + 3 * 60 * 1000); 
 
         await connection.beginTransaction();
 

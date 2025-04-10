@@ -3,7 +3,6 @@ import { View, Text, SafeAreaView, Switch, TouchableOpacity, ScrollView, Image }
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import Header from './components/Header';
 
-// Setting item with right arrow
 const SettingOption = ({ title, description, onPress, rightElement = null }: 
   { title: string; description?: string; onPress: () => void; rightElement?: React.ReactNode }
 ) => (
@@ -19,7 +18,6 @@ const SettingOption = ({ title, description, onPress, rightElement = null }:
   </TouchableOpacity>
 );
 
-// Settings group
 const SettingsGroup = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <View className="mb-6">
     <Text className="text-lg font-semibold mb-2">{title}</Text>
@@ -29,7 +27,6 @@ const SettingsGroup = ({ title, children }: { title: string; children: React.Rea
   </View>
 );
 
-// Status Indicator
 const StatusIndicator = ({ status, label, description }: { status: string; label: string; description: string }) => {
   const getStatusColor = () => {
     switch(status) {

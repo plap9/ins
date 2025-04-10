@@ -109,12 +109,10 @@ const UserProfileScreen = () => {
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
   const [isLoadingHighlights, setIsLoadingHighlights] = useState(false);
   
-  // State cho modal
   const [showPostModal, setShowPostModal] = useState<boolean>(false);
   const [selectedPost, setSelectedPost] = useState<number | null>(null);
   const [selectedPostsCollection, setSelectedPostsCollection] = useState<Post[]>([]);
   
-  // References cho BottomSheet
   const commentBottomSheetRef = useRef<BottomSheetModal>(null);
   const likeBottomSheetRef = useRef<BottomSheetModal>(null);
   const [commentPostId, setCommentPostId] = useState<number | null>(null);
@@ -281,7 +279,6 @@ const UserProfileScreen = () => {
       alert('Đường dẫn đã được copy vào clipboard!');
     };
   
-  // Thêm các hàm xử lý modal
   const handlePostPress = (postId: number) => {
     const currentPosts = activeTab === 'posts' ? posts : savedPosts;
     const post = currentPosts.find((p) => p.id === postId);
@@ -302,7 +299,6 @@ const UserProfileScreen = () => {
     setSelectedPost(null);
   };
 
-  // Update post data khi có thay đổi like/comment
   const handleCommentAdded = (updatedPostId: number) => {
     setPosts((prev) => {
       const updated = [...prev];
@@ -317,13 +313,11 @@ const UserProfileScreen = () => {
     });
   };
 
-  // Xử lý khi nhấn vào số lượt like
   const handleLikeCountPress = (postId: number) => {
     setLikePostId(postId);
     likeBottomSheetRef.current?.present();
   };
 
-  // Xử lý khi nhấn vào biểu tượng comment
   const handleCommentPress = (postId: number) => {
     setCommentPostId(postId);
     commentBottomSheetRef.current?.present();

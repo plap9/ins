@@ -78,13 +78,26 @@ export const searchUsers = async (req: AuthRequest, res: Response, next: NextFun
 
     if (userId) {
       try {
-         await pool.query(
-            `INSERT INTO search_history
+         const [existingHistory] = await pool.query<RowDataPacket[]>(
+           `SELECT history_id FROM search_history
+            WHERE user_id = ? AND search_text = ? AND type = 'user'`,
+           [userId, rawQuery]
+         );
+         
+         if (existingHistory.length > 0) {
+           await pool.query(
+             `UPDATE search_history SET created_at = NOW()
+              WHERE history_id = ?`,
+             [existingHistory[0].history_id]
+           );
+         } else {
+           await pool.query(
+             `INSERT INTO search_history
               (user_id, search_text, type)
-            VALUES (?, ?, 'user')
-            ON DUPLICATE KEY UPDATE created_at = NOW()`,
-            [userId, rawQuery]
-          );
+             VALUES (?, ?, 'user')`,
+             [userId, rawQuery]
+           );
+         }
       } catch (historyError) {
          console.error("Lỗi khi lưu lịch sử tìm kiếm:", historyError);
       }

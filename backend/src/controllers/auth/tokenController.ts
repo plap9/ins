@@ -26,11 +26,9 @@ const refreshTokenHandler = async (req: Request, res: Response): Promise<void> =
     }
 
     try {
-        // Xác thực refresh token
         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET) as { userId: number };
         const userId = decoded.userId;
 
-        // Kiểm tra người dùng có tồn tại
         const [users] = await connection.query(
             "SELECT id, username, email FROM users WHERE id = ?",
             [userId]
@@ -44,14 +42,12 @@ const refreshTokenHandler = async (req: Request, res: Response): Promise<void> =
             );
         }
 
-        // Tạo token mới
         const newToken = jwt.sign(
             { userId },
             process.env.JWT_SECRET || "default-secret",
             { expiresIn: "7d" }
         );
 
-        // Tạo refresh token mới
         const newRefreshToken = jwt.sign(
             { userId },
             process.env.JWT_REFRESH_SECRET,
@@ -98,13 +94,10 @@ const logoutHandler = async (req: Request, res: Response): Promise<void> => {
         );
     }
     
-    // Vô hiệu hóa refresh token trong cache
     await cacheUtils.invalidateRefreshToken(refreshToken);
     
-    // Xóa refresh token từ cơ sở dữ liệu
     await connection.query("DELETE FROM refresh_tokens WHERE token = ?", [refreshToken]);
     
-    // Thêm token hiện tại vào danh sách đen nếu có
     if (token) {
         try {
             const decoded = jwt.decode(token) as any;
@@ -115,7 +108,6 @@ const logoutHandler = async (req: Request, res: Response): Promise<void> => {
                 }
             }
         } catch (err) {
-            // Lỗi khi giải mã token không quan trọng lắm
         }
     }
 

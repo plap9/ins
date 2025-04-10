@@ -55,14 +55,16 @@ export default function UpdateProfile() {
             
             try {
                 const response = await getUserProfile(userId);
-                const userData = response.user;
-                
-                setUsername(userData.username || '');
-                setBio(userData.bio || '');
-                setEmail(userData.email || '');
-                setGender(userData.gender || '');
-                if (userData.profile_picture) {
-                    setImage(userData.profile_picture);
+                if (response && response.user) {
+                    const userData = response.user;
+                    
+                    setUsername(userData.username || '');
+                    setBio(userData.bio || '');
+                    setEmail(userData.email || '');
+                    setGender(userData.gender || '');
+                    if (userData.profile_picture) {
+                        setImage(userData.profile_picture);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching user profile:', error);
@@ -133,7 +135,6 @@ export default function UpdateProfile() {
             try {
                 const response = await updateUserProfile(userId, updateData);
                 if (response.success) {
-                    // Cập nhật AuthContext với thông tin mới
                     if (authData?.user) {
                         authData.user.profile_picture = response.user.profile_picture;
                         authData.user.username = response.user.username;

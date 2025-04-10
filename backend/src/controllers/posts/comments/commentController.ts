@@ -24,11 +24,9 @@ async function countChildComments(connection: PoolConnection, commentId: number)
 async function deleteCommentHierarchy(connection: PoolConnection, commentId: number): Promise<void> {
     const [children] = await connection.query<RowDataPacket[]>('SELECT comment_id FROM comments WHERE parent_id = ?', [commentId]);
     for (const child of children) {
-        await deleteCommentHierarchy(connection, child.comment_id); // Đệ quy
+        await deleteCommentHierarchy(connection, child.comment_id);
     }
-    // Xóa likes liên quan trước khi xóa comment
     await connection.query('DELETE FROM likes WHERE comment_id = ?', [commentId]);
-    // Cuối cùng xóa chính comment đó
     await connection.query('DELETE FROM comments WHERE comment_id = ?', [commentId]);
 }
 
