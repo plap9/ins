@@ -12,7 +12,6 @@ export const rateLimit = (windowMs: number = 60 * 1000, maxRequests: number = 10
     
     const requestData = requestCounts.get(key) || { count: 0, resetTime: now + windowMs };
     
-    // Nếu đã hết thời gian, đặt lại bộ đếm
     if (now > requestData.resetTime) {
       requestData.count = 1;
       requestData.resetTime = now + windowMs;
@@ -22,7 +21,6 @@ export const rateLimit = (windowMs: number = 60 * 1000, maxRequests: number = 10
     
     requestCounts.set(key, requestData);
     
-    // Thêm header thông tin tỷ lệ giới hạn
     res.setHeader('X-RateLimit-Limit', maxRequests);
     res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - requestData.count));
     res.setHeader('X-RateLimit-Reset', requestData.resetTime);
@@ -40,5 +38,4 @@ export const rateLimit = (windowMs: number = 60 * 1000, maxRequests: number = 10
   };
 };
 
-// Giới hạn tỷ lệ đăng nhập: 5 lần trong 15 phút
 export const loginRateLimiter = rateLimit(15 * 60 * 1000, 5);

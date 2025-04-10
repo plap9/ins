@@ -45,6 +45,7 @@ interface MediaEditRequest {
       settings: Record<string, any>;
     }[];
   };
+  contentType?: string;
 }
 
 const applyTextOverlays = async (
@@ -311,11 +312,11 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
   
   try {
     const user_id = req.user?.user_id;
-    if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.INVALID_TOKEN));
+    if (!user_id) return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
 
     const editData = req.body as MediaEditRequest;
     if (!editData.mediaUrl && !editData.originalMediaId) {
-      return next(new AppError("Thiếu thông tin media cần chỉnh sửa", 400, ErrorCode.MISSING_MEDIA_URL));
+      return next(new AppException("Thiếu thông tin media cần chỉnh sửa", ErrorCode.MISSING_MEDIA_URL, 400));
     }
 
     let mediaUrl = editData.mediaUrl;
@@ -328,7 +329,7 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
       );
       
       if (mediaRows.length === 0) {
-        return next(new AppError("Không tìm thấy media với ID đã cung cấp", 404, ErrorCode.MEDIA_NOT_FOUND));
+        return next(new AppException("Không tìm thấy media với ID đã cung cấp", ErrorCode.MEDIA_NOT_FOUND, 404));
       }
       
       mediaUrl = mediaRows[0].media_url;
@@ -374,8 +375,8 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
     await connection.beginTransaction();
     
     const [mediaResult] = await connection.query<ResultSetHeader>(
-      "INSERT INTO media (post_id, media_url, media_type) VALUES (NULL, ?, ?)",
-      [uploadResult.Location, mediaType]
+      "INSERT INTO media (post_id, media_url, media_type, content_type) VALUES (NULL, ?, ?, ?)",
+      [uploadResult.Location, mediaType, editData.contentType || 'post']
     );
     
     const mediaId = mediaResult.insertId;
@@ -399,7 +400,7 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
 
     if (editsToSave.length > 0) {
       await connection.query(
-        "INSERT INTO media_edit (media_id, edit_type, edit_data) VALUES ?",
+        "INSERT INTO media_edits (media_id, edit_type, edit_data) VALUES ?",
         [editsToSave.map(([type, data]) => 
           [mediaId, type, JSON.stringify(data)]
         )]
@@ -434,28 +435,55 @@ export const editMedia = async (req: AuthRequest, res: Response, next: NextFunct
 export const getMediaLibrary = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user_id = req.user?.user_id;
-      if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.INVALID_TOKEN));
+      if (!user_id) return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
   
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
       const mediaType = ['image', 'video'].includes(req.query.type as string) ? req.query.type as string : null;
+      const contentType = ['post', 'story', 'message', 'reel'].includes(req.query.contentType as string) 
+        ? req.query.contentType as string 
+        : 'post';
   
-      if (page < 1) return next(new AppError("Tham số 'page' phải lớn hơn 0", 400));
+      if (page < 1) return next(new AppException("Tham số 'page' phải lớn hơn 0", ErrorCode.VALIDATION_ERROR, 400));
       
       const offset = (page - 1) * limit;
-      const queryParams: any[] = [user_id];
+      let queryParams: any[] = [];
       
       let query = `
         SELECT 
           m.media_id, 
           m.media_url, 
           m.media_type, 
-          m.created_at,
-          p.post_id
-        FROM media m
-        LEFT JOIN posts p ON m.post_id = p.post_id
-        WHERE p.user_id = ?
+          m.content_type,
+          m.created_at
       `;
+
+      if (contentType === 'post') {
+        query += `, p.post_id`;
+      } else if (contentType === 'story') {
+        query += `, s.story_id`;
+      } else if (contentType === 'reel') {
+        query += `, r.reel_id`;
+      } else if (contentType === 'message') {
+        query += `, msg.message_id`;
+      }
+      
+      query += ` FROM media m`;
+      
+      if (contentType === 'post') {
+        query += ` LEFT JOIN posts p ON m.post_id = p.post_id WHERE p.user_id = ? AND m.content_type = ?`;
+        queryParams = [user_id, contentType];
+      } else if (contentType === 'story') {
+        query += ` LEFT JOIN stories s ON m.story_id = s.story_id WHERE s.user_id = ? AND m.content_type = ?`;
+        queryParams = [user_id, contentType];
+      } else if (contentType === 'reel') {
+        query += ` LEFT JOIN reels r ON m.reel_id = r.reel_id WHERE r.user_id = ? AND m.content_type = ?`;
+        queryParams = [user_id, contentType];
+      } else if (contentType === 'message') {
+        query += ` LEFT JOIN messages msg ON m.message_id = msg.message_id 
+                  WHERE (msg.sender_id = ? OR msg.receiver_id = ?) AND m.content_type = ?`;
+        queryParams = [user_id, user_id, contentType];
+      }
   
       if (mediaType) {
         query += " AND m.media_type = ?";
@@ -466,19 +494,31 @@ export const getMediaLibrary = async (req: AuthRequest, res: Response, next: Nex
       queryParams.push(offset, limit);
   
       const [media] = await pool.query<RowDataPacket[]>(query, queryParams);
-  
-      const countQuery = `
-        SELECT COUNT(*) as total 
-        FROM media m
-        LEFT JOIN posts p ON m.post_id = p.post_id
-        WHERE p.user_id = ?
-        ${mediaType ? "AND m.media_type = ?" : ""}
-      `;
       
-      const [countResult] = await pool.query<RowDataPacket[]>(
-        countQuery,
-        mediaType ? [user_id, mediaType] : [user_id]
-      );
+      let countQuery = `SELECT COUNT(*) as total FROM media m`;
+      let countParams: any[] = [];
+      
+      if (contentType === 'post') {
+        countQuery += ` LEFT JOIN posts p ON m.post_id = p.post_id WHERE p.user_id = ? AND m.content_type = ?`;
+        countParams = [user_id, contentType];
+      } else if (contentType === 'story') {
+        countQuery += ` LEFT JOIN stories s ON m.story_id = s.story_id WHERE s.user_id = ? AND m.content_type = ?`;
+        countParams = [user_id, contentType];
+      } else if (contentType === 'reel') {
+        countQuery += ` LEFT JOIN reels r ON m.reel_id = r.reel_id WHERE r.user_id = ? AND m.content_type = ?`;
+        countParams = [user_id, contentType];
+      } else if (contentType === 'message') {
+        countQuery += ` LEFT JOIN messages msg ON m.message_id = msg.message_id 
+                        WHERE (msg.sender_id = ? OR msg.receiver_id = ?) AND m.content_type = ?`;
+        countParams = [user_id, user_id, contentType];
+      }
+      
+      if (mediaType) {
+        countQuery += " AND m.media_type = ?";
+        countParams.push(mediaType);
+      }
+      
+      const [countResult] = await pool.query<RowDataPacket[]>(countQuery, countParams);
   
       const total = countResult[0]?.total || 0;
       const totalPages = Math.ceil(total / limit);
@@ -496,6 +536,6 @@ export const getMediaLibrary = async (req: AuthRequest, res: Response, next: Nex
       });
       
     } catch (error) {
-      next(new AppError("Lỗi hệ thống khi lấy danh sách media", 500, ErrorCode.SERVER_ERROR));
+      next(new AppException("Lỗi hệ thống khi lấy danh sách media", ErrorCode.SERVER_ERROR, 500));
     }
   };

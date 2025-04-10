@@ -134,33 +134,73 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
       
       const formData = new FormData();
       
+      const fileExtension = mediaUri.toLowerCase().split('.').pop() || '';
       let type = 'image/jpeg';
-      if (mediaUri.endsWith('.mp4') || mediaUri.endsWith('.mov')) {
-        type = 'video/mp4';
-      } else if (mediaUri.endsWith('.png')) {
+      let isVideo = false;
+      
+      if (['mp4', 'mov', 'mpeg', 'mpg', '3gp'].includes(fileExtension)) {
+        type = fileExtension === 'mov' ? 'video/quicktime' : 'video/mp4';
+        isVideo = true;
+      } else if (fileExtension === 'png') {
         type = 'image/png';
+      } else if (fileExtension === 'gif') {
+        type = 'image/gif';
+      } else if (['jpg', 'jpeg'].includes(fileExtension)) {
+        type = 'image/jpeg';
       }
       
-      const fileName = mediaUri.split('/').pop() || `story_${Date.now()}.jpg`;
+      const fileName = mediaUri.split('/').pop() || `story_${Date.now()}.${fileExtension || 'jpg'}`;
       
-      // Lấy thông tin file
-      const fileInfo = await fetch(mediaUri);
-      const fileSize = fileInfo.headers.get('content-length');
-      const fileSizeMB = fileSize ? (parseInt(fileSize) / (1024 * 1024)).toFixed(2) : 'unknown';
+      let processedUri = mediaUri;
+      if (Platform.OS === 'ios' && processedUri.startsWith('file://')) {
+        processedUri = processedUri.replace('file://', '');
+      }
       
-      console.log("Thông tin file:", {
-        fileName,
-        type,
-        size: `${fileSizeMB}MB`,
-        uri: mediaUri
-      });
+      try {
+        const fileInfo = await fetch(mediaUri);
+        const fileSize = fileInfo.headers.get('content-length');
+        const fileSizeMB = fileSize ? (parseInt(fileSize) / (1024 * 1024)).toFixed(2) : 'unknown';
+        
+        console.log("Thông tin file:", {
+          fileName,
+          type,
+          size: `${fileSizeMB}MB`,
+          uri: processedUri,
+          isVideo
+        });
+        
+        if (fileSize && parseInt(fileSize) > 25 * 1024 * 1024 && isVideo) {
+          console.warn("Video có kích thước lớn, có thể gặp vấn đề khi tải lên:", fileSizeMB + "MB");
+          Alert.alert(
+            'Cảnh báo',
+            `Video có kích thước khá lớn (${fileSizeMB}MB). Bạn vẫn muốn tiếp tục?`,
+            [
+              { text: 'Hủy', style: 'cancel', onPress: () => setIsUploading(false) },
+              { text: 'Tiếp tục', onPress: () => completeUpload(processedUri, fileName, type, formData) }
+            ]
+          );
+          return;
+        }
+      } catch (fileInfoError) {
+        console.error("Lỗi khi lấy thông tin file:", fileInfoError);
+      }
       
-      // @ts-ignore
+      await completeUpload(processedUri, fileName, type, formData);
+    } catch (error: any) {
+      console.error("Lỗi khi tạo story:", error);
+      Alert.alert('Lỗi', error.message || 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  const completeUpload = async (uri: string, fileName: string, type: string, formData: FormData) => {
+    try {
       formData.append('media', {
-        uri: Platform.OS === 'ios' ? mediaUri.replace('file://', '') : mediaUri,
+        uri,
         name: fileName,
         type,
-      });
+      } as any);
       
       if (hasText && text.trim()) {
         formData.append('caption', text.trim());
@@ -210,10 +250,8 @@ const StoryEditorScreen = ({ route, asset: propAsset, onClose, onStoryCreated }:
         }]
       );
     } catch (error: any) {
-      console.error("Lỗi khi tạo story:", error);
-      Alert.alert('Lỗi', error.message || 'Không thể tạo story');
-    } finally {
-      setIsUploading(false);
+      console.error("Lỗi trong completeUpload:", error);
+      throw new Error(error.message || 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.');
     }
   };
 

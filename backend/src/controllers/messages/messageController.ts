@@ -14,25 +14,35 @@ export const initializeSocketService = (instance: SocketService) => {
 
 interface MessageRow extends RowDataPacket {
   message_id: number;
+  sender_id: number;
+  receiver_id: number;
   content: string;
-  message_type: string;
+  message_type: 'text' | 'media' | 'call';
   is_read: number;
-  created_at: Date;
+  sent_at: Date;
+  call_status: 'none' | 'initiated' | 'accepted' | 'rejected' | 'ended' | 'missed';
+  call_type: 'audio' | 'video' | null;
+  call_duration: number | null;
+  call_started_at: Date | null;
+  group_id: number | null;
+  reply_to_id: number | null;
+  disappears_at: Date | null;
 }
 
 interface ConversationRow extends RowDataPacket {
-  conversation_id: number;
-  type: string;
-  name?: string;
+  group_id: number;
   creator_id: number;
+  group_name: string;
+  group_avatar: string | null;
   created_at: Date;
 }
 
 interface ConversationMemberRow extends RowDataPacket {
-  id: number;
-  conversation_id: number;
+  member_id: number;
+  group_id: number;
   user_id: number;
-  role: string;
+  role: 'member' | 'admin';
+  joined_at: Date;
 }
 
 export const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -43,24 +53,26 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
-    const { conversation_id, content, message_type = 'text' } = req.body;
+    const { receiver_id, group_id, content, message_type = 'text' } = req.body;
     
-    if (!conversation_id || !content) {
+    if ((!receiver_id && !group_id) || !content) {
       throw new AppException("Thiếu thông tin tin nhắn", ErrorCode.VALIDATION_ERROR, 400);
     }
     
-    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
-      "SELECT * FROM group_members WHERE conversation_id = ? AND user_id = ?",
-      [conversation_id, userId]
-    );
-    
-    if (memberCheck.length === 0) {
-      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    if (group_id) {
+      const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+        "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+        [group_id, userId]
+      );
+      
+      if (memberCheck.length === 0) {
+        throw new AppException("Bạn không thuộc nhóm chat này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+      }
     }
 
     const [result] = await pool.query<ResultSetHeader>(
-      "INSERT INTO messages (conversation_id, sender_id, content, message_type) VALUES (?, ?, ?, ?)",
-      [conversation_id, userId, content, message_type]
+      "INSERT INTO messages (sender_id, receiver_id, content, message_type, group_id) VALUES (?, ?, ?, ?, ?)",
+      [userId, receiver_id || null, content, message_type, group_id || null]
     );
     
     const messageId = result.insertId;
@@ -79,14 +91,21 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
 
     const message = messages[0];
     
-    await pool.query(
-      "UPDATE chat_groups SET last_message_id = ? WHERE group_id = ?",
-      [messageId, conversation_id]
-    );
-    
-    const roomId = `conversation_${conversation_id}`;
-    if (socketServiceInstance) {
-      socketServiceInstance.notifyNewMessage(roomId, message);
+    if (group_id) {
+      await pool.query(
+        "UPDATE chat_groups SET last_message_id = ? WHERE group_id = ?",
+        [messageId, group_id]
+      );
+      
+      const roomId = `group_${group_id}`;
+      if (socketServiceInstance) {
+        socketServiceInstance.notifyNewMessage(roomId, message);
+      }
+    } else if (receiver_id) {
+      const receiverRoomId = `user_${receiver_id}`;
+      if (socketServiceInstance) {
+        socketServiceInstance.notifyNewMessage(receiverRoomId, message);
+      }
     }
 
     res.status(201).json({
@@ -109,19 +128,21 @@ export const sendMediaMessage = async (req: AuthRequest, res: Response): Promise
       throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
-    const { conversation_id, message_type, caption } = req.body;
+    const { receiver_id, group_id, message_type, caption } = req.body;
     
-    if (!conversation_id || !message_type || !req.file) {
+    if ((!receiver_id && !group_id) || !message_type || !req.file) {
       throw new AppException("Thiếu thông tin tin nhắn", ErrorCode.VALIDATION_ERROR, 400);
     }
     
-    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
-      "SELECT * FROM group_members WHERE conversation_id = ? AND user_id = ?",
-      [conversation_id, userId]
-    );
-    
-    if (memberCheck.length === 0) {
-      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    if (group_id) {
+      const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+        "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+        [group_id, userId]
+      );
+      
+      if (memberCheck.length === 0) {
+        throw new AppException("Bạn không thuộc nhóm chat này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+      }
     }
 
     const connection = await pool.getConnection();
@@ -129,38 +150,49 @@ export const sendMediaMessage = async (req: AuthRequest, res: Response): Promise
       await connection.beginTransaction();
       
       const [messageResult] = await connection.query<ResultSetHeader>(
-        "INSERT INTO messages (conversation_id, sender_id, content, message_type) VALUES (?, ?, ?, ?)",
-        [conversation_id, userId, caption || '', message_type]
+        "INSERT INTO messages (sender_id, receiver_id, content, message_type, group_id) VALUES (?, ?, ?, ?, ?)",
+        [userId, receiver_id || null, caption || '', 'media', group_id || null]
       );
       
       const messageId = messageResult.insertId;
       
-      await connection.query(
-        "INSERT INTO message_media (message_id, media_type, media_url) VALUES (?, ?, ?)",
-        [messageId, message_type, req.file.path]
-      );
+      const mediaType = message_type === 'image' ? 'image' : message_type === 'video' ? 'video' : 'audio';
       
       await connection.query(
-        "UPDATE chat_groups SET last_message_id = ? WHERE group_id = ?",
-        [messageId, conversation_id]
+        "INSERT INTO media (media_url, media_type, message_id, content_type) VALUES (?, ?, ?, 'message')",
+        [req.file.path, mediaType, messageId]
       );
+      
+      if (group_id) {
+        await connection.query(
+          "UPDATE chat_groups SET last_message_id = ? WHERE group_id = ?",
+          [messageId, group_id]
+        );
+      }
       
       await connection.commit();
       
       const [messages] = await pool.query<MessageRow[]>(
-        `SELECT m.*, u.username, u.profile_picture, mm.media_url, mm.media_type
+        `SELECT m.*, u.username, u.profile_picture, med.media_url, med.media_type
          FROM messages m
          JOIN users u ON m.sender_id = u.user_id
-         JOIN message_media mm ON m.message_id = mm.message_id
+         JOIN media med ON m.message_id = med.message_id
          WHERE m.message_id = ?`,
         [messageId]
       );
       
       const message = messages[0];
       
-      const roomId = `conversation_${conversation_id}`;
-      if (socketServiceInstance) {
-        socketServiceInstance.notifyNewMessage(roomId, message);
+      if (group_id) {
+        const roomId = `group_${group_id}`;
+        if (socketServiceInstance) {
+          socketServiceInstance.notifyNewMessage(roomId, message);
+        }
+      } else if (receiver_id) {
+        const receiverRoomId = `user_${receiver_id}`;
+        if (socketServiceInstance) {
+          socketServiceInstance.notifyNewMessage(receiverRoomId, message);
+        }
       }
 
       res.status(201).json({
@@ -189,60 +221,78 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
-    const conversationId = parseInt(req.params.conversationId);
+    const { receiver_id, group_id } = req.query;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
     
-    if (!conversationId) {
-      throw new AppException("ID cuộc trò chuyện không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+    if (!receiver_id && !group_id) {
+      throw new AppException("Thiếu ID người nhận hoặc ID nhóm", ErrorCode.VALIDATION_ERROR, 400);
     }
     
-    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
-      "SELECT * FROM group_members WHERE conversation_id = ? AND user_id = ?",
-      [conversationId, userId]
-    );
+    let query = '';
+    let params: any[] = [];
     
-    if (memberCheck.length === 0) {
-      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    if (group_id) {
+      const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+        "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+        [group_id, userId]
+      );
+      
+      if (memberCheck.length === 0) {
+        throw new AppException("Bạn không thuộc nhóm chat này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+      }
+      
+      query = `
+        SELECT m.*, u.username, u.profile_picture, 
+               med.media_url, med.media_type, med.thumbnail_url,
+               r.username as reply_username
+        FROM messages m
+        JOIN users u ON m.sender_id = u.user_id
+        LEFT JOIN media med ON m.message_id = med.message_id AND med.content_type = 'message'
+        LEFT JOIN messages rm ON m.reply_to_id = rm.message_id
+        LEFT JOIN users r ON rm.sender_id = r.user_id
+        WHERE m.group_id = ?
+        ORDER BY m.sent_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      params = [group_id, limit, offset];
+    } else {
+      query = `
+        SELECT m.*, u.username, u.profile_picture, 
+               med.media_url, med.media_type, med.thumbnail_url,
+               r.username as reply_username
+        FROM messages m
+        JOIN users u ON m.sender_id = u.user_id
+        LEFT JOIN media med ON m.message_id = med.message_id AND med.content_type = 'message'
+        LEFT JOIN messages rm ON m.reply_to_id = rm.message_id
+        LEFT JOIN users r ON rm.sender_id = r.user_id
+        WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+        ORDER BY m.sent_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      params = [userId, receiver_id, receiver_id, userId, limit, offset];
     }
-
-    const [messages] = await pool.query<RowDataPacket[]>(
-      `SELECT m.message_id, m.sender_id, m.content, m.message_type, m.is_read, m.created_at,
-       u.username, u.profile_picture,
-       mm.media_id, mm.media_type, mm.media_url, mm.thumbnail_url, mm.duration
-       FROM messages m
-       JOIN users u ON m.sender_id = u.user_id
-       LEFT JOIN message_media mm ON m.message_id = mm.message_id
-       WHERE m.conversation_id = ?
-       ORDER BY m.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [conversationId, limit, offset]
-    );
     
-    await pool.query(
-      `UPDATE message_status 
-       SET status = 'read', timestamp = NOW()
-       WHERE message_id IN (
-         SELECT message_id FROM messages 
-         WHERE conversation_id = ? AND sender_id != ?
-       ) AND user_id = ? AND status != 'read'`,
-      [conversationId, userId, userId]
-    );
-
-    const maxAge = 60;
-    res.setHeader('Cache-Control', `private, max-age=${maxAge}`);
-    res.setHeader('Expires', new Date(Date.now() + maxAge * 1000).toUTCString());
-    res.setHeader('Vary', 'Authorization');
-
+    const [messages] = await pool.query<MessageRow[]>(query, params);
+    
+    if (messages.length > 0) {
+      if (group_id) {
+        await pool.query(
+          "UPDATE messages SET is_read = 1 WHERE group_id = ? AND sender_id != ? AND is_read = 0",
+          [group_id, userId]
+        );
+      } else {
+        await pool.query(
+          "UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ? AND is_read = 0",
+          [receiver_id, userId]
+        );
+      }
+    }
+    
     res.status(200).json({
       status: "success",
-      data: messages,
-      pagination: {
-        page,
-        limit,
-        has_more: messages.length === limit
-      }
+      data: messages.reverse() 
     });
   } catch (error) {
     if (error instanceof AppException) {

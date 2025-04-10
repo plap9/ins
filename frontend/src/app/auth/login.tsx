@@ -41,19 +41,22 @@ export default function LoginScreen() {
       setLoading(true);
 
       const response = await apiClient.post<{
-        token?: string;
-        refreshToken?: string;
-        user?: any;
+        status?: string;
+        data?: {
+          token: string;
+          refreshToken: string;
+          user: any;
+        };
       }>("/auth/login", {
         login,
         password,
       });
 
-      if (!response.data.token || !response.data.user) {
+      if (!response.data.data?.token || !response.data.data?.user) {
         throw new Error("Invalid response format");
       }
 
-      const { token, refreshToken, user } = response.data;
+      const { token, refreshToken, user } = response.data.data;
 
       if (!token || !refreshToken || !user) {
         throw new Error("Missing authentication data");

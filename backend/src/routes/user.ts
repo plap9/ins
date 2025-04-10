@@ -2,13 +2,6 @@ import express, { Router } from "express";
 import {
   getUserProfile,
   getUserByUsername,
-  // searchUsers,
-  // getUserPosts,
-  // followUser,
-  // unfollowUser,
-  // getSuggestedUsers,
-  // getUserFollowers,
-  // getUserFollowing,
 } from "../controllers/users/userProfileController";
 import { getUsersBySearch, getUserSettings, updateUserProfile, updateUserSettings } from "../controllers/users/userUpdateController";
 import { authMiddleware } from "../middlewares/authMiddleware";

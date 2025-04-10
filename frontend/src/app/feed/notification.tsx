@@ -4,7 +4,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// Dữ liệu mẫu cho các thông báo
 const notifications = [
   {
     id: "1",

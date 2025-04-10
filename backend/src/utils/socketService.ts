@@ -175,15 +175,12 @@ class SocketService {
       }
     ];
 
-    // Sử dụng TURN server nếu đã được cấu hình
     const turnServerUris = (process.env.TURN_SERVER_URIS || '').split(',').filter(Boolean);
     
     if (turnServerUris.length > 0) {
-      // Tạo username theo định dạng timestamp + username
       const timestamp = Math.floor(Date.now() / 1000) + (parseInt(process.env.TURN_CREDENTIAL_TTL || '3600'));
       const username = `${timestamp}:socketio`;
       
-      // Tạo credential (HMAC-SHA1)
       const crypto = require('crypto');
       const secret = process.env.STATIC_TURN_SECRET || '';
       const hmac = crypto.createHmac('sha1', secret);
@@ -198,13 +195,10 @@ class SocketService {
       
       console.log('TURN server đã được cấu hình');
       
-      // Thêm log để hiển thị thông tin cụ thể cho việc test
-      console.log('=== THÔNG TIN TURN CREDENTIALS CHO TESTING ===');
       console.log('TURN Server URLs:', turnServerUris);
       console.log('TURN Username:', username);
       console.log('TURN Credential:', credential);
       console.log('Hết hạn sau:', process.env.TURN_CREDENTIAL_TTL || '3600', 'giây');
-      console.log('==========================================');
     }
 
     return iceServers;

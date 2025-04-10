@@ -31,7 +31,6 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
             );
         }
 
-        // Kiểm tra người dùng đã tồn tại
         const [existingUsers] = await connection.query(
             "SELECT * FROM users WHERE email = ? OR phone_number = ?",
             [email || null, phone || null]
@@ -48,21 +47,17 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 phút
+        const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); 
 
-        // Bắt đầu giao dịch
         await connection.beginTransaction();
 
         if (isEmail) {
-            // Thêm người dùng với email
             await connection.execute(
-                `INSERT INTO users (username, email, password, is_verified, verification_code, verification_expires) 
-                VALUES (?, ?, ?, 0, ?, ?)`,
+                `INSERT INTO users (username, email, password_hash, is_verified, email_verification_code, email_verification_expires, contact_type, reset_password_code) 
+                VALUES (?, ?, ?, 0, ?, ?, 'email', LPAD(FLOOR(RAND() * 1000000), 6, '0'))`,
                 [username, email, hashedPassword, verificationCode, verificationExpires]
             );
 
-            // TODO: Gửi email xác thực
-            // emailService.sendVerificationEmail(email, verificationCode);
 
             await connection.commit();
 
@@ -76,15 +71,12 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
                 }
             });
         } else {
-            // Thêm người dùng với số điện thoại
             await connection.execute(
-                `INSERT INTO users (username, phone_number, password, is_verified, verification_code, verification_expires) 
-                VALUES (?, ?, ?, 0, ?, ?)`,
+                `INSERT INTO users (username, phone_number, password_hash, is_verified, phone_verification_code, phone_verification_expires, contact_type, reset_password_code) 
+                VALUES (?, ?, ?, 0, ?, ?, 'phone', LPAD(FLOOR(RAND() * 1000000), 6, '0'))`,
                 [username, phone, hashedPassword, verificationCode, verificationExpires]
             );
 
-            // TODO: Gửi SMS xác thực
-            // smsService.sendVerificationSMS(phone, verificationCode);
 
             await connection.commit();
 
@@ -99,7 +91,6 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
             });
         }
     } catch (error) {
-        // Nếu có lỗi, rollback giao dịch
         await connection.rollback();
         throw error;
     }

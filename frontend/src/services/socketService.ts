@@ -122,6 +122,14 @@ class SocketService {
       const listeners = this.callListeners.get('media-state') || new Set();
       listeners.forEach(listener => listener(data));
     });
+
+    this.socket.on('webrtc:config', (data) => {
+      console.log('Đã nhận cấu hình WebRTC từ server:', data);
+      if (this.callListeners.has('config')) {
+        const listeners = this.callListeners.get('config') || new Set();
+        listeners.forEach(listener => listener(data));
+      }
+    });
   }
 
   disconnect() {
@@ -204,7 +212,7 @@ class SocketService {
     this.socket.emit('call:end', { roomId, rtcSessionId });
   }
 
-  onCall(type: 'incoming' | 'user-joined' | 'rejected' | 'ended' | 'user-left' | 'rtc-offer' | 'rtc-answer' | 'rtc-ice' | 'media-state', callback: (data: any) => void) {
+  onCall(type: 'incoming' | 'user-joined' | 'rejected' | 'ended' | 'user-left' | 'rtc-offer' | 'rtc-answer' | 'rtc-ice' | 'media-state' | 'config', callback: (data: any) => void) {
     if (!this.callListeners.has(type)) {
       this.callListeners.set(type, new Set());
     }
@@ -231,6 +239,19 @@ class SocketService {
   updateMediaState(roomId: string, video: boolean, audio: boolean) {
     if (!this.socket) return;
     this.socket.emit('webrtc:media-state', { roomId, video, audio });
+  }
+
+  emit(eventName: string, data: any): void {
+    if (!this.socket) return;
+    this.socket.emit(eventName, data);
+  }
+
+  isConnected(): boolean {
+    return this.socket !== null && this.socket.connected;
+  }
+
+  getSocket(): Socket | null {
+    return this.socket;
   }
 }
 
