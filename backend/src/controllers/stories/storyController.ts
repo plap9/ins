@@ -2,7 +2,7 @@ import { NextFunction, Response } from "express";
 import pool from "../../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { uploadToS3 } from "../../utils/s3Utils";
 import path from 'path';
@@ -26,11 +26,11 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
     try {
         
         if (!req.file) {
-            return next(new AppError('Không tìm thấy file', 400, ErrorCode.VALIDATION_ERROR));
+            return next(new AppException('Không tìm thấy file', ErrorCode.VALIDATION_ERROR, 400));
         }
         
         if (!req.user?.user_id) {
-            return next(new AppError('Không xác định được người dùng', 401, ErrorCode.USER_NOT_AUTHENTICATED));
+            return next(new AppException('Không xác định được người dùng', ErrorCode.USER_NOT_AUTHENTICATED, 401));
         }
 
         const user_id = req.user.user_id;
@@ -40,7 +40,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
         } else if (req.file.path) {
             filePath = req.file.path;
         } else {
-            return next(new AppError('Không tìm thấy dữ liệu file', 400, ErrorCode.VALIDATION_ERROR));
+            return next(new AppException('Không tìm thấy dữ liệu file', ErrorCode.VALIDATION_ERROR, 400));
         }
         
         const has_text = req.body.has_text === 'true' || req.body.has_text === true;
@@ -56,7 +56,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
             );
             
             if (friends[0].count === 0) {
-                return next(new AppError('Bạn chưa có danh sách bạn thân', 400, ErrorCode.VALIDATION_ERROR));
+                return next(new AppException('Bạn chưa có danh sách bạn thân', ErrorCode.VALIDATION_ERROR, 400));
             }
         }
         
@@ -71,7 +71,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
             }
             
             if (!s3Result.Location) {
-                return next(new AppError('Upload lên S3 thất bại', 500, ErrorCode.SERVER_ERROR));
+                return next(new AppException('Upload lên S3 thất bại', ErrorCode.SERVER_ERROR, 500));
             }
             
             await connection.beginTransaction();
@@ -118,7 +118,7 @@ export const createStory = async (req: AuthRequest, res: Response, next: NextFun
             
         } catch (uploadError) {
             console.error("Lỗi khi upload file:", uploadError);
-            return next(new AppError(`Upload lên S3 thất bại: ${(uploadError as Error).message}`, 500, ErrorCode.SERVER_ERROR));
+            return next(new AppException(`Upload lên S3 thất bại: ${(uploadError as Error).message}`, ErrorCode.SERVER_ERROR, 500));
         }
         
     } catch (error) {

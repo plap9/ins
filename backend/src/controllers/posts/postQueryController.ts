@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { AuthRequest } from "../../middlewares/authMiddleware";
 import { cachePostList, getCachePostsList } from "../../utils/cacheUtils";
@@ -11,7 +11,7 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
     try {
         const loggedInUserId = req.user?.user_id;
         if (!loggedInUserId) {
-            return next(new AppError('Người dùng chưa xác thực để lấy bài viết.', 401, ErrorCode.USER_NOT_AUTHENTICATED));
+            return next(new AppException('Người dùng chưa xác thực để lấy bài viết.', ErrorCode.USER_NOT_AUTHENTICATED, 401));
         }
 
         const page = parseInt(req.query.page as string || "1", 10);
@@ -20,14 +20,14 @@ export const getPosts = async (req: AuthRequest, res: Response, next: NextFuncti
         const forceRefresh = req.query._ ? true : false;
 
         if (isNaN(page) || page < 1) {
-             return next(new AppError("Tham số 'page' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR, "page"));
+            return next(new AppException("Tham số 'page' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
         const safeLimit = Math.min(Math.max(limit, 1), 50);
         if (isNaN(limit)) {
-             return next(new AppError("Tham số 'limit' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR, "limit"));
+            return next(new AppException("Tham số 'limit' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
         if (filterUserId !== undefined && isNaN(filterUserId)) {
-             return next(new AppError("Tham số 'user_id' (filter) không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
+            return next(new AppException("Tham số 'user_id' (filter) không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         const offset = (page - 1) * safeLimit;
@@ -134,14 +134,14 @@ export const deletePost = async (req: AuthRequest, res: Response, next: NextFunc
     try {
         const post_id = parseInt(req.params.id, 10);
         if (isNaN(post_id)) {
-             connection.release();
-             return next(new AppError("Tham số 'id' không hợp lệ (phải là số).", 400, ErrorCode.VALIDATION_ERROR));
+            connection.release();
+            return next(new AppException("Tham số 'id' không hợp lệ (phải là số).", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         const user_id = req.user?.user_id;
         if (!user_id) {
-             connection.release();
-             return next(new AppError("Người dùng chưa được xác thực.", 401, ErrorCode.USER_NOT_AUTHENTICATED));
+            connection.release();
+            return next(new AppException("Người dùng chưa được xác thực.", ErrorCode.USER_NOT_AUTHENTICATED, 401));
         }
 
         const [checkRows] = await connection.query<RowDataPacket[]>(
@@ -151,7 +151,7 @@ export const deletePost = async (req: AuthRequest, res: Response, next: NextFunc
 
         if (checkRows.length === 0) {
             connection.release();
-            return next(new AppError("Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại.", 403, ErrorCode.INVALID_PERMISSIONS));
+            return next(new AppException("Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại.", ErrorCode.INVALID_PERMISSIONS, 403));
         }
 
         await connection.beginTransaction();

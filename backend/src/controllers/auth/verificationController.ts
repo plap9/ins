@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
 import { RowDataPacket } from "mysql2";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 
 export const verifyAccount = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -12,11 +12,11 @@ export const verifyAccount = async (req: Request, res: Response, next: NextFunct
         const { contact, code, verificationType } = req.body;
         
         if (!contact || !code || !verificationType) {
-            throw new AppError("Thiếu thông tin xác thực", 400, ErrorCode.MISSING_CREDENTIALS);
+            throw new AppException("Thiếu thông tin xác thực", ErrorCode.MISSING_CREDENTIALS, 400);
         }
 
         if (!['email', 'phone'].includes(verificationType)) {
-            throw new AppError("Loại xác thực không hợp lệ", 400, ErrorCode.INVALID_OTP);
+            throw new AppException("Loại xác thực không hợp lệ", ErrorCode.INVALID_OTP, 400);
         }
 
         const verificationConfig = {
@@ -44,7 +44,7 @@ export const verifyAccount = async (req: Request, res: Response, next: NextFunct
         );
 
         if (users.length === 0) {
-            throw new AppError("Mã xác thực không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
+            throw new AppException("Mã xác thực không hợp lệ hoặc đã hết hạn", ErrorCode.INVALID_VERIFICATION, 400);
         }
 
         const userId = users[0].user_id;

@@ -1,81 +1,132 @@
-import { NextFunction, Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import pool from "../../config/db";
-import { AppError } from "../../middlewares/errorHandler";
+import connection from "../../config/db";
+import { RowDataPacket } from "mysql2";
 import { ErrorCode } from "../../types/errorCode";
-import { redisClient, cacheUtils } from "../../config/redis";
+import { catchAsync } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
+import { logError } from "../../utils/errorUtils";
 
-export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const connection = await pool.getConnection();
+interface User extends RowDataPacket {
+  id: number;
+  email?: string;
+  password?: string;
+  username?: string;
+  is_verified: number;
+}
+
+export const login = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { login, password } = req.body;
+      const { email, username, password } = req.body;
 
-        if (!login && !password) {
-            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400, ErrorCode.MISSING_CREDENTIALS);
-        } else if (!login) {
-            throw new AppError("Vui lòng nhập tài khoản", 400, ErrorCode.MISSING_CREDENTIALS, "login");
-        } else if (!password) {
-            throw new AppError("Vui lòng nhập mật khẩu", 400, ErrorCode.MISSING_CREDENTIALS, "password");
+      if ((!email && !username) || !password) {
+        throw new AppException(
+          "Vui lòng nhập đầy đủ thông tin",
+          ErrorCode.MISSING_CREDENTIALS,
+          400
+        );
+      }
+
+      // Tìm kiếm người dùng theo email hoặc username
+      const [rows] = await connection.query<User[]>(
+        `SELECT id, IFNULL(email, '') AS email, password, username, is_verified, login_attempts, last_failed_login 
+         FROM users 
+         WHERE ${email ? "email = ?" : "username = ?"}`,
+        [email || username]
+      );
+
+      if (rows.length === 0) {
+        // Không tìm thấy người dùng
+        throw new AppException(
+          "Tài khoản không tồn tại",
+          ErrorCode.ACCOUNT_NOT_FOUND,
+          404,
+          { field: "login" }
+        );
+      }
+
+      const user = rows[0];
+
+      // Kiểm tra số lần đăng nhập thất bại
+      if (user.login_attempts >= 5) {
+        const lastFailedLogin = new Date(user.last_failed_login).getTime();
+        const now = Date.now();
+        // 15 phút = 15 * 60 * 1000 milliseconds
+        if (now - lastFailedLogin < 15 * 60 * 1000) {
+          throw new AppException(
+            "Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau",
+            ErrorCode.TOO_MANY_ATTEMPTS,
+            429,
+            { field: "login", remainingTime: 15 * 60 * 1000 - (now - lastFailedLogin) }
+          );
         }
+      }
 
-        const loginAttempts = await redisClient.get(`login_attempts:${login}`);
-        if (loginAttempts && parseInt(loginAttempts) >= 5) {
-            throw new AppError("Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau", 429, ErrorCode.TOO_MANY_ATTEMPTS, "login");
-        }
+      // Kiểm tra xác thực
+      if (user.is_verified === 0) {
+        throw new AppException(
+          "Tài khoản chưa được xác thực",
+          ErrorCode.UNVERIFIED_ACCOUNT,
+          403,
+          { field: "login" }
+        );
+      }
 
-        const [users]: any = await connection.query(
-            "SELECT * FROM users WHERE email = ? OR phone_number = ?",
-            [login, login]
+      // Kiểm tra mật khẩu
+      if (!user.password || !(await bcrypt.compare(password, user.password))) {
+        // Cập nhật số lần đăng nhập thất bại
+        await connection.execute(
+          "UPDATE users SET login_attempts = login_attempts + 1, last_failed_login = NOW() WHERE id = ?",
+          [user.id]
         );
 
-        const user = users[0];
-
-        if (!user) {
-            await redisClient.incr(`login_attempts:${login}`);
-            await redisClient.expire(`login_attempts:${login}`, 60 * 15);
-            throw new AppError("Tài khoản không tồn tại", 400, ErrorCode.ACCOUNT_NOT_FOUND, "login");
-        }
-
-        if (user.is_verified === 0) {
-            throw new AppError("Tài khoản chưa được xác thực", 400, ErrorCode.UNVERIFIED_ACCOUNT, "login");
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) {
-            await redisClient.incr(`login_attempts:${login}`);
-            await redisClient.expire(`login_attempts:${login}`, 60 * 15);
-            throw new AppError("Sai mật khẩu", 400, ErrorCode.INVALID_PASSWORD, "password");
-        }
-
-        await redisClient.del(`login_attempts:${login}`);
-
-        const userId = user.user_id;
-        const token = jwt.sign({ userId }, process.env.JWT_SECRET as string, { expiresIn: "1h" });
-        const refreshToken = jwt.sign({ userId }, process.env.REFRESH_SECRET as string, { expiresIn: "7d" });
-
-        await connection.beginTransaction(); 
-
-        await connection.query(
-            "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY))",
-            [userId, refreshToken]
+        throw new AppException(
+          "Sai mật khẩu",
+          ErrorCode.INVALID_PASSWORD,
+          401,
+          { field: "password" }
         );
+      }
 
-        await cacheUtils.storeRefreshToken(userId, refreshToken);
+      // Đặt lại số lần đăng nhập thất bại
+      await connection.execute(
+        "UPDATE users SET login_attempts = 0 WHERE id = ?",
+        [user.id]
+      );
 
-        await connection.query("UPDATE users SET last_login = NOW() WHERE user_id = ?", [userId]);
+      // Tạo JWT token
+      const token = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET || "your-secret-key",
+        { expiresIn: "7d" }
+      );
 
-        await connection.commit(); 
+      const refreshToken = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key",
+        { expiresIn: "30d" }
+      );
 
-        const { password_hash, ...userWithoutPassword } = user;
-
-        await cacheUtils.storeRefreshToken(userId, refreshToken);
-
-        res.json({ token, refreshToken, user: userWithoutPassword });
+      res.json({
+        status: "success",
+        data: {
+          token,
+          refreshToken,
+          user: {
+            id: user.id,
+            email: user.email,
+            username: user.username,
+          },
+        },
+      });
     } catch (error) {
-        await connection.rollback(); 
-        next(error);
-    } finally {
-        connection.release();
+      // Kiểm tra xem lỗi đã được xử lý chưa, nếu chưa thì ghi log và chuyển cho middleware xử lý lỗi
+      if (!(error instanceof AppException)) {
+        logError('Auth', error, `Lỗi không xác định khi đăng nhập: ${req.body.email || req.body.username}`);
+      }
+      next(error);
     }
-};
+  }
+);

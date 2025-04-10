@@ -1,6 +1,7 @@
 import mysql from "mysql2";
 import dotenv from "dotenv";
-import { AppError } from "../middlewares/errorHandler";
+import { AppException } from "../middlewares/errorHandler";
+import { ErrorCode } from "../types/errorCode";
 
 dotenv.config();
 
@@ -20,7 +21,11 @@ if (process.env.NODE_ENV !== 'test') {
   pool.getConnection((err, connection) => {
     if (err) {
       console.error(" Kết nối MySQL thất bại:", err.message);
-      throw new AppError("Không thể kết nối đến cơ sở dữ liệu", 503);
+      throw new AppException(
+        "Không thể kết nối đến cơ sở dữ liệu", 
+        ErrorCode.DB_CONNECTION_ERROR,
+        503
+      );
     } else {
       console.log(" Kết nối MySQL thành công!");
       connection.release();

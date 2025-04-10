@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import pool from '../../config/db';
-import { AppError } from '../../middlewares/errorHandler';
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from '../../types/errorCode';
 import { RowDataPacket } from 'mysql2';
 import { 
@@ -13,7 +13,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'id' không hợp lệ.", 400, ErrorCode.USER_NOT_FOUND));
+            return next(new AppException("Tham số 'id' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         const cachedUser = await getCachedUserProfile(userId);
@@ -46,7 +46,7 @@ export const getUserProfile = async (req: Request, res: Response, next: NextFunc
         );
 
         if (users.length === 0) {
-            return next(new AppError("Người dùng không tồn tại.", 404, ErrorCode.USER_NOT_FOUND));
+            return next(new AppException("Người dùng không tồn tại.", ErrorCode.USER_NOT_FOUND, 404));
         }
 
         const [[postCountResult]] = await pool.query<RowDataPacket[]>(
@@ -86,7 +86,7 @@ export const getUserByUsername = async (req: Request, res: Response, next: NextF
     console.log(`[getUserByUsername] Tìm kiếm người dùng với username: ${username}`);
     
     if (!username) {
-      return next(new AppError("Username is required", 400));
+      return next(new AppException("Username is required", ErrorCode.VALIDATION_ERROR, 400));
     }
 
     const [userCheck] = await pool.query<RowDataPacket[]>(
@@ -97,7 +97,7 @@ export const getUserByUsername = async (req: Request, res: Response, next: NextF
     console.log(`[getUserByUsername] Kết quả kiểm tra người dùng:`, userCheck);
 
     if (userCheck.length === 0) {
-      return next(new AppError("User not found", 404));
+      return next(new AppException("User not found", ErrorCode.USER_NOT_FOUND, 404));
     }
 
     const userId = userCheck[0].user_id;

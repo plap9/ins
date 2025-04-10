@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { AppError } from '../../../middlewares/errorHandler';
+import { AppException } from "../../../middlewares/errorHandler";
 import { ErrorCode } from '../../../types/errorCode';
 import { 
     invalidateLikesCache, 
@@ -21,8 +21,8 @@ export const likePost = async (req: AuthRequest, res: Response, next: NextFuncti
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(postId)) throw new AppError('ID bài viết không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) throw new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401);
+        if (isNaN(postId)) throw new AppException('ID bài viết không hợp lệ', ErrorCode.VALIDATION_ERROR, 400);
 
         const [[post]] = await connection.query<RowDataPacket[]>(`
             SELECT p.post_id, 
@@ -32,15 +32,15 @@ export const likePost = async (req: AuthRequest, res: Response, next: NextFuncti
             [postId, userId, postId]
         );
 
-        if (!post) throw new AppError('Bài viết không tồn tại', 404);
-        if (post.liked) throw new AppError('Bài viết đã được thích', 400);
+        if (!post) throw new AppException('Bài viết không tồn tại', ErrorCode.SERVER_ERROR, 404);
+        if (post.liked) throw new AppException('Bài viết đã được thích', ErrorCode.SERVER_ERROR, 400);
 
         const [insertResult] = await connection.query<ResultSetHeader>(
             "INSERT INTO likes (post_id, user_id) VALUES (?, ?)",
             [postId, userId]
         );
 
-        if (insertResult.affectedRows === 0) throw new AppError('Lỗi cơ sở dữ liệu', 500, ErrorCode.SERVER_ERROR);
+        if (insertResult.affectedRows === 0) throw new AppException('Lỗi cơ sở dữ liệu', ErrorCode.SERVER_ERROR, 500);
 
         await connection.query("UPDATE posts SET like_count = like_count + 1 WHERE post_id = ?", [postId]);
 
@@ -68,8 +68,8 @@ export const unlikePost = async (req: AuthRequest, res: Response, next: NextFunc
         const postId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(postId)) throw new AppError('ID bài viết không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) throw new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401);
+        if (isNaN(postId)) throw new AppException('ID bài viết không hợp lệ', ErrorCode.VALIDATION_ERROR, 400);
 
         const [[post]] = await connection.query<RowDataPacket[]>(`
             SELECT p.post_id, 
@@ -79,15 +79,15 @@ export const unlikePost = async (req: AuthRequest, res: Response, next: NextFunc
             [postId, userId, postId]
         );
 
-        if (!post) throw new AppError('Bài viết không tồn tại', 404, ErrorCode.NOT_FOUND);
-        if (!post.like_id) throw new AppError('Bài viết chưa được thích', 400, ErrorCode.INVALID_OPERATION);
+        if (!post) throw new AppException('Bài viết không tồn tại', ErrorCode.NOT_FOUND, 404);
+        if (!post.like_id) throw new AppException('Bài viết chưa được thích', ErrorCode.INVALID_OPERATION, 400);
 
         const [deleteResult] = await connection.query<ResultSetHeader>(
             "DELETE FROM likes WHERE post_id = ? AND user_id = ?",
             [postId, userId]
         );
 
-        if (deleteResult.affectedRows === 0) throw new AppError('Lỗi cơ sở dữ liệu', 500, ErrorCode.SERVER_ERROR);
+        if (deleteResult.affectedRows === 0) throw new AppException('Lỗi cơ sở dữ liệu', ErrorCode.SERVER_ERROR, 500);
 
         await connection.query("UPDATE posts SET like_count = like_count - 1 WHERE post_id = ?", [postId]);
 
@@ -113,8 +113,8 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
         const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
         const loggedInUserId = req.user?.user_id; 
 
-        if (!loggedInUserId) return next(new AppError('Người dùng chưa xác thực', 401));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400));
+        if (!loggedInUserId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(postId)) return next(new AppException('ID bài viết không hợp lệ', ErrorCode.VALIDATION_ERROR, 400));
 
         const cacheKey = `post:${postId}:likers:page:${page}:limit:${limit}`;
         const cachedData = await getCacheLikes(postId, page, limit); 
@@ -127,7 +127,7 @@ export const getPostLikes = async (req: AuthRequest, res: Response, next: NextFu
             SELECT post_id FROM posts WHERE post_id = ?`,
             [postId]
         );
-        if (!post) return next(new AppError('Bài viết không tồn tại', 404));
+        if (!post) return next(new AppException('Bài viết không tồn tại', ErrorCode.NOT_FOUND, 404));
 
         const offset = (page - 1) * limit;
 

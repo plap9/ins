@@ -1,6 +1,7 @@
 import twilio from "twilio";
 import dotenv from "dotenv";
-import { AppError } from "../middlewares/errorHandler";
+import { AppException } from "../middlewares/errorHandler";
+import { ErrorCode } from "../types/errorCode";
 
 dotenv.config();
 
@@ -14,13 +15,14 @@ export const sendOTP = async (phone: string, otp: string) => {
             to: phone
         });
         console.log("OTP sent:", message.sid);
+        return message;
     } catch (error: any) {
         console.error("Lỗi gửi OTP:", error);
         
         if (error.code) {
-            throw new AppError(`Lỗi Twilio: ${error.message}`, 500);
+            throw new AppException(`Lỗi SMS: ${error.message}`, ErrorCode.SERVER_ERROR, 500);
         }
         
-        throw new AppError("Không thể gửi OTP. Vui lòng thử lại.", 500);
+        throw new AppException("Không thể gửi OTP. Vui lòng thử lại.", ErrorCode.SERVER_ERROR, 500);
     }
 };
