@@ -1,7 +1,7 @@
     import multer, { FileFilterCallback } from "multer";
     import path from "path";
     import { Request } from "express";
-    import { AppError } from "./errorHandler";
+    import { AppException } from "./errorHandler";
     import { ErrorCode } from "../types/errorCode";
 
     export const FileTypes = {
@@ -52,10 +52,10 @@
           cb(null, true);
         } else {
           cb(
-            new AppError(
+            new AppException(
               `Chỉ hỗ trợ các định dạng: ${allowedTypes.join(", ")}`,
-              400,
-              ErrorCode.UNSUPPORTED_FILE_TYPE
+              ErrorCode.UNSUPPORTED_FILE_TYPE,
+              400
             )
           );
         }
@@ -102,14 +102,14 @@
           
           if (err instanceof multer.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
-              return next(new AppError(`File quá lớn, giới hạn: ${FileSizeLimits.AVATAR / (1024 * 1024)}MB`, 400, ErrorCode.FILE_TOO_LARGE));
+              return next(new AppException(`File quá lớn, giới hạn: ${FileSizeLimits.AVATAR / (1024 * 1024)}MB`, ErrorCode.FILE_TOO_LARGE, 400));
             }
             if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-              return next(new AppError('Tên field không đúng. Phải sử dụng field "avatar"', 400, ErrorCode.UNSUPPORTED_FILE_TYPE));
+              return next(new AppException('Tên field không đúng. Phải sử dụng field "avatar"', ErrorCode.UNSUPPORTED_FILE_TYPE, 400));
             }
           }
           
-          return next(new AppError(`Lỗi khi upload file: ${err.message}`, 400, ErrorCode.FILE_PROCESSING_ERROR));
+          return next(new AppException(`Lỗi khi upload file: ${err.message}`, ErrorCode.FILE_PROCESSING_ERROR, 400));
         }
         
         if (!req.file) {

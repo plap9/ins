@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import pool from '../../config/db';
-import { AppError } from '../../middlewares/errorHandler';
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from '../../types/errorCode';
 import { 
   cacheUserProfile, 
@@ -42,7 +42,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'user_id' không hợp lệ.", 400, ErrorCode.VALIDATION_ERROR));
+            return next(new AppException("Tham số 'user_id' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         await connection.beginTransaction();
@@ -63,7 +63,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
             } catch (error) {
                 console.error(`[userUpdateController] Lỗi khi upload ảnh:`, error);
                 await connection.rollback();
-                return next(new AppError('Không thể upload ảnh', 500, ErrorCode.FILE_PROCESSING_ERROR));
+                return next(new AppException('Không thể upload ảnh', ErrorCode.FILE_PROCESSING_ERROR, 500));
             }
         } 
         else if (req.body.avatar_base64) {
@@ -85,7 +85,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
             } catch (error) {
                 console.error(`[userUpdateController] Lỗi khi xử lý ảnh base64:`, error);
                 await connection.rollback();
-                return next(new AppError('Không thể xử lý ảnh', 500, ErrorCode.FILE_PROCESSING_ERROR));
+                return next(new AppException('Không thể xử lý ảnh', ErrorCode.FILE_PROCESSING_ERROR, 500));
             }
         }
 
@@ -110,7 +110,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
         
         if (fieldsToUpdate.length === 0 && !avatarUrl) {
             await connection.rollback();
-            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
+            return next(new AppException("Không có dữ liệu nào để cập nhật.", ErrorCode.USER_NO_UPDATE_DATA, 400));
         }
         
         if (avatarUrl && fieldsToUpdate.length === 0) {
@@ -137,7 +137,7 @@ export const updateUserProfile = async (req: Request, res: Response, next: NextF
 
         if ((result as any).affectedRows === 0) {
             await connection.rollback();
-            return next(new AppError("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", 404, ErrorCode.USER_NOT_FOUND));
+            return next(new AppException("Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.", ErrorCode.USER_NOT_FOUND, 404));
         }
 
         await connection.commit();
@@ -193,7 +193,7 @@ export const getUsersBySearch = async (req: Request, res: Response, next: NextFu
         const offset = (page - 1) * limit;
 
         if (!query || typeof query !== 'string') {
-            return next(new AppError("Tham số tìm kiếm không hợp lệ.", 400, ErrorCode.USER_SEARCH_INVALID));
+            return next(new AppException("Tham số tìm kiếm không hợp lệ.", ErrorCode.USER_SEARCH_INVALID, 400));
         }
 
         const cacheKey = `search:${query.toLowerCase()}:page:${page}:limit:${limit}`;
@@ -258,7 +258,7 @@ export const getUserSettings = async (req: Request, res: Response, next: NextFun
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+            return next(new AppException("Tham số 'id' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         const cacheKey = `settings:${userId}`;
@@ -286,7 +286,7 @@ export const getUserSettings = async (req: Request, res: Response, next: NextFun
         );
 
         if (settings.length === 0) {
-            return next(new AppError("Cài đặt người dùng không tồn tại.", 404, ErrorCode.USER_SETTINGS_NOT_FOUND));
+            return next(new AppException("Cài đặt người dùng không tồn tại.", ErrorCode.USER_SETTINGS_NOT_FOUND, 404));
         }
 
         await cacheData(cacheKey, settings[0]);
@@ -305,7 +305,7 @@ export const updateUserSettings = async (req: Request, res: Response, next: Next
     try {
         const userId = parseInt(req.params.id, 10);
         if (isNaN(userId)) {
-            return next(new AppError("Tham số 'id' không hợp lệ.", 400));
+            return next(new AppException("Tham số 'id' không hợp lệ.", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         const { notification_preferences, privacy_settings, language, theme, two_factor_auth_enabled } = req.body;
@@ -321,7 +321,7 @@ export const updateUserSettings = async (req: Request, res: Response, next: Next
         const fieldsToUpdate = Object.keys(updateFields).filter(key => updateFields[key] !== undefined);
         
         if (fieldsToUpdate.length === 0) {
-            return next(new AppError("Không có dữ liệu nào để cập nhật.", 400, ErrorCode.USER_NO_UPDATE_DATA));
+            return next(new AppException("Không có dữ liệu nào để cập nhật.", ErrorCode.USER_NO_UPDATE_DATA, 400));
         }
 
         let updateQuery = "UPDATE user_settings SET ";
@@ -348,7 +348,7 @@ export const updateUserSettings = async (req: Request, res: Response, next: Next
             );
 
             if (checkUser.length === 0) {
-                return next(new AppError("Người dùng không tồn tại.", 404, ErrorCode.USER_NOT_FOUND));
+                return next(new AppException("Người dùng không tồn tại.", ErrorCode.USER_NOT_FOUND, 404));
             }
 
             const insertFields = fieldsToUpdate.join(', ');

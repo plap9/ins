@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import pool from "../../config/db";
 import { ResultSetHeader, RowDataPacket } from "mysql2";

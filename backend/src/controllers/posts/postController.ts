@@ -2,7 +2,7 @@ import { NextFunction, Response } from "express";
 import pool from "../../config/db";
 import { ResultSetHeader } from "mysql2";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { uploadToS3 } from "../../utils/s3Utils";
 import path from 'path';
@@ -14,14 +14,14 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
         const { content, location } = req.body;
         const user_id = req.user?.user_id;
 
-        if (!user_id) return next(new AppError("Người dùng chưa được xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
+        if (!user_id) return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
 
         const hasContent = content && content.trim() !== "";
         const hasFile = req.file !== undefined;
         const hasFiles = req.files !== undefined && Array.isArray(req.files) && req.files.length > 0;
 
         if (!hasContent && !hasFile && !hasFiles) {
-            return next(new AppError("Bài viết phải có nội dung hoặc ít nhất một ảnh/video", 400, ErrorCode.VALIDATION_ERROR));
+            return next(new AppException("Bài viết phải có nội dung hoặc ít nhất một ảnh/video", ErrorCode.VALIDATION_ERROR, 400));
         }
 
         await connection.beginTransaction();
@@ -37,7 +37,7 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             
             if (!file.mimetype.startsWith("image") && !file.mimetype.startsWith("video")) {
                 await connection.rollback();
-                return next(new AppError("Chỉ hỗ trợ ảnh và video", 400, ErrorCode.VALIDATION_ERROR));
+                return next(new AppException("Chỉ hỗ trợ ảnh và video", ErrorCode.VALIDATION_ERROR, 400));
             }
 
             const fileExt = path.extname(file.originalname).toLowerCase();
@@ -63,7 +63,7 @@ export const createPost = async (req: AuthRequest, res: Response, next: NextFunc
             for (const file of files) {
                 if (!file.mimetype.startsWith("image") && !file.mimetype.startsWith("video")) {
                     await connection.rollback();
-                    return next(new AppError("Chỉ hỗ trợ ảnh và video", 400, ErrorCode.VALIDATION_ERROR));
+                    return next(new AppException("Chỉ hỗ trợ ảnh và video", ErrorCode.VALIDATION_ERROR, 400));
                 }
 
                 const fileExt = path.extname(file.originalname).toLowerCase();

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import pool from "../../config/db";
 import { AuthRequest } from "../../middlewares/authMiddleware"; 
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { RowDataPacket, OkPacket, ResultSetHeader } from "mysql2";
 import SocketService from "../../utils/socketService";
@@ -40,13 +40,13 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const { conversation_id, content, message_type = 'text' } = req.body;
     
     if (!conversation_id || !content) {
-      throw new AppError("Thiếu thông tin tin nhắn", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Thiếu thông tin tin nhắn", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [memberCheck] = await pool.query<ConversationMemberRow[]>(
@@ -55,7 +55,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     );
     
     if (memberCheck.length === 0) {
-      throw new AppError("Bạn không thuộc cuộc trò chuyện này", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
     }
 
     const [result] = await pool.query<ResultSetHeader>(
@@ -74,7 +74,7 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     );
     
     if (messages.length === 0) {
-      throw new AppError("Lỗi khi tạo tin nhắn", 500, ErrorCode.SERVER_ERROR);
+      throw new AppException("Lỗi khi tạo tin nhắn", ErrorCode.SERVER_ERROR, 500);
     }
 
     const message = messages[0];
@@ -94,10 +94,10 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       data: message
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi gửi tin nhắn", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi gửi tin nhắn", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -106,13 +106,13 @@ export const sendMediaMessage = async (req: AuthRequest, res: Response): Promise
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const { conversation_id, message_type, caption } = req.body;
     
     if (!conversation_id || !message_type || !req.file) {
-      throw new AppError("Thiếu thông tin tin nhắn", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Thiếu thông tin tin nhắn", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [memberCheck] = await pool.query<ConversationMemberRow[]>(
@@ -121,7 +121,7 @@ export const sendMediaMessage = async (req: AuthRequest, res: Response): Promise
     );
     
     if (memberCheck.length === 0) {
-      throw new AppError("Bạn không thuộc cuộc trò chuyện này", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
     }
 
     const connection = await pool.getConnection();
@@ -174,10 +174,10 @@ export const sendMediaMessage = async (req: AuthRequest, res: Response): Promise
       connection.release();
     }
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi gửi tin nhắn đa phương tiện", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi gửi tin nhắn đa phương tiện", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -186,7 +186,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const conversationId = parseInt(req.params.conversationId);
@@ -195,7 +195,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
     const offset = (page - 1) * limit;
     
     if (!conversationId) {
-      throw new AppError("ID cuộc trò chuyện không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID cuộc trò chuyện không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [memberCheck] = await pool.query<ConversationMemberRow[]>(
@@ -204,7 +204,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
     );
     
     if (memberCheck.length === 0) {
-      throw new AppError("Bạn không thuộc cuộc trò chuyện này", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+      throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
     }
 
     const [messages] = await pool.query<RowDataPacket[]>(
@@ -230,6 +230,11 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       [conversationId, userId, userId]
     );
 
+    const maxAge = 60;
+    res.setHeader('Cache-Control', `private, max-age=${maxAge}`);
+    res.setHeader('Expires', new Date(Date.now() + maxAge * 1000).toUTCString());
+    res.setHeader('Vary', 'Authorization');
+
     res.status(200).json({
       status: "success",
       data: messages,
@@ -240,10 +245,10 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       }
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi lấy tin nhắn", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy tin nhắn", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -255,17 +260,17 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const { participants, name, type = 'private' } = req.body;
     
     if (!participants || !Array.isArray(participants) || participants.length === 0) {
-      throw new AppError("Danh sách người tham gia không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Danh sách người tham gia không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (type === 'private' && participants.length > 1) {
-      throw new AppError("Cuộc trò chuyện riêng tư chỉ cho phép 2 người", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Cuộc trò chuyện riêng tư chỉ cho phép 2 người", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (!participants.includes(userId)) {
@@ -336,10 +341,10 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
     });
   } catch (error) {
     await connection.rollback();
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi tạo cuộc trò chuyện", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi tạo cuộc trò chuyện", ErrorCode.SERVER_ERROR, 500);
   } finally {
     connection.release();
   }
@@ -350,7 +355,7 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const page = parseInt(req.query.page as string) || 1;
@@ -404,6 +409,11 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
       })
     );
 
+    const maxAge = 30;
+    res.setHeader('Cache-Control', `private, max-age=${maxAge}`);
+    res.setHeader('Expires', new Date(Date.now() + maxAge * 1000).toUTCString());
+    res.setHeader('Vary', 'Authorization');
+
     res.status(200).json({
       status: "success",
       data: conversationsWithParticipants,
@@ -414,10 +424,10 @@ export const getConversations = async (req: AuthRequest, res: Response): Promise
       }
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi lấy danh sách cuộc trò chuyện", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy danh sách cuộc trò chuyện", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -426,13 +436,13 @@ export const markAsRead = async (req: AuthRequest, res: Response): Promise<void>
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const { message_ids } = req.body;
     
     if (!message_ids || !Array.isArray(message_ids) || message_ids.length === 0) {
-      throw new AppError("Danh sách ID tin nhắn không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Danh sách ID tin nhắn không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
 
     const placeholders = message_ids.map(() => '?').join(',');
@@ -472,10 +482,10 @@ export const markAsRead = async (req: AuthRequest, res: Response): Promise<void>
       message: "Đã cập nhật trạng thái tin nhắn"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi cập nhật trạng thái tin nhắn", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi cập nhật trạng thái tin nhắn", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -484,13 +494,13 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const messageId = parseInt(req.params.messageId);
     
     if (!messageId) {
-      throw new AppError("ID tin nhắn không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID tin nhắn không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [message] = await pool.query<MessageRow[]>(
@@ -499,7 +509,7 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
     );
     
     if (message.length === 0) {
-      throw new AppError("Tin nhắn không tồn tại", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Tin nhắn không tồn tại", ErrorCode.NOT_FOUND, 404);
     }
     
     if (message[0].sender_id !== userId) {
@@ -509,7 +519,7 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
       );
       
       if (adminCheck.length === 0) {
-        throw new AppError("Bạn không có quyền xóa tin nhắn này", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+        throw new AppException("Bạn không có quyền xóa tin nhắn này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
       }
     }
     
@@ -532,10 +542,10 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
       message: "Đã xóa tin nhắn"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi xóa tin nhắn", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi xóa tin nhắn", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -544,18 +554,18 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const groupId = parseInt(req.params.groupId);
     const { user_ids } = req.body;
     
     if (!groupId) {
-      throw new AppError("ID nhóm không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
-      throw new AppError("Danh sách ID người dùng không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Danh sách ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [adminCheck] = await pool.query<ConversationMemberRow[]>(
@@ -564,7 +574,7 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     );
     
     if (adminCheck.length === 0) {
-      throw new AppError("Bạn không có quyền thêm thành viên vào nhóm này", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+      throw new AppException("Bạn không có quyền thêm thành viên vào nhóm này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
     }
     
     const [groupInfo] = await pool.query<ConversationRow[]>(
@@ -573,11 +583,11 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     );
     
     if (groupInfo.length === 0) {
-      throw new AppError("Nhóm không tồn tại", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Nhóm không tồn tại", ErrorCode.NOT_FOUND, 404);
     }
     
     if (groupInfo[0].type === 'private') {
-      throw new AppError("Không thể thêm thành viên vào cuộc trò chuyện riêng tư", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Không thể thêm thành viên vào cuộc trò chuyện riêng tư", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const existingMembersQuery = `
@@ -594,7 +604,7 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     const newMemberIds = user_ids.filter((id: number) => !existingMemberIds.includes(id));
     
     if (newMemberIds.length === 0) {
-      throw new AppError("Tất cả người dùng đã có trong nhóm", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Tất cả người dùng đã có trong nhóm", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const memberValues = newMemberIds.map((id: number) => [groupId, id, 'member']);
@@ -623,10 +633,10 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
       }
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi thêm thành viên vào nhóm", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi thêm thành viên vào nhóm", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -635,13 +645,13 @@ export const leaveGroup = async (req: AuthRequest, res: Response): Promise<void>
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const groupId = parseInt(req.params.groupId);
     
     if (!groupId) {
-      throw new AppError("ID nhóm không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [memberCheck] = await pool.query<ConversationMemberRow[]>(
@@ -650,7 +660,7 @@ export const leaveGroup = async (req: AuthRequest, res: Response): Promise<void>
     );
     
     if (memberCheck.length === 0) {
-      throw new AppError("Bạn không thuộc nhóm này", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Bạn không thuộc nhóm này", ErrorCode.NOT_FOUND, 404);
     }
     
     const [groupInfo] = await pool.query<ConversationRow[]>(
@@ -659,11 +669,11 @@ export const leaveGroup = async (req: AuthRequest, res: Response): Promise<void>
     );
     
     if (groupInfo.length === 0) {
-      throw new AppError("Nhóm không tồn tại", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Nhóm không tồn tại", ErrorCode.NOT_FOUND, 404);
     }
     
     if (groupInfo[0].type === 'private') {
-      throw new AppError("Không thể rời khỏi cuộc trò chuyện riêng tư", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Không thể rời khỏi cuộc trò chuyện riêng tư", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const connection = await pool.getConnection();
@@ -730,10 +740,10 @@ export const leaveGroup = async (req: AuthRequest, res: Response): Promise<void>
       connection.release();
     }
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi rời khỏi nhóm", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi rời khỏi nhóm", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -742,18 +752,18 @@ export const updateGroupInfo = async (req: AuthRequest, res: Response): Promise<
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const groupId = parseInt(req.params.groupId);
     const { name, avatar_url, theme_id } = req.body;
     
     if (!groupId) {
-      throw new AppError("ID nhóm không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (!name && !avatar_url && !theme_id) {
-      throw new AppError("Không có thông tin cần cập nhật", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Không có thông tin cần cập nhật", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [adminCheck] = await pool.query<ConversationMemberRow[]>(
@@ -762,7 +772,7 @@ export const updateGroupInfo = async (req: AuthRequest, res: Response): Promise<
     );
     
     if (adminCheck.length === 0) {
-      throw new AppError("Bạn không có quyền cập nhật thông tin nhóm", 403, ErrorCode.RESOURCE_ACCESS_DENIED);
+      throw new AppException("Bạn không có quyền cập nhật thông tin nhóm", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
     }
     
     const [groupInfo] = await pool.query<ConversationRow[]>(
@@ -771,11 +781,11 @@ export const updateGroupInfo = async (req: AuthRequest, res: Response): Promise<
     );
     
     if (groupInfo.length === 0) {
-      throw new AppError("Nhóm không tồn tại", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Nhóm không tồn tại", ErrorCode.NOT_FOUND, 404);
     }
     
     if (groupInfo[0].type === 'private') {
-      throw new AppError("Không thể cập nhật thông tin cuộc trò chuyện riêng tư", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Không thể cập nhật thông tin cuộc trò chuyện riêng tư", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const updateFields = [];
@@ -821,9 +831,9 @@ export const updateGroupInfo = async (req: AuthRequest, res: Response): Promise<
       message: "Đã cập nhật thông tin nhóm"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi cập nhật thông tin nhóm", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi cập nhật thông tin nhóm", ErrorCode.SERVER_ERROR, 500);
   }
 }; 

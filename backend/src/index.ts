@@ -3,10 +3,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import http from 'http';
+import compression from 'compression';
 import authRouter from "./routes/auth";
 import post from "./routes/post";
 import user from "./routes/user";
-import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
+import { globalErrorHandler, notFoundHandler } from './middlewares/errorHandler';
 import comment from "./routes/comment";
 import cacheRoutes from "./routes/cache";
 import story from "./routes/story";
@@ -20,8 +21,30 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
-// Tạo HTTP server từ Express app
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+process.env.STUN_URLS = process.env.STUN_URLS || 'stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302';
+
+if (!process.env.TURN_SERVER_URIS) {
+  console.warn('CẢNH BÁO: TURN server chưa được cấu hình. WebRTC có thể không hoạt động qua NAT nghiêm ngặt!');
+  console.log('Để cấu hình TURN, hãy thiết lập các biến môi trường TURN_SERVER_URIS, STATIC_TURN_SECRET, TURN_CREDENTIAL_TTL');
+}
+
+process.env.ENABLE_SFU = process.env.ENABLE_SFU || 'true';
+process.env.MAX_P2P_PARTICIPANTS = process.env.MAX_P2P_PARTICIPANTS || '4';
+
 const server = http.createServer(app);
+
+app.use(compression({
+  threshold: 1024,
+  filter: (req: express.Request, res: express.Response) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  level: 6
+}));
 
 app.use(cors({
   origin: [
@@ -59,26 +82,20 @@ app.use("/search", search);
 app.use("/messages", messageRoutes);
 
 app.use(notFoundHandler);
-app.use(errorHandler);
+app.use(globalErrorHandler);
 
-// Khởi tạo SocketService và cấu hình chỉ khi là module chính
 let socketService: SocketService | null = null;
 
-// Không khởi động server nếu được import từ module khác
 if (require.main === module) {
-  // Khởi tạo socket service 
   socketService = new SocketService(server);
 
-  // Thiết lập socket service cho các controller
   initMessageSocketService(socketService);
   initSocketHandlers(socketService);
 
-  // Setup message handlers cho socket
   socketService.registerSocketHandler((socket, userId) => {
     setupMessageSocketHandlers(socket, userId);
   });
 
-  // Khởi động HTTP server với hỗ trợ socket.io
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server đang chạy với socket.io trên:`);
     console.log(`- Local: http://localhost:${PORT}`);

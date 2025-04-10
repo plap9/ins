@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import pool from '../../config/db';
-import { AppError } from '../../middlewares/errorHandler';
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from '../../types/errorCode';
 import { RowDataPacket } from 'mysql2';
 import { AuthRequest } from '../../middlewares/authMiddleware';
@@ -12,7 +12,7 @@ export const searchUsers = async (req: AuthRequest, res: Response, next: NextFun
     const userId = req.user?.user_id;
 
     if (!query || typeof query !== "string" || query.trim() === "") {
-      return next(new AppError("Truy vấn tìm kiếm không hợp lệ", 400, ErrorCode.USER_SEARCH_INVALID));
+      return next(new AppException("Truy vấn tìm kiếm không hợp lệ", ErrorCode.USER_SEARCH_INVALID, 400));
     }
 
     const rawQuery = query.toLowerCase().trim();
@@ -98,13 +98,13 @@ export const searchUsers = async (req: AuthRequest, res: Response, next: NextFun
 
   } catch (error) {
     console.error("Lỗi nghiêm trọng khi tìm kiếm người dùng:", error);
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
         next(error);
     } else if (typeof error === 'object' && error !== null && 'code' in error) {
          console.error(`Database Error Code: ${(error as any).code}`);
-         next(new AppError("Lỗi cơ sở dữ liệu khi tìm kiếm người dùng", 500, ErrorCode.DB_CONNECTION_ERROR));
+         next(new AppException("Lỗi cơ sở dữ liệu khi tìm kiếm người dùng", ErrorCode.DB_CONNECTION_ERROR, 500));
     } else {
-        next(new AppError("Đã xảy ra lỗi không mong muốn khi tìm kiếm người dùng", 500, ErrorCode.SERVER_ERROR));
+        next(new AppException("Đã xảy ra lỗi không mong muốn khi tìm kiếm người dùng", ErrorCode.SERVER_ERROR, 500));
     }
   }
 };
@@ -114,7 +114,7 @@ export const getSearchHistory = async (req: AuthRequest, res: Response, next: Ne
     const userId = req.user?.user_id;
 
     if (!userId) {
-      return next(new AppError("Chưa đăng nhập", 401, ErrorCode.USER_NOT_AUTHENTICATED));
+      return next(new AppException("Chưa đăng nhập", ErrorCode.USER_NOT_AUTHENTICATED, 401));
     }
 
     const [searchHistory] = await pool.query<RowDataPacket[]>(
@@ -135,7 +135,7 @@ export const getSearchHistory = async (req: AuthRequest, res: Response, next: Ne
     });
   } catch (error) {
     console.error("Lỗi khi lấy lịch sử tìm kiếm:", error);
-    next(new AppError("Đã xảy ra lỗi khi lấy lịch sử tìm kiếm", 500, ErrorCode.SERVER_ERROR));
+    next(new AppException("Đã xảy ra lỗi khi lấy lịch sử tìm kiếm", ErrorCode.SERVER_ERROR, 500));
   }
 };
 
@@ -145,10 +145,10 @@ export const deleteSearchHistoryItem = async (req: AuthRequest, res: Response, n
     const userId = req.user?.user_id;
 
     if (!userId) {
-      return next(new AppError("Chưa đăng nhập", 401, ErrorCode.USER_NOT_AUTHENTICATED));
+      return next(new AppException("Chưa đăng nhập", ErrorCode.USER_NOT_AUTHENTICATED, 401));
     }
     if (!id || !/^\d+$/.test(id)) {
-         return next(new AppError("ID mục lịch sử không hợp lệ", 400, ErrorCode.VALIDATION_ERROR));
+         return next(new AppException("ID mục lịch sử không hợp lệ", ErrorCode.VALIDATION_ERROR, 400));
     }
 
     const [result] = await pool.query(
@@ -160,11 +160,11 @@ export const deleteSearchHistoryItem = async (req: AuthRequest, res: Response, n
     if (typeof result === 'object' && result !== null && 'affectedRows' in result) {
          const affectedRows = (result as { affectedRows: number }).affectedRows;
          if (affectedRows === 0) {
-             return next(new AppError("Không tìm thấy mục lịch sử hoặc không có quyền xóa", 404, ErrorCode.NOT_FOUND));
+             return next(new AppException("Không tìm thấy mục lịch sử hoặc không có quyền xóa", ErrorCode.NOT_FOUND, 404));
          }
     } else {
          console.error("Kết quả không mong đợi từ query DELETE:", result);
-         return next(new AppError("Lỗi không xác định khi xóa lịch sử", 500, ErrorCode.SERVER_ERROR));
+         return next(new AppException("Lỗi không xác định khi xóa lịch sử", ErrorCode.SERVER_ERROR, 500));
     }
 
     res.status(200).json({
@@ -173,10 +173,10 @@ export const deleteSearchHistoryItem = async (req: AuthRequest, res: Response, n
     });
   } catch (error) {
     console.error("Lỗi khi xóa mục lịch sử tìm kiếm:", error);
-     if (error instanceof AppError) {
+     if (error instanceof AppException) {
          next(error);
      } else {
-         next(new AppError("Đã xảy ra lỗi khi xóa mục lịch sử tìm kiếm", 500, ErrorCode.SERVER_ERROR));
+         next(new AppException("Đã xảy ra lỗi khi xóa mục lịch sử tìm kiếm", ErrorCode.SERVER_ERROR, 500));
      }
   }
 };
@@ -186,7 +186,7 @@ export const clearSearchHistory = async (req: AuthRequest, res: Response, next: 
     const userId = req.user?.user_id;
 
     if (!userId) {
-      return next(new AppError("Chưa đăng nhập", 401, ErrorCode.USER_NOT_AUTHENTICATED));
+      return next(new AppException("Chưa đăng nhập", ErrorCode.USER_NOT_AUTHENTICATED, 401));
     }
 
     await pool.query(
@@ -201,6 +201,6 @@ export const clearSearchHistory = async (req: AuthRequest, res: Response, next: 
     });
   } catch (error) {
     console.error("Lỗi khi xóa lịch sử tìm kiếm:", error);
-    next(new AppError("Đã xảy ra lỗi khi xóa lịch sử tìm kiếm", 500, ErrorCode.SERVER_ERROR));
+    next(new AppException("Đã xảy ra lỗi khi xóa lịch sử tìm kiếm", ErrorCode.SERVER_ERROR, 500));
   }
 };

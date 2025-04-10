@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import pool from "../../config/db";
 import { AuthRequest } from "../../middlewares/authMiddleware"; 
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { RowDataPacket, OkPacket, ResultSetHeader } from "mysql2";
 
@@ -54,7 +54,7 @@ export const getFollowing = async (req: AuthRequest, res: Response): Promise<voi
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId) || userId;
@@ -65,7 +65,7 @@ export const getFollowing = async (req: AuthRequest, res: Response): Promise<voi
     );
     
     if (userExists.length === 0) {
-      throw new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND);
+      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
     }
 
     if (targetUserId !== userId) {
@@ -83,11 +83,9 @@ export const getFollowing = async (req: AuthRequest, res: Response): Promise<voi
         );
         
         if (followCheck.length === 0) {
-          throw new AppError(
-            "Không thể xem danh sách theo dõi của tài khoản riêng tư", 
-            403, 
-            ErrorCode.USER_PROFILE_ACCESS_DENIED
-          );
+          throw new AppException(
+            "Không thể xem danh sách theo dõi của tài khoản riêng tư", ErrorCode.USER_PROFILE_ACCESS_DENIED
+          , 403);
         }
       }
     }
@@ -107,10 +105,10 @@ export const getFollowing = async (req: AuthRequest, res: Response): Promise<voi
       data: following
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi lấy danh sách đang theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy danh sách đang theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -119,7 +117,7 @@ export const getFollowers = async (req: AuthRequest, res: Response): Promise<voi
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId) || userId;
@@ -130,7 +128,7 @@ export const getFollowers = async (req: AuthRequest, res: Response): Promise<voi
     );
     
     if (userExists.length === 0) {
-      throw new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND);
+      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
     }
 
     if (targetUserId !== userId) {
@@ -148,11 +146,9 @@ export const getFollowers = async (req: AuthRequest, res: Response): Promise<voi
         );
         
         if (followCheck.length === 0) {
-          throw new AppError(
-            "Không thể xem danh sách người theo dõi của tài khoản riêng tư", 
-            403, 
-            ErrorCode.USER_PROFILE_ACCESS_DENIED
-          );
+          throw new AppException(
+            "Không thể xem danh sách người theo dõi của tài khoản riêng tư", ErrorCode.USER_PROFILE_ACCESS_DENIED
+          , 403);
         }
       }
     }
@@ -172,10 +168,10 @@ export const getFollowers = async (req: AuthRequest, res: Response): Promise<voi
       data: followers
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi lấy danh sách người theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy danh sách người theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -184,17 +180,17 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId);
     
     if (!targetUserId) {
-      throw new AppError("ID người dùng không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (userId === targetUserId) {
-      throw new AppError("Không thể tự theo dõi chính mình", 400, ErrorCode.INVALID_OPERATION);
+      throw new AppException("Không thể tự theo dõi chính mình", ErrorCode.INVALID_OPERATION, 400);
     }
 
     await checkFollowLimits(userId);
@@ -205,7 +201,7 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
     );
     
     if (userExists.length === 0) {
-      throw new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND);
+      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
     }
 
     const [isBlocked] = await pool.query<BlockRow[]>(
@@ -214,7 +210,7 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
     );
     
     if (isBlocked.length > 0) {
-      throw new AppError("Không thể theo dõi người dùng này", 403, ErrorCode.USER_PROFILE_ACCESS_DENIED);
+      throw new AppException("Không thể theo dõi người dùng này", ErrorCode.USER_PROFILE_ACCESS_DENIED, 403);
     }
 
     const [existingFollow] = await pool.query<FollowRow[]>(
@@ -223,7 +219,7 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
     );
     
     if (existingFollow.length > 0) {
-      throw new AppError("Bạn đã theo dõi người dùng này rồi", 400, ErrorCode.DUPLICATE_ENTRY);
+      throw new AppException("Bạn đã theo dõi người dùng này rồi", ErrorCode.DUPLICATE_ENTRY, 400);
     }
     
     const [existingRequest] = await pool.query<FollowRequestRow[]>(
@@ -233,7 +229,7 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
     
     if (existingRequest.length > 0) {
       if (existingRequest[0].status === 'pending') {
-        throw new AppError("Bạn đã gửi yêu cầu theo dõi tới người dùng này", 400, ErrorCode.DUPLICATE_ENTRY);
+        throw new AppException("Bạn đã gửi yêu cầu theo dõi tới người dùng này", ErrorCode.DUPLICATE_ENTRY, 400);
       } else if (existingRequest[0].status === 'rejected') {
         await pool.query(
           "UPDATE follow_requests SET status = 'pending', created_at = NOW() WHERE request_id = ?",
@@ -273,7 +269,7 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
       });
     } 
     else if (isPrivate && !allowFollowRequests) {
-      throw new AppError("Người dùng này không chấp nhận yêu cầu theo dõi", 403, ErrorCode.USER_PROFILE_ACCESS_DENIED);
+      throw new AppException("Người dùng này không chấp nhận yêu cầu theo dõi", ErrorCode.USER_PROFILE_ACCESS_DENIED, 403);
     }
     else {
       await pool.query(
@@ -305,10 +301,10 @@ export const followUser = async (req: AuthRequest, res: Response): Promise<void>
       });
     }
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi theo dõi người dùng", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi theo dõi người dùng", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -317,17 +313,17 @@ export const unfollowUser = async (req: AuthRequest, res: Response): Promise<voi
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId);
     
     if (!targetUserId) {
-      throw new AppError("ID người dùng không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (userId === targetUserId) {
-      throw new AppError("Không thể tự bỏ theo dõi chính mình", 400, ErrorCode.INVALID_OPERATION);
+      throw new AppException("Không thể tự bỏ theo dõi chính mình", ErrorCode.INVALID_OPERATION, 400);
     }
 
     const [unfollowCount] = await pool.query<RateLimitRow[]>(
@@ -336,11 +332,9 @@ export const unfollowUser = async (req: AuthRequest, res: Response): Promise<voi
     );
     
     if (unfollowCount[0].count >= UNFOLLOW_DAILY_LIMIT) {
-      throw new AppError(
-        `Bạn đã đạt giới hạn bỏ theo dõi hôm nay (${UNFOLLOW_DAILY_LIMIT} người/ngày)`, 
-        429, 
-        ErrorCode.RATE_LIMIT_EXCEEDED
-      );
+      throw new AppException(
+        `Bạn đã đạt giới hạn bỏ theo dõi hôm nay (${UNFOLLOW_DAILY_LIMIT} người/ngày)`, ErrorCode.RATE_LIMIT_EXCEEDED
+      , 429);
     }
 
     const [existingFollow] = await pool.query<FollowRow[]>(
@@ -349,7 +343,7 @@ export const unfollowUser = async (req: AuthRequest, res: Response): Promise<voi
     );
     
     if (existingFollow.length === 0) {
-      throw new AppError("Bạn chưa theo dõi người dùng này", 400, ErrorCode.NOT_FOUND);
+      throw new AppException("Bạn chưa theo dõi người dùng này", ErrorCode.NOT_FOUND, 400);
     }
 
     await pool.query(
@@ -367,10 +361,10 @@ export const unfollowUser = async (req: AuthRequest, res: Response): Promise<voi
       message: "Đã bỏ theo dõi người dùng thành công"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi bỏ theo dõi người dùng", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi bỏ theo dõi người dùng", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -379,13 +373,13 @@ export const getFollowStatus = async (req: AuthRequest, res: Response): Promise<
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId);
     
     if (!targetUserId) {
-      throw new AppError("ID người dùng không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
 
     const [userExists] = await pool.query<UserRow[]>(
@@ -394,7 +388,7 @@ export const getFollowStatus = async (req: AuthRequest, res: Response): Promise<
     );
     
     if (userExists.length === 0) {
-      throw new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND);
+      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
     }
 
     const [isFollowing] = await pool.query<FollowRow[]>(
@@ -421,10 +415,10 @@ export const getFollowStatus = async (req: AuthRequest, res: Response): Promise<
       }
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi kiểm tra trạng thái theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi kiểm tra trạng thái theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -433,7 +427,7 @@ export const getSuggestedUsers = async (req: AuthRequest, res: Response): Promis
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const limit = parseInt(req.query.limit as string) || 10;
@@ -457,7 +451,10 @@ export const getSuggestedUsers = async (req: AuthRequest, res: Response): Promis
       data: suggestedUsers
     });
   } catch (error) {
-    throw new AppError("Lỗi khi lấy đề xuất người dùng", 500, ErrorCode.SERVER_ERROR);
+    if (error instanceof AppException) {
+      throw error;
+    }
+    throw new AppException("Lỗi khi lấy đề xuất người dùng", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -466,7 +463,7 @@ export const getFollowCounts = async (req: AuthRequest, res: Response): Promise<
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId) || userId;
@@ -477,7 +474,7 @@ export const getFollowCounts = async (req: AuthRequest, res: Response): Promise<
     );
     
     if (userExists.length === 0) {
-      throw new AppError("Người dùng không tồn tại", 404, ErrorCode.USER_NOT_FOUND);
+      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
     }
 
     if (targetUserId !== userId) {
@@ -495,11 +492,9 @@ export const getFollowCounts = async (req: AuthRequest, res: Response): Promise<
         );
         
         if (followCheck.length === 0) {
-          throw new AppError(
-            "Không thể xem thông tin của tài khoản riêng tư", 
-            403, 
-            ErrorCode.USER_PROFILE_ACCESS_DENIED
-          );
+          throw new AppException(
+            "Không thể xem thông tin của tài khoản riêng tư", ErrorCode.USER_PROFILE_ACCESS_DENIED
+          , 403);
         }
       }
     }
@@ -522,10 +517,10 @@ export const getFollowCounts = async (req: AuthRequest, res: Response): Promise<
       }
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi lấy số lượng theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy số lượng theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -534,7 +529,7 @@ export const getFollowRequests = async (req: AuthRequest, res: Response): Promis
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const page = parseInt(req.query.page as string) || 1;
@@ -568,7 +563,7 @@ export const getFollowRequests = async (req: AuthRequest, res: Response): Promis
       }
     });
   } catch (error) {
-    throw new AppError("Lỗi khi lấy danh sách yêu cầu theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi lấy danh sách yêu cầu theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -577,13 +572,13 @@ export const acceptFollowRequest = async (req: AuthRequest, res: Response): Prom
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const requestId = parseInt(req.params.requestId);
     
     if (!requestId) {
-      throw new AppError("ID yêu cầu không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID yêu cầu không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     interface RequestDataRow extends RowDataPacket {
@@ -596,7 +591,7 @@ export const acceptFollowRequest = async (req: AuthRequest, res: Response): Prom
     );
     
     if (requestData.length === 0) {
-      throw new AppError("Yêu cầu theo dõi không tồn tại hoặc đã được xử lý", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Yêu cầu theo dõi không tồn tại hoặc đã được xử lý", ErrorCode.NOT_FOUND, 404);
     }
     
     const requesterId = requestData[0].requester_id;
@@ -643,10 +638,10 @@ export const acceptFollowRequest = async (req: AuthRequest, res: Response): Prom
       message: "Đã chấp nhận yêu cầu theo dõi"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi chấp nhận yêu cầu theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi chấp nhận yêu cầu theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -655,13 +650,13 @@ export const rejectFollowRequest = async (req: AuthRequest, res: Response): Prom
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const requestId = parseInt(req.params.requestId);
     
     if (!requestId) {
-      throw new AppError("ID yêu cầu không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID yêu cầu không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [request] = await pool.query<FollowRequestRow[]>(
@@ -670,7 +665,7 @@ export const rejectFollowRequest = async (req: AuthRequest, res: Response): Prom
     );
     
     if (request.length === 0) {
-      throw new AppError("Yêu cầu theo dõi không tồn tại hoặc đã được xử lý", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Yêu cầu theo dõi không tồn tại hoặc đã được xử lý", ErrorCode.NOT_FOUND, 404);
     }
 
     await pool.query(
@@ -683,10 +678,10 @@ export const rejectFollowRequest = async (req: AuthRequest, res: Response): Prom
       message: "Đã từ chối yêu cầu theo dõi"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi từ chối yêu cầu theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi từ chối yêu cầu theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -695,13 +690,13 @@ export const cancelFollowRequest = async (req: AuthRequest, res: Response): Prom
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const targetUserId = parseInt(req.params.userId);
     
     if (!targetUserId) {
-      throw new AppError("ID người dùng không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [request] = await pool.query<FollowRequestRow[]>(
@@ -710,7 +705,7 @@ export const cancelFollowRequest = async (req: AuthRequest, res: Response): Prom
     );
     
     if (request.length === 0) {
-      throw new AppError("Bạn chưa gửi yêu cầu theo dõi tới người dùng này", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Bạn chưa gửi yêu cầu theo dõi tới người dùng này", ErrorCode.NOT_FOUND, 404);
     }
 
     await pool.query(
@@ -728,10 +723,10 @@ export const cancelFollowRequest = async (req: AuthRequest, res: Response): Prom
       message: "Đã hủy yêu cầu theo dõi"
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi hủy yêu cầu theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi hủy yêu cầu theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -740,17 +735,17 @@ export const bulkProcessFollowRequests = async (req: AuthRequest, res: Response)
     const userId = req.user?.user_id;
     
     if (!userId) {
-      throw new AppError("Không xác định được người dùng", 401, ErrorCode.USER_NOT_AUTHENTICATED);
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
     }
     
     const { requestIds, action } = req.body;
     
     if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
-      throw new AppError("Danh sách ID yêu cầu không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Danh sách ID yêu cầu không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     if (action !== 'accept' && action !== 'reject') {
-      throw new AppError("Hành động không hợp lệ", 400, ErrorCode.VALIDATION_ERROR);
+      throw new AppException("Hành động không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     interface BulkRequestRow extends RowDataPacket {
@@ -767,7 +762,7 @@ export const bulkProcessFollowRequests = async (req: AuthRequest, res: Response)
     );
     
     if (validRequests.length === 0) {
-      throw new AppError("Không tìm thấy yêu cầu theo dõi hợp lệ", 404, ErrorCode.NOT_FOUND);
+      throw new AppException("Không tìm thấy yêu cầu theo dõi hợp lệ", ErrorCode.NOT_FOUND, 404);
     }
     
     const validRequestIds = validRequests.map(req => req.request_id);
@@ -830,10 +825,10 @@ export const bulkProcessFollowRequests = async (req: AuthRequest, res: Response)
       total: requestIds.length
     });
   } catch (error) {
-    if (error instanceof AppError) {
+    if (error instanceof AppException) {
       throw error;
     }
-    throw new AppError("Lỗi khi xử lý hàng loạt yêu cầu theo dõi", 500, ErrorCode.SERVER_ERROR);
+    throw new AppException("Lỗi khi xử lý hàng loạt yêu cầu theo dõi", ErrorCode.SERVER_ERROR, 500);
   }
 };
 
@@ -844,11 +839,9 @@ async function checkFollowLimits(userId: number): Promise<void> {
   );
   
   if (followingCount[0].count >= FOLLOW_LIMIT) {
-    throw new AppError(
-      `Bạn đã đạt giới hạn số lượng người có thể theo dõi (${FOLLOW_LIMIT})`, 
-      429, 
-      ErrorCode.RATE_LIMIT_EXCEEDED
-    );
+    throw new AppException(
+      `Bạn đã đạt giới hạn số lượng người có thể theo dõi (${FOLLOW_LIMIT})`, ErrorCode.RATE_LIMIT_EXCEEDED
+    , 429);
   }
   
   const [dailyFollowCount] = await pool.query<RateLimitRow[]>(
@@ -857,11 +850,9 @@ async function checkFollowLimits(userId: number): Promise<void> {
   );
   
   if (dailyFollowCount[0].count >= FOLLOW_DAILY_LIMIT) {
-    throw new AppError(
-      `Bạn đã đạt giới hạn theo dõi hàng ngày (${FOLLOW_DAILY_LIMIT} người/ngày)`, 
-      429, 
-      ErrorCode.RATE_LIMIT_EXCEEDED
-    );
+    throw new AppException(
+      `Bạn đã đạt giới hạn theo dõi hàng ngày (${FOLLOW_DAILY_LIMIT} người/ngày)`, ErrorCode.RATE_LIMIT_EXCEEDED
+    , 429);
   }
   
   const [hourlyFollowCount] = await pool.query<RateLimitRow[]>(
@@ -870,11 +861,9 @@ async function checkFollowLimits(userId: number): Promise<void> {
   );
   
   if (hourlyFollowCount[0].count >= FOLLOW_HOURLY_LIMIT) {
-    throw new AppError(
-      `Bạn đã đạt giới hạn theo dõi hàng giờ (${FOLLOW_HOURLY_LIMIT} người/giờ)`, 
-      429, 
-      ErrorCode.RATE_LIMIT_EXCEEDED
-    );
+    throw new AppException(
+      `Bạn đã đạt giới hạn theo dõi hàng giờ (${FOLLOW_HOURLY_LIMIT} người/giờ)`, ErrorCode.RATE_LIMIT_EXCEEDED
+    , 429);
   }
 }
 

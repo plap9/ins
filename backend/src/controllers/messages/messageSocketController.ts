@@ -11,12 +11,6 @@ export const initializeSocketService = (instance: SocketService) => {
 
 export const setupMessageSocketHandlers = (socket: Socket, userId: number): void => {
   socket.on('message:typing', ({ conversation_id, is_typing }: { conversation_id: number, is_typing: boolean }) => {
-    const roomId = `conversation_${conversation_id}`;
-    socket.to(roomId).emit('message:typing', {
-      conversation_id,
-      user_id: userId,
-      is_typing
-    });
   });
 
   socket.on('conversation:join', async ({ conversation_id }: { conversation_id: number }) => {
@@ -76,6 +70,11 @@ export const setupMessageSocketHandlers = (socket: Socket, userId: number): void
           });
         }
       }
+      
+      socket.emit('conversation:joined', {
+        conversation_id,
+        room_id: roomId
+      });
     } catch (error) {
       console.error('Error in conversation:join handler:', error);
       socket.emit('error', {
@@ -93,6 +92,23 @@ export const setupMessageSocketHandlers = (socket: Socket, userId: number): void
       conversation_id,
       user_id: userId
     });
+  });
+
+  socket.on('connection:status', ({ status }: { status: 'stable' | 'unstable' | 'reconnecting' }) => {
+    const userRooms = Array.from(socket.rooms).filter(room => room !== socket.id);
+    if (status === 'reconnecting') {
+      console.log(`[${new Date().toISOString()}] Người dùng ${userId} đang cố gắng kết nối lại`);
+    } else if (status === 'stable') {
+      console.log(`[${new Date().toISOString()}] Kết nối của người dùng ${userId} đã ổn định`);
+      
+      userRooms.forEach(roomId => {
+        socket.to(roomId).emit('user:online', {
+          user_id: userId,
+          online: true,
+          conversation_id: parseInt(roomId.replace('conversation_', ''))
+        });
+      });
+    }
   });
 
   socket.on('message:read', async ({ conversation_id, message_ids }: { conversation_id: number, message_ids: number[] }) => {

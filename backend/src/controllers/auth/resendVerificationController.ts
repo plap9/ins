@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import pool from "../../config/db";
-import { AppError } from "../../middlewares/errorHandler";
+import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { emailQueue, redisClient, smsQueue } from "../../config/redis";
 
@@ -10,20 +10,20 @@ export const resendVerification = async (req: Request, res: Response, next: Next
         const { contact } = req.body;
 
         if (!contact) {
-            throw new AppError("Vui lòng nhập email hoặc số điện thoại", 400, ErrorCode.MISSING_CREDENTIALS, "contact");
+            throw new AppException("Vui lòng nhập email hoặc số điện thoại", ErrorCode.MISSING_CREDENTIALS, 400, { field: "contact" });
         }
 
         const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
         const isPhone = /^\+?[84]\d{1,14}$/.test(contact);
 
         if (!isEmail && !isPhone) {
-            throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400, ErrorCode.INVALID_FORMAT, "contact");
+            throw new AppException("Định dạng email hoặc số điện thoại không hợp lệ", ErrorCode.INVALID_FORMAT, 400, { field: "contact" });
         }
 
         const ipAddress = req.ip;
         const resendCount = await redisClient.get(`resend_verification_count:${ipAddress}`);
         if (resendCount && parseInt(resendCount) >= 5) {
-            throw new AppError("Quá nhiều lần yêu cầu, vui lòng thử lại sau", 429, ErrorCode.TOO_MANY_ATTEMPTS);
+            throw new AppException("Quá nhiều lần yêu cầu, vui lòng thử lại sau", ErrorCode.TOO_MANY_ATTEMPTS, 429);
         }
 
         const [users]: any = await connection.query(
@@ -32,7 +32,7 @@ export const resendVerification = async (req: Request, res: Response, next: Next
         );
 
         if (users.length === 0) {
-            throw new AppError("Tài khoản không tồn tại hoặc đã được xác thực", 400, ErrorCode.ACCOUNT_NOT_FOUND, "contact");
+            throw new AppException("Tài khoản không tồn tại hoặc đã được xác thực", ErrorCode.ACCOUNT_NOT_FOUND, 400, { field: "contact" });
         }
 
         const user = users[0];

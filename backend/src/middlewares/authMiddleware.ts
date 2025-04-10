@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { AppError } from "../middlewares/errorHandler";
+import { AppException } from "../middlewares/errorHandler";
 import { ErrorCode } from "../types/errorCode";
+import { logError } from "../utils/errorUtils";
+
 export interface AuthRequest extends Request {
     user?: { user_id: number };
 }
@@ -10,10 +12,20 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     const token = req.header("Authorization")?.split(" ")[1];
 
     if (!token) {
-        return next(new AppError("Không có token, quyền truy cập bị từ chối", 401, ErrorCode.INVALID_TOKEN));
+        return next(new AppException(
+            "Không có token, quyền truy cập bị từ chối", 
+            ErrorCode.MISSING_TOKEN, 
+            401
+        ));
     }
+    
     if (!process.env.JWT_SECRET) {
-        return next(new AppError("Lỗi máy chủ: JWT_SECRET không được định nghĩa", 500));
+        logError('Auth', new Error('JWT_SECRET không được định nghĩa'), 'Lỗi cấu hình máy chủ');
+        return next(new AppException(
+            "Lỗi máy chủ: JWT_SECRET không được định nghĩa", 
+            ErrorCode.SERVER_ERROR, 
+            500
+        ));
     }
 
     try {
@@ -21,9 +33,10 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
         req.user = { user_id: decoded.userId };
         next();
     } catch (error: any) {
-
         let errCode = ErrorCode.INVALID_TOKEN;
         let message = 'Token không hợp lệ hoặc đã hết hạn';
+        let status = 401;
+        
         if (error.name === 'TokenExpiredError') {
             errCode = ErrorCode.TOKEN_EXPIRED;
             message = 'Token đã hết hạn';
@@ -31,6 +44,8 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
             errCode = ErrorCode.INVALID_TOKEN;
             message = 'Token không hợp lệ';
         }
-        return next(new AppError("Token không hợp lệ hoặc đã hết hạn", 401, ErrorCode.TOKEN_EXPIRED));
+        
+        logError('Auth', error, `Lỗi xác thực token: ${error.message}`);
+        return next(new AppException(message, errCode, status));
     }
 };

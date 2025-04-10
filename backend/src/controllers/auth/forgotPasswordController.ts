@@ -1,161 +1,176 @@
-import { NextFunction, Request, Response } from "express";
-import pool from "../../config/db";
-import { AppError } from "../../middlewares/errorHandler";
-import { ErrorCode } from "../../types/errorCode"
-import { emailQueue, redisClient, smsQueue } from "../../config/redis";
-import validator from "validator"
-export const forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const connection = await pool.getConnection();
-    try {
-        const { contact } = req.body;
-        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-        const isPhone = /^\+84[3|5|7|8|9]\d{8}$/.test(contact);
+import { Request, Response } from "express";
+import crypto from "crypto";
+import connection from "../../config/db";
+import { AppException } from "../../middlewares/errorHandler";
+import { ErrorCode } from "../../types/errorCode";
+import { createController } from "../../utils/errorUtils";
+import bcrypt from "bcryptjs";
 
-        if (!contact) {
-            throw new AppError("Vui lòng nhập email hoặc số điện thoại", 400, ErrorCode.MISSING_CREDENTIALS, "contact");
-        }
+// Xử lý yêu cầu quên mật khẩu
+const forgotPasswordHandler = async (req: Request, res: Response): Promise<void> => {
+  const { contact } = req.body; // Email hoặc số điện thoại
 
+  if (!contact) {
+    throw new AppException(
+      "Vui lòng cung cấp email hoặc số điện thoại", 
+      ErrorCode.MISSING_CREDENTIALS, 
+      400
+    );
+  }
 
-        if (!isEmail && !isPhone) {
-            throw new AppError("Định dạng email hoặc số điện thoại không hợp lệ", 400, ErrorCode.INVALID_FORMAT, "contact");
-        }
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+  const isPhone = /^\+?[0-9]{10,15}$/.test(contact);
 
-        const ipAddress = req.ip;
-        const resetCount = await redisClient.get(`reset_password_count:${ipAddress}`);
-        if (resetCount && parseInt(resetCount) >= 5) {
-            throw new AppError("Quá nhiều lần yêu cầu, vui lòng thử lại sau", 429, ErrorCode.TOO_MANY_ATTEMPTS);
-        }
+  if (!isEmail && !isPhone) {
+    throw new AppException(
+      "Định dạng email hoặc số điện thoại không hợp lệ", 
+      ErrorCode.INVALID_FORMAT, 
+      400, 
+      { field: "contact" }
+    );
+  }
 
-        const [users]: any = await connection.query(
-            "SELECT * FROM users WHERE email = ? OR phone_number = ?",
-            [contact, contact]
-        );
+  // Tạo mã reset ngẫu nhiên
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString(); // Mã 6 số
+  const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
 
-        if (users.length === 0) {
-            throw new AppError("Tài khoản không tồn tại", 400, ErrorCode.ACCOUNT_NOT_FOUND, "contact");
-        }
+  const [users] = await connection.query(
+    "SELECT id FROM users WHERE email = ? OR phone_number = ?",
+    [isEmail ? contact : null, isPhone ? contact : null]
+  );
 
-        const user = users[0];
-        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+  if ((users as any[]).length === 0) {
+    throw new AppException(
+      "Tài khoản không tồn tại", 
+      ErrorCode.ACCOUNT_NOT_FOUND, 
+      404
+    );
+  }
 
-        await connection.beginTransaction();
+  const userId = (users as any[])[0].id;
 
-        if (isEmail) {
-            await connection.query(
-                `UPDATE users SET 
-                 reset_password_code = ?, 
-                 reset_password_expires = ? 
-                 WHERE user_id = ?`,
-                [resetCode, resetExpires, user.user_id]
-            );
+  // Bắt đầu giao dịch
+  await connection.beginTransaction();
 
-            await connection.commit();
+  try {
+    // Lưu thông tin reset password vào database
+    await connection.execute(
+      `UPDATE users SET 
+       reset_token = ?, 
+       reset_code = ?, 
+       reset_expires = ? 
+       WHERE id = ?`,
+      [resetToken, resetCode, resetExpires, userId]
+    );
 
-            await emailQueue.add('send-reset-password-email', {
-                email: contact,
-                code: resetCode
-            }, {
-                attempts: 3,
-                backoff: {
-                    type: 'exponential',
-                    delay: 2000
-                }
-            });
-
-            await redisClient.incr(`reset_password_count:${ipAddress}`);
-            await redisClient.expire(`reset_password_count:${ipAddress}`, 60 * 60);
-
-            res.json({ 
-                message: "Vui lòng kiểm tra email để lấy mã đặt lại mật khẩu",
-                resetType: "email",
-                contact: contact
-            });
-        } else {
-            await connection.query(
-                `UPDATE users SET 
-                 reset_password_code = ?, 
-                 reset_password_expires = ? 
-                 WHERE user_id = ?`,
-                [resetCode, resetExpires, user.user_id]
-            );
-
-            await connection.commit();
-            
-            await smsQueue.add('send-reset-password-sms', {
-                phone: contact,
-                code: resetCode
-            }, {
-                attempts: 3,
-                backoff: {
-                    type: 'exponential',
-                    delay: 2000
-                }
-            });
-
-            await redisClient.incr(`reset_password_count:${ipAddress}`);
-            await redisClient.expire(`reset_password_count:${ipAddress}`, 60 * 60);
-
-            res.json({ 
-                message: "Vui lòng kiểm tra tin nhắn SMS để lấy mã đặt lại mật khẩu",
-                resetType: "phone",
-                contact: contact
-            });
-        }
-    } catch (error) {
-        await connection.rollback();
-        next(error);
-    } finally {
-        connection.release();
+    // Gửi mã xác nhận qua email hoặc SMS
+    if (isEmail) {
+      // TODO: Integrate with actual email service
+      // sendEmail(contact, resetCode);
+      console.log(`[DEV] Gửi mã reset ${resetCode} đến email ${contact}`);
+    } else {
+      // TODO: Integrate with actual SMS service
+      // sendSMS(contact, resetCode);
+      console.log(`[DEV] Gửi mã reset ${resetCode} đến số điện thoại ${contact}`);
     }
+
+    await connection.commit();
+
+    res.json({
+      status: "success",
+      message: `Mã xác nhận đã được gửi tới ${isEmail ? 'email' : 'số điện thoại'} của bạn`,
+      data: {
+        tokenType: "reset",
+        resetToken: resetToken,
+        contact: contact,
+        method: isEmail ? "email" : "sms"
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  }
 };
 
-export const resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const connection = await pool.getConnection();
-    try {
-        const { contact, code, newPassword } = req.body;
+// Xác nhận mã reset và cập nhật mật khẩu mới
+const resetPasswordHandler = async (req: Request, res: Response): Promise<void> => {
+  const { resetToken, code, newPassword } = req.body;
 
-        if (!contact || !code || !newPassword) {
-            throw new AppError("Vui lòng nhập đầy đủ thông tin", 400, ErrorCode.MISSING_CREDENTIALS);
-        }
+  if (!resetToken || !code || !newPassword) {
+    throw new AppException(
+      "Vui lòng cung cấp đầy đủ thông tin", 
+      ErrorCode.MISSING_CREDENTIALS, 
+      400
+    );
+  }
 
-        await connection.beginTransaction();
+  // Kiểm tra độ dài và độ phức tạp của mật khẩu
+  if (newPassword.length < 8) {
+    throw new AppException(
+      "Mật khẩu phải có ít nhất 8 ký tự", 
+      ErrorCode.INVALID_FORMAT, 
+      400, 
+      { field: "newPassword" }
+    );
+  }
 
-        const [users]: any = await connection.query(
-            "SELECT * FROM users WHERE (email = ? OR phone_number = ?) AND reset_password_code = ? AND reset_password_expires > NOW() FOR UPDATE",
-            [contact, contact, code]
-        );
-        console.log('Database response:', users[0]);
+  // Tìm người dùng với mã reset
+  const [users] = await connection.query(
+    `SELECT id, reset_expires, reset_code FROM users 
+     WHERE reset_token = ? AND reset_expires > NOW()`,
+    [resetToken]
+  );
 
-        if (users.length === 0) {
-            throw new AppError("Mã xác thực không hợp lệ hoặc đã hết hạn", 400, ErrorCode.INVALID_VERIFICATION);
-        }
+  if ((users as any[]).length === 0) {
+    throw new AppException(
+      "Mã xác nhận không hợp lệ hoặc đã hết hạn", 
+      ErrorCode.INVALID_VERIFICATION, 
+      400
+    );
+  }
 
-        const user = users[0];
-        const bcrypt = require('bcryptjs');
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const user = (users as any[])[0];
 
-        await connection.query(
-            `UPDATE users SET 
-             password_hash = ?,
-             reset_password_code = NULL,
-             reset_password_expires = NULL
-             WHERE user_id = ?`,
-            [hashedPassword, user.user_id]
-        );
+  // Kiểm tra mã xác nhận
+  if (user.reset_code !== code) {
+    throw new AppException(
+      "Mã xác nhận không chính xác", 
+      ErrorCode.INVALID_VERIFICATION, 
+      400, 
+      { field: "code" }
+    );
+  }
 
-        await connection.query(
-            "DELETE FROM refresh_tokens WHERE user_id = ?",
-            [user.user_id]
-        );
+  // Băm mật khẩu mới
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await connection.commit();
+  // Bắt đầu giao dịch
+  await connection.beginTransaction();
 
-        res.json({ message: "Đặt lại mật khẩu thành công" });
-    } catch (error) {
-        await connection.rollback();
-        next(error);
-    } finally {
-        connection.release();
-    }
+  try {
+    // Cập nhật mật khẩu và xóa thông tin reset
+    await connection.execute(
+      `UPDATE users SET 
+       password = ?, 
+       reset_token = NULL, 
+       reset_code = NULL, 
+       reset_expires = NULL 
+       WHERE id = ?`,
+      [hashedPassword, user.id]
+    );
+
+    await connection.commit();
+
+    res.json({
+      status: "success",
+      message: "Mật khẩu đã được cập nhật thành công"
+    });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  }
 };
+
+export const forgotPassword = createController(forgotPasswordHandler, 'Auth:ForgotPassword');
+export const resetPassword = createController(resetPasswordHandler, 'Auth:ResetPassword');

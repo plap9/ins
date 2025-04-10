@@ -1,13 +1,44 @@
-import rateLimit from "express-rate-limit";
-import { AppError } from "../middlewares/errorHandler";
+import { Request, Response, NextFunction } from "express";
 import { ErrorCode } from "../types/errorCode";
+import { AppException } from "./errorHandler";
 
-export const loginRateLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 5, 
-    handler: (req, res, next) => {
-        next(new AppError("Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau 15 phút.", 429, ErrorCode.TOO_MANY_ATTEMPTS));
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+
+export const rateLimit = (windowMs: number = 60 * 1000, maxRequests: number = 100) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${ip}:${req.path}`;
+    const now = Date.now();
+    
+    const requestData = requestCounts.get(key) || { count: 0, resetTime: now + windowMs };
+    
+    // Nếu đã hết thời gian, đặt lại bộ đếm
+    if (now > requestData.resetTime) {
+      requestData.count = 1;
+      requestData.resetTime = now + windowMs;
+    } else {
+      requestData.count += 1;
+    }
+    
+    requestCounts.set(key, requestData);
+    
+    // Thêm header thông tin tỷ lệ giới hạn
+    res.setHeader('X-RateLimit-Limit', maxRequests);
+    res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - requestData.count));
+    res.setHeader('X-RateLimit-Reset', requestData.resetTime);
+    
+    if (requestData.count > maxRequests) {
+      throw new AppException(
+        'Đã vượt quá giới hạn yêu cầu. Vui lòng thử lại sau.',
+        ErrorCode.RATE_LIMIT_EXCEEDED,
+        429,
+        { retryAfter: Math.ceil((requestData.resetTime - now) / 1000) }
+      );
+    }
+    
+    next();
+  };
+};
+
+// Giới hạn tỷ lệ đăng nhập: 5 lần trong 15 phút
+export const loginRateLimiter = rateLimit(15 * 60 * 1000, 5);

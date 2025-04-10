@@ -2,7 +2,7 @@ import { NextFunction, Response } from 'express';
 import pool from '../../../config/db';
 import { AuthRequest } from '../../../middlewares/authMiddleware';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
-import { AppError } from '../../../middlewares/errorHandler';
+import { AppException } from "../../../middlewares/errorHandler";
 import { ErrorCode } from '../../../types/errorCode';
 import { Pool, PoolConnection} from 'mysql2/promise';
 import { getCachedCommentLikes, getCachedComments, invalidateCommentCache, invalidateCommentsCache, cacheComments, invalidateCommentLikesCache, cacheCommentLikes, invalidatePostCache} from '../../../utils/cacheUtils';
@@ -79,14 +79,14 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
         const userId = req.user?.user_id;
         const { content, parent_id } = req.body;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400 , ErrorCode.VALIDATION_ERROR));
-        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
+        if (!userId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(postId)) return next(new AppException('ID bài viết không hợp lệ', ErrorCode.VALIDATION_ERROR, 400));
+        if (!content || content.trim() === '') return next(new AppException('Nội dung bình luận không được để trống', ErrorCode.VALIDATION_ERROR, 400, { field: "content" }));
 
         const [[post]] = await connection.query<RowDataPacket[]>('SELECT post_id FROM posts WHERE post_id = ?', [postId]);
         if (!post) {
             await connection.rollback();
-            return next(new AppError('Bài viết không tồn tại', 404, ErrorCode.NOT_FOUND));
+            return next(new AppException('Bài viết không tồn tại', ErrorCode.NOT_FOUND, 404));
         }
 
         let parentCommentInfo: RowDataPacket | null = null;
@@ -97,7 +97,7 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
             );
             if (!parentCommentInfo) {
                 await connection.rollback();
-                return next(new AppError('Bình luận cha không tồn tại', 404, ErrorCode.VALIDATION_ERROR, "parent_id"));
+                return next(new AppException('Bình luận cha không tồn tại', ErrorCode.VALIDATION_ERROR, 404, { field: "parent_id" }));
             }
         }
 
@@ -109,7 +109,7 @@ export const createComment = async (req: AuthRequest, res: Response, next: NextF
 
         if (result.affectedRows === 0) {
             await connection.rollback();
-            return next(new AppError('Lỗi khi thêm bình luận', 500, ErrorCode.SERVER_ERROR));
+            return next(new AppException('Lỗi khi thêm bình luận', ErrorCode.SERVER_ERROR, 500));
         }
 
         await connection.query('UPDATE posts SET comment_count = comment_count + 1 WHERE post_id = ?', [postId]);
@@ -162,8 +162,8 @@ export const deleteComment = async (req: AuthRequest, res: Response, next: NextF
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
+        if (!userId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(commentId)) return next(new AppException('ID bình luận không hợp lệ', ErrorCode.VALIDATION_ERROR, 400, { field: "comment_id" }));
 
         const [[comment]] = await connection.query<RowDataPacket[]>(
            `SELECT c.comment_id, c.user_id, c.post_id, c.parent_id, p.parent_id as parent_parent_id
@@ -175,12 +175,12 @@ export const deleteComment = async (req: AuthRequest, res: Response, next: NextF
 
         if (!comment) {
             await connection.rollback();
-            return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
+            return next(new AppException('Bình luận không tồn tại', ErrorCode.NOT_FOUND, 404, { field: "comment_id" }));
         }
 
         if (comment.user_id !== userId) {
             await connection.rollback();
-            return next(new AppError('Bạn không có quyền xóa bình luận này', 403, ErrorCode.INVALID_PERMISSIONS));
+            return next(new AppException('Bạn không có quyền xóa bình luận này', ErrorCode.INVALID_PERMISSIONS, 403));
         }
 
         const totalDescendants = await countAllDescendants(connection, commentId);
@@ -234,18 +234,18 @@ export const likeComment = async (req: AuthRequest, res: Response, next: NextFun
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(commentId)) throw new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) throw new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401);
+        if (isNaN(commentId)) throw new AppException('ID bình luận không hợp lệ', ErrorCode.VALIDATION_ERROR, 400);
 
         const [[comment]] = await connection.query<RowDataPacket[]>(
             'SELECT comment_id, like_count, post_id FROM comments WHERE comment_id = ? FOR UPDATE', [commentId]
         );
-        if (!comment) throw new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND);
+        if (!comment) throw new AppException('Bình luận không tồn tại', ErrorCode.NOT_FOUND, 404);
 
         const [[existingLike]] = await connection.query<RowDataPacket[]>(
             'SELECT like_id FROM likes WHERE comment_id = ? AND user_id = ?', [commentId, userId]
         );
-        if (existingLike) throw new AppError('Đã thích bình luận này', 400, ErrorCode.VALIDATION_ERROR);
+        if (existingLike) throw new AppException('Đã thích bình luận này', ErrorCode.VALIDATION_ERROR, 400);
 
         await connection.query("INSERT INTO likes (comment_id, user_id) VALUES (?, ?)", [commentId, userId]);
         await connection.query("UPDATE comments SET like_count = like_count + 1 WHERE comment_id = ?", [commentId]);
@@ -277,13 +277,13 @@ export const unlikeComment = async (req: AuthRequest, res: Response, next: NextF
         const commentId = parseInt(req.params.id);
         const userId = req.user?.user_id;
 
-        if (!userId) throw new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED);
-        if (isNaN(commentId)) throw new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR);
+        if (!userId) throw new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401);
+        if (isNaN(commentId)) throw new AppException('ID bình luận không hợp lệ', ErrorCode.VALIDATION_ERROR, 400);
 
         const [[comment]] = await connection.query<RowDataPacket[]>(
              'SELECT comment_id, like_count, post_id FROM comments WHERE comment_id = ? FOR UPDATE', [commentId]
         );
-        if (!comment) throw new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND);
+        if (!comment) throw new AppException('Bình luận không tồn tại', ErrorCode.NOT_FOUND, 404);
 
         const [deleteResult] = await connection.query<ResultSetHeader>(
              "DELETE FROM likes WHERE comment_id = ? AND user_id = ?", [commentId, userId]
@@ -332,8 +332,8 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
         const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(postId)) return next(new AppError('ID bài viết không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "post_id"));
+        if (!userId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(postId)) return next(new AppException('ID bài viết không hợp lệ', ErrorCode.VALIDATION_ERROR, 400));
 
         const cacheKey = `post:${postId}:page:${page}:limit:${limit}:parent:null:user:${userId}`;
         const cachedData = await getCachedComments(cacheKey);
@@ -343,7 +343,7 @@ export const getComments = async (req: AuthRequest, res: Response, next: NextFun
         }
 
         const [[post]] = await pool.query<RowDataPacket[]>('SELECT post_id FROM posts WHERE post_id = ?', [postId]);
-        if (!post) return next(new AppError('Bài viết không tồn tại', 404, ErrorCode.NOT_FOUND, "post_id"));
+        if (!post) return next(new AppException('Bài viết không tồn tại', ErrorCode.NOT_FOUND, 404));
 
         const offset = (page - 1) * limit;
 
@@ -380,8 +380,8 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         const offset = (page - 1) * limit;
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError("Người dùng chưa xác thực", 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(commentId)) return next(new AppError("ID bình luận không hợp lệ", 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
+        if (!userId) return next(new AppException("Người dùng chưa xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(commentId)) return next(new AppException("ID bình luận không hợp lệ", ErrorCode.VALIDATION_ERROR, 400, { field: "comment_id" }));
 
         const cacheKey = `comment:${commentId}:replies:page:${page}:limit:${limit}:user:${userId}`;
         const cachedData = await getCachedComments(cacheKey);
@@ -393,7 +393,7 @@ export const getReplies = async (req: AuthRequest, res: Response, next: NextFunc
         const [[commentInfo]] = await pool.query<RowDataPacket[]>(
             "SELECT comment_id, reply_count FROM comments WHERE comment_id = ?", [commentId]
         );
-        if (!commentInfo) return next(new AppError("Bình luận không tồn tại", 404, ErrorCode.NOT_FOUND, "comment_id"));
+        if (!commentInfo) return next(new AppException("Bình luận không tồn tại", ErrorCode.NOT_FOUND, 404, { field: "comment_id" }));
 
         const repliesQuery = `
             SELECT ${commonCommentSelectFields}
@@ -425,20 +425,20 @@ export const updateComment = async (req: AuthRequest, res: Response, next: NextF
         const userId = req.user?.user_id;
         const { content } = req.body;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
-        if (!content || content.trim() === '') return next(new AppError('Nội dung bình luận không được để trống', 400, ErrorCode.VALIDATION_ERROR, "content"));
+        if (!userId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(commentId)) return next(new AppException('ID bình luận không hợp lệ', ErrorCode.VALIDATION_ERROR, 400, { field: "comment_id" }));
+        if (!content || content.trim() === '') return next(new AppException('Nội dung bình luận không được để trống', ErrorCode.VALIDATION_ERROR, 400, { field: "content" }));
 
         const [[comment]] = await pool.query<RowDataPacket[]>(
             'SELECT comment_id, user_id, post_id FROM comments WHERE comment_id = ?', [commentId]
         );
-        if (!comment) return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
-        if (comment.user_id !== userId) return next(new AppError('Bạn không có quyền cập nhật bình luận này', 403, ErrorCode.INVALID_PERMISSIONS));
+        if (!comment) return next(new AppException('Bình luận không tồn tại', ErrorCode.NOT_FOUND, 404, { field: "comment_id" }));
+        if (comment.user_id !== userId) return next(new AppException('Bạn không có quyền cập nhật bình luận này', ErrorCode.INVALID_PERMISSIONS, 403));
 
         const [result] = await pool.query<ResultSetHeader>(
             'UPDATE comments SET content = ? WHERE comment_id = ?', [content, commentId]
         );
-        if (result.affectedRows === 0) return next(new AppError('Lỗi khi cập nhật bình luận', 500, ErrorCode.SERVER_ERROR));
+        if (result.affectedRows === 0) return next(new AppException('Lỗi khi cập nhật bình luận', ErrorCode.SERVER_ERROR, 500));
 
         const [[updatedComment]] = await pool.query<RowDataPacket[]>(`
             SELECT ${commonCommentSelectFields.replace('?', userId?.toString() || 'NULL')} /* Thay ? cho is_liked */
@@ -468,8 +468,8 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
         const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
         const userId = req.user?.user_id;
 
-        if (!userId) return next(new AppError('Người dùng chưa xác thực', 401, ErrorCode.USER_NOT_AUTHENTICATED));
-        if (isNaN(commentId)) return next(new AppError('ID bình luận không hợp lệ', 400, ErrorCode.VALIDATION_ERROR, "comment_id"));
+        if (!userId) return next(new AppException('Người dùng chưa xác thực', ErrorCode.USER_NOT_AUTHENTICATED, 401));
+        if (isNaN(commentId)) return next(new AppException('ID bình luận không hợp lệ', ErrorCode.VALIDATION_ERROR, 400));
 
         const cachedData = await getCachedCommentLikes(commentId, page, limit);
         if (cachedData) {
@@ -478,7 +478,7 @@ export const getCommentLikes = async (req: AuthRequest, res: Response, next: Nex
         }
 
         const [[comment]] = await pool.query<RowDataPacket[]>('SELECT comment_id FROM comments WHERE comment_id = ?', [commentId]);
-        if (!comment) return next(new AppError('Bình luận không tồn tại', 404, ErrorCode.NOT_FOUND, "comment_id"));
+        if (!comment) return next(new AppException('Bình luận không tồn tại', ErrorCode.NOT_FOUND, 404));
 
         const offset = (page - 1) * limit;
 

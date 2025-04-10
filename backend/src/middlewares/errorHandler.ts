@@ -8,618 +8,281 @@ import {
 import { MulterError } from "multer";
 import { ValidationError } from "joi";
 import { ErrorCode } from "../types/errorCode";
+import { createAppError, logError } from '../utils/errorUtils';
 
-export class AppError extends Error {
-  statusCode: number;
-  isOperational: boolean;
-  errorCode: ErrorCode;
-  field?: string;
+export interface AppError {
+  code: ErrorCode;
+  message: string;
+  status?: number;
+  data?: Record<string, any>;
+}
 
-  constructor(
-    message: string,
-    statusCode: number,
-    errorCode?: ErrorCode,
-    field?: string
-  ) {
-    super(message || "Có lỗi xảy ra");
-    this.statusCode = statusCode;
-    this.isOperational = true;
-    this.errorCode = errorCode || ErrorCode.SERVER_ERROR;
-    this.field = field;
-    Error.captureStackTrace(this, this.constructor);
+export class AppException extends Error {
+  code: ErrorCode;
+  status: number;
+  data?: Record<string, any>;
+
+  constructor(message: string, code: ErrorCode, status = 500, data?: Record<string, any>) {
+    super(message);
+    this.name = 'AppException';
+    this.code = code;
+    this.status = status;
+    this.data = data;
   }
 }
 
-const logError = (err: any): void => {
-  console.error(`[${new Date().toISOString()}] ERROR:`, {
-    name: err.name,
-    message: err.message,
-    errorCode: err.errorCode,
-    field: err.field,
-    stack: err.stack,
-    ...(err.code && { code: err.code }),
-    ...(err.statusCode && { statusCode: err.statusCode }),
-  });
+const errorCodeToStatus: Record<string, number> = {
+  'AUTH_001': 401, // MISSING_CREDENTIALS 
+  'AUTH_002': 401, // INVALID_CREDENTIALS
+  'AUTH_003': 404, // ACCOUNT_NOT_FOUND
+  'AUTH_004': 401, // INVALID_PASSWORD
+  'AUTH_005': 403, // UNVERIFIED_ACCOUNT
+  'AUTH_006': 401, // INVALID_TOKEN
+  'AUTH_007': 401, // TOKEN_EXPIRED
+  'AUTH_008': 429, // TOO_MANY_ATTEMPTS
+  'AUTH_009': 401, // MISSING_TOKEN
+  'AUTH_010': 409, // EXISTING_USER
+  'AUTH_011': 400, // INVALID_FORMAT
+  'AUTH_012': 400, // INVALID_OTP
+  'AUTH_013': 400, // INVALID_VERIFICATION
+  
+  'DB_001': 409, // DUPLICATE_ENTRY
+  'DB_002': 404, // REFERENCED_DATA_NOT_FOUND
+  'DB_003': 409, // DATA_IN_USE
+  'DB_004': 500, // DB_CONNECTION_ERROR
+
+  'FILE_001': 413, // FILE_TOO_LARGE
+  'FILE_002': 429, // TOO_MANY_FILES
+  'FILE_003': 415, // UNSUPPORTED_FILE_TYPE
+  'FILE_004': 500, // FILE_DOWNLOAD_ERROR
+  'FILE_005': 500, // FILE_PROCESSING_ERROR
+  'FILE_006': 404, // FILE_MISSING
+  'FILE_007': 500, // UPLOAD_FAILED
+  'FILE_008': 500, // CANCEL_FAILED
+  'FILE_009': 400, // CHUNK_INVALID
+  
+  'MEDIA_001': 404, // MEDIA_NOT_FOUND
+  'MEDIA_002': 500, // MEDIA_PROCESSING_ERROR
+  'MEDIA_003': 415, // UNSUPPORTED_MEDIA_TYPE
+  'MEDIA_004': 400, // MISSING_MEDIA_URL
+  'MEDIA_005': 500, // MEDIA_UPLOAD_ERROR
+  'MEDIA_006': 400, // MISSING_EDIT_DATA
+  'MEDIA_007': 415, // MEDIA_UNSUPPORTED_TYPE
+  
+  'VAL_001': 400, // VALIDATION_ERROR
+
+  'GEN_001': 404, // NOT_FOUND
+  'GEN_002': 500, // SERVER_ERROR
+  'GEN_003': 403, // RESOURCE_ACCESS_DENIED
+  'GEN_004': 400, // INVALID_OPERATION
+  'GEN_005': 429, // RATE_LIMIT_EXCEEDED
+  'GEN_006': 403, // INVALID_PERMISSIONS
 };
 
-const handleMySQLError = (err: QueryError): AppError => {
-  const errorMap: {
-    [key: string]: {
-      message: string;
-      statusCode: number;
-      errorCode: ErrorCode;
-    };
-  } = {
-    ER_DUP_ENTRY: {
-      message: "Dữ liệu đã tồn tại trong hệ thống",
-      statusCode: 409,
-      errorCode: ErrorCode.DUPLICATE_ENTRY,
-    },
-    ER_NO_REFERENCED_ROW: {
-      message: "Dữ liệu liên quan không tồn tại",
-      statusCode: 400,
-      errorCode: ErrorCode.REFERENCED_DATA_NOT_FOUND,
-    },
-    ER_ROW_IS_REFERENCED: {
-      message: "Dữ liệu đang được sử dụng",
-      statusCode: 400,
-      errorCode: ErrorCode.DATA_IN_USE,
-    },
-    ER_PARSE_ERROR: {
-      message: "Lỗi cú pháp SQL",
-      statusCode: 500,
-      errorCode: ErrorCode.SERVER_ERROR,
-    },
-    ECONNREFUSED: {
-      message: "Không thể kết nối đến cơ sở dữ liệu",
-      statusCode: 503,
-      errorCode: ErrorCode.DB_CONNECTION_ERROR,
-    },
-    PROTOCOL_CONNECTION_LOST: {
-      message: "Kết nối cơ sở dữ liệu bị mất",
-      statusCode: 503,
-      errorCode: ErrorCode.DB_CONNECTION_ERROR,
-    },
-  };
-
-  const defaultError = {
-    message: "Lỗi cơ sở dữ liệu",
-    statusCode: 500,
-    errorCode: ErrorCode.SERVER_ERROR,
-  };
-  const error = errorMap[err.code] || defaultError;
-
-  let field;
-  if (err.code === "ER_DUP_ENTRY" && err.message) {
-    const matches = err.message.match(/'([^']+)'/g);
-    if (matches && matches.length > 1) {
-      const key = matches[1].replace(/'/g, "");
-      field = key.includes("email")
-        ? "email"
-        : key.includes("phone")
-        ? "phone_number"
-        : key.includes("username")
-        ? "username"
-        : undefined;
-    }
+const handleMySQLError = (err: QueryError): AppException => {
+  if (err.code === "ER_DUP_ENTRY") {
+    return new AppException(
+      "Dữ liệu đã tồn tại trong hệ thống",
+      ErrorCode.DUPLICATE_ENTRY,
+      409
+    );
   }
-
-  return new AppError(error.message, error.statusCode, error.errorCode, field);
-};
-
-const handleJWTError = (
-  err: JsonWebTokenError | TokenExpiredError | NotBeforeError
-): AppError => {
-  const errorMap = {
-    TokenExpiredError: {
-      message: "Token đã hết hạn. Vui lòng đăng nhập lại",
-      statusCode: 401,
-      errorCode: ErrorCode.TOKEN_EXPIRED,
-    },
-    NotBeforeError: {
-      message: "Token chưa có hiệu lực",
-      statusCode: 401,
-      errorCode: ErrorCode.INVALID_TOKEN,
-    },
-    JsonWebTokenError: {
-      message: "Token không hợp lệ. Vui lòng đăng nhập lại",
-      statusCode: 401,
-      errorCode: ErrorCode.INVALID_TOKEN,
-    },
-  } as const;
-
-  const defaultError = {
-    message: "Lỗi xác thực token",
-    statusCode: 401,
-    errorCode: ErrorCode.INVALID_TOKEN,
-  };
-  const error = errorMap[err.name as keyof typeof errorMap] || defaultError;
-
-  return new AppError(error.message, error.statusCode, error.errorCode);
-};
-
-const handleMulterError = (err: MulterError): AppError => {
-  const errorMap: {
-    [key: string]: { message: string; errorCode: ErrorCode; field?: string };
-  } = {
-    LIMIT_FILE_SIZE: {
-      message: "Kích thước file quá lớn",
-      errorCode: ErrorCode.FILE_TOO_LARGE,
-      field: "file",
-    },
-    LIMIT_FILE_COUNT: {
-      message: "Số lượng file vượt quá giới hạn",
-      errorCode: ErrorCode.TOO_MANY_FILES,
-    },
-    LIMIT_UNEXPECTED_FILE: {
-      message: "Loại file không được hỗ trợ",
-      errorCode: ErrorCode.UNSUPPORTED_FILE_TYPE,
-      field: "file",
-    },
-  };
-
-  const defaultError = {
-    message: "Lỗi khi tải file lên",
-    errorCode: ErrorCode.SERVER_ERROR,
-  };
-  const error = errorMap[err.code] || defaultError;
-
-  return new AppError(error.message, 400, error.errorCode, error.field);
-};
-
-const handleValidationError = (err: ValidationError): AppError => {
-  const detail = err.details[0];
-  const message = detail.message;
-  const field = detail.path.join(".");
-
-  return new AppError(
-    `Dữ liệu không hợp lệ: ${message}`,
-    400,
-    ErrorCode.VALIDATION_ERROR,
-    field
+  
+  if (err.code === "ER_NO_REFERENCED_ROW") {
+    return new AppException(
+      "Dữ liệu liên quan không tồn tại",
+      ErrorCode.REFERENCED_DATA_NOT_FOUND,
+      400
+    );
+  }
+  
+  if (err.code === "ER_ROW_IS_REFERENCED") {
+    return new AppException(
+      "Dữ liệu đang được sử dụng",
+      ErrorCode.DATA_IN_USE,
+      400
+    );
+  }
+  
+  return new AppException(
+    "Lỗi cơ sở dữ liệu",
+    ErrorCode.SERVER_ERROR,
+    500
   );
 };
 
-export const mapAuthError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string } } =
-    {
-      "Vui lòng nhập đầy đủ thông tin": {
-        errorCode: ErrorCode.MISSING_CREDENTIALS,
-      },
-      "Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau": {
-        errorCode: ErrorCode.TOO_MANY_ATTEMPTS,
-        field: "login",
-      },
-      "Tài khoản không tồn tại": {
-        errorCode: ErrorCode.ACCOUNT_NOT_FOUND,
-        field: "login",
-      },
-      "Tài khoản chưa được xác thực": {
-        errorCode: ErrorCode.UNVERIFIED_ACCOUNT,
-        field: "login",
-      },
-      "Sai mật khẩu": {
-        errorCode: ErrorCode.INVALID_PASSWORD,
-        field: "password",
-      },
-      "Thiếu token": {
-        errorCode: ErrorCode.MISSING_TOKEN,
-      },
-      "Token không hợp lệ": {
-        errorCode: ErrorCode.INVALID_TOKEN,
-      },
-      "Email hoặc số điện thoại đã tồn tại": {
-        errorCode: ErrorCode.EXISTING_USER,
-        field: "contact",
-      },
-      "Định dạng email hoặc số điện thoại không hợp lệ": {
-        errorCode: ErrorCode.INVALID_FORMAT,
-        field: "contact",
-      },
-      "Quá nhiều lần đăng ký, vui lòng thử lại sau": {
-        errorCode: ErrorCode.TOO_MANY_ATTEMPTS,
-      },
-      "Thiếu token xác thực": {
-        errorCode: ErrorCode.MISSING_TOKEN,
-      },
-      "Token không hợp lệ hoặc đã hết hạn": {
-        errorCode: ErrorCode.INVALID_VERIFICATION,
-      },
-      "Thiếu số điện thoại hoặc mã OTP": {
-        errorCode: ErrorCode.MISSING_CREDENTIALS,
-      },
-      "Mã OTP không hợp lệ hoặc đã hết hạn": {
-        errorCode: ErrorCode.INVALID_OTP,
-        field: "otp",
-      },
-      "Không có refresh token": {
-        errorCode: ErrorCode.MISSING_TOKEN,
-      },
-    };
-
-  if (message === "Vui lòng nhập đầy đủ thông tin") {
-    const field = message.toLowerCase().includes("password")
-      ? "password"
-      : message.toLowerCase().includes("email")
-      ? "email"
-      : message.toLowerCase().includes("phone")
-      ? "phone_number"
-      : "login";
-    return new AppError(
-      message,
-      statusCode,
-      ErrorCode.MISSING_CREDENTIALS,
-      field
+const handleJWTError = (err: JsonWebTokenError | TokenExpiredError | NotBeforeError): AppException => {
+  if (err instanceof TokenExpiredError) {
+    return new AppException(
+      "Token đã hết hạn. Vui lòng đăng nhập lại",
+      ErrorCode.TOKEN_EXPIRED,
+      401
     );
   }
-
-  const error = errorMap[message];
-  return error
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
+  
+  if (err instanceof NotBeforeError) {
+    return new AppException(
+      "Token chưa có hiệu lực",
+      ErrorCode.INVALID_TOKEN,
+      401
+    );
+  }
+  
+  return new AppException(
+    "Token không hợp lệ. Vui lòng đăng nhập lại",
+    ErrorCode.INVALID_TOKEN,
+    401
+  );
 };
 
-export const mapStoryError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string }} = {
-    "Story không tồn tại hoặc đã hết hạn.": { 
-      errorCode: ErrorCode.STORY_NOT_FOUND,
-      field: 'story_id'
-    },
-    "Story phải có ít nhất một ảnh/video": { 
-      errorCode: ErrorCode.STORY_NO_MEDIA,
-      field: 'media'
-    },
-    "Chỉ hỗ trợ ảnh và video": { 
-      errorCode: ErrorCode.STORY_MEDIA_UNSUPPORTED,
-      field: 'media'
-    },
-    "Bạn không có quyền xem story này.": { 
-      errorCode: ErrorCode.STORY_ACCESS_DENIED
-    },
-    "Bạn không có quyền trả lời story này.": { 
-      errorCode: ErrorCode.STORY_ACCESS_DENIED
-    },
-    "Bạn không có quyền xóa story này hoặc story không tồn tại.": { 
-      errorCode: ErrorCode.STORY_ACCESS_DENIED,
-      field: 'story_id'
-    },
-    "Nội dung trả lời không được để trống.": { 
-      errorCode: ErrorCode.STORY_INVALID_CONTENT,
-      field: 'content'
-    },
-    "Story đã được thêm vào highlight này.": { 
-      errorCode: ErrorCode.STORY_ALREADY_ADDED,
-      field: 'highlight_id'
-    },
-    "Highlight không tồn tại hoặc không thuộc về bạn.": { 
-      errorCode: ErrorCode.STORY_ACCESS_DENIED,
-      field: 'highlight_id'
-    },
-    "Story không tồn tại hoặc không thuộc về bạn.": { 
-      errorCode: ErrorCode.STORY_ACCESS_DENIED,
-      field: 'story_id'
-    },
-    "Thiếu thông số user_id": { 
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'user_id'
-    },
-    "Người dùng chưa được xác thực": { 
-      errorCode: ErrorCode.USER_NOT_AUTHENTICATED
+const handleMulterError = (err: MulterError): AppException => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return new AppException(
+      "Kích thước file quá lớn",
+      ErrorCode.FILE_TOO_LARGE,
+      400,
+      { field: "file" }
+    );
+  }
+  
+  if (err.code === "LIMIT_FILE_COUNT") {
+    return new AppException(
+      "Số lượng file vượt quá giới hạn",
+      ErrorCode.TOO_MANY_FILES,
+      400
+    );
+  }
+  
+  if (err.code === "LIMIT_UNEXPECTED_FILE") {
+    return new AppException(
+      "Loại file không được hỗ trợ",
+      ErrorCode.UNSUPPORTED_FILE_TYPE,
+      400,
+      { field: "file" }
+    );
+  }
+  
+  return new AppException(
+    "Lỗi khi tải file lên",
+    ErrorCode.SERVER_ERROR,
+    400
+  );
+};
+
+const handleValidationError = (err: ValidationError): AppException => {
+  const detail = err.details[0];
+  const message = detail.message;
+  const field = detail.path.join(".");
+  
+  return new AppException(
+    `Dữ liệu không hợp lệ: ${message}`,
+    ErrorCode.VALIDATION_ERROR,
+    400,
+    { field }
+  );
+};
+
+export const appExceptionHandler = (
+  err: AppException, 
+  req: Request,
+  res: Response, 
+  next: NextFunction
+) => {
+  const statusCode = err.status || errorCodeToStatus[err.code] || 500;
+  
+  logError('Express', err, `Route: ${req.method} ${req.path}`);
+  
+  res.status(statusCode).json({
+    success: false,
+    error: {
+      code: err.code,
+      message: err.message,
+      data: err.data
     }
-  };
-
-  const error = errorMap[message];
-  return error 
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
+  });
 };
 
-export const mapUserError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string } } = {
-    "Người dùng không tồn tại.": { 
-      errorCode: ErrorCode.USER_NOT_FOUND,
-      field: 'user_id'
-    },
-    "Cài đặt người dùng không tồn tại.": { 
-      errorCode: ErrorCode.USER_SETTINGS_NOT_FOUND,
-      field: 'user_id'
-    },
-    "Không có dữ liệu nào để cập nhật.": { 
-      errorCode: ErrorCode.USER_NO_UPDATE_DATA
-    },
-    "Người dùng không tồn tại hoặc không có thay đổi nào được thực hiện.": { 
-      errorCode: ErrorCode.USER_NOT_FOUND,
-      field: 'user_id'
-    },
-    "Tham số 'id' không hợp lệ.": { 
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'id'
-    },
-    "Tham số 'user_id' không hợp lệ.": { 
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'user_id'
-    },
-    "Tham số tìm kiếm không hợp lệ.": { 
-      errorCode: ErrorCode.USER_SEARCH_INVALID,
-      field: 'query'
-    }
-  };
-
-  const error = errorMap[message];
-  return error 
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
-};
-
-export const mapMediaError = (
-  message: string,
-  statusCode: number
-): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string } } =
-    {
-      "Thiếu thông tin media cần chỉnh sửa": {
-        errorCode: ErrorCode.MISSING_MEDIA_URL,
-        field: "mediaUrl",
-      },
-      "Không tìm thấy media với ID đã cung cấp": {
-        errorCode: ErrorCode.MEDIA_NOT_FOUND,
-        field: "originalMediaId",
-      },
-      "Lỗi khi xử lý media": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-      },
-      "Loại media không được hỗ trợ": {
-        errorCode: ErrorCode.UNSUPPORTED_MEDIA_TYPE,
-        field: "mediaType",
-      },
-      "Lỗi khi tải media lên": {
-        errorCode: ErrorCode.MEDIA_UPLOAD_ERROR,
-      },
-      "Không thể tải xuống media từ URL": {
-        errorCode: ErrorCode.FILE_DOWNLOAD_ERROR,
-        field: "mediaUrl",
-      },
-      "Người dùng chưa được xác thực": {
-        errorCode: ErrorCode.INVALID_TOKEN,
-      },
-      "Thiếu thông tin chỉnh sửa": {
-        errorCode: ErrorCode.MISSING_EDIT_DATA,
-        field: "edits",
-      },
-      "Lỗi khi xử lý file tạm thời": {
-        errorCode: ErrorCode.FILE_PROCESSING_ERROR,
-      },
-      "Lỗi hệ thống khi lấy danh sách media": {
-        errorCode: ErrorCode.SERVER_ERROR,
-      },
-      "Tham số 'page' phải lớn hơn 0": {
-        errorCode: ErrorCode.VALIDATION_ERROR,
-        field: "page",
-      },
-      "Lỗi khi xử lý bộ lọc": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "filters",
-      },
-      "Lỗi khi xử lý hiệu ứng": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "effects",
-      },
-      "Lỗi khi áp dụng chồng lớp hình ảnh": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "overlayImages",
-      },
-      "Lỗi khi thêm âm thanh vào media": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "music",
-      },
-      "Lỗi khi áp dụng văn bản": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "text",
-      },
-      "Không thể xử lý media với URL đã cung cấp": {
-        errorCode: ErrorCode.MEDIA_PROCESSING_ERROR,
-        field: "mediaUrl",
-      },
-    };
-
-  const error = errorMap[message];
-  return error
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
-};
-
-export const mapLikeError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string] : { errorCode: ErrorCode; field?: string}} = {
-    'Người dùng chưa xác thực': {
-      errorCode: ErrorCode.USER_NOT_AUTHENTICATED,
-    },
-    'ID bài viết không hợp lệ': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'post_id'
-    },
-    'Bài viết không tồn tại': {
-      errorCode: ErrorCode.NOT_FOUND,
-      field: 'post_id'
-    },
-    'Bài viết đã được thích': {
-      errorCode: ErrorCode.INVALID_OPERATION,
-      field: 'post_id'
-    },
-    'Bài viết chưa được thích': {
-      errorCode: ErrorCode.INVALID_OPERATION,
-      field: 'post_id'
-    },
-    'Lỗi cơ sở dữ liệu': {
-      errorCode: ErrorCode.SERVER_ERROR
-    }
-  };
-
-  const error = errorMap[message];
-  return error 
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
-};
-
-export const mapCommentError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode; field?: string } } = {
-    'Người dùng chưa xác thực': {
-      errorCode: ErrorCode.USER_NOT_AUTHENTICATED,
-    },
-    'ID bài viết không hợp lệ': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'post_id'
-    },
-    'ID bình luận không hợp lệ': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'comment_id'
-    },
-    'Bài viết không tồn tại': {
-      errorCode: ErrorCode.NOT_FOUND,
-      field: 'post_id'
-    },
-    'Bình luận không tồn tại': {
-      errorCode: ErrorCode.NOT_FOUND,
-      field: 'comment_id'
-    },
-    "Bình luận cha không tồn tại": {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'parent_id'
-    },
-    'Nội dung bình luận không được để trống': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'content'
-    },
-    'Bạn không có quyền xóa bình luận này': {
-      errorCode: ErrorCode.INVALID_PERMISSIONS,
-      field: 'comment_id'
-    },
-    "Lỗi khi thêm bình luận" : {
-      errorCode: ErrorCode.SERVER_ERROR
-    },
-    "Banj chưa thích bình luận này" : {
-      errorCode: ErrorCode.INVALID_OPERATION,
-      field: 'comment_id'
-    },
-    "Lỗi khi bỏ bình luận": {
-      errorCode: ErrorCode.SERVER_ERROR
-    },
-    'Lỗi cơ sở dữ liệu': {
-      errorCode: ErrorCode.SERVER_ERROR
-    }
-  };
-
-  const error = errorMap[message];
-  return error 
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
-};
-
-export const mapPostError = (message: string, statusCode: number): AppError => {
-  const errorMap: { [key: string]: { errorCode: ErrorCode, field?: string } } = {
-    'Người dùng chưa xác thực': {
-      errorCode: ErrorCode.USER_NOT_AUTHENTICATED
-    },
-    'Bài viết phải có nội dung hoặc ít nhất một ảnh/video': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'content'
-    },
-    'Chỉ hỗ trợ ảnh và video': {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'media'
-    },
-    'Lỗi cơ sở dữ liệu': {
-      errorCode: ErrorCode.SERVER_ERROR
-    },
-    "Tham số 'page' không hợp lệ": {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'page'
-    },
-    "Tham số 'limit' không hợp lệ": {
-      errorCode: ErrorCode.VALIDATION_ERROR,
-      field: 'limit'
-    },
-    "Bạn không có quyền xóa bài viết này hoặc bài viết không tồn tại": {
-      errorCode: ErrorCode.INVALID_PERMISSIONS,
-      field: 'post_id'
-    }
-  };
-
-  const error = errorMap[message];
-  return error 
-    ? new AppError(message, statusCode, error.errorCode, error.field)
-    : new AppError(message, statusCode, ErrorCode.SERVER_ERROR);
-}
-
-export const errorHandler = (
-  err: any,
+export const globalErrorHandler = (
+  err: Error | unknown,
   req: Request,
   res: Response,
   next: NextFunction
-): void => {
-  logError(err);
-
-  let error = err;
-
-  if (err instanceof AppError && !err.errorCode) {
-    if (
-      req.originalUrl.includes("/media/edit") ||
-      req.originalUrl.includes("/media/library")
-    ) {
-      error = mapMediaError(err.message, err.statusCode);
-    } else {
-      error = mapAuthError(err.message, err.statusCode);
-    }
-  } else if (err.errno && err.sqlMessage) {
-    error = handleMySQLError(err);
-  } else if (
-    err instanceof JsonWebTokenError ||
-    err instanceof TokenExpiredError ||
-    err instanceof NotBeforeError
-  ) {
-    error = handleJWTError(err);
-  } else if (err instanceof MulterError) {
-    error = handleMulterError(err);
-  } else if (err.isJoi === true) {
-    error = handleValidationError(err);
-  } else if (!(err instanceof AppError)) {
-    if (err.message && err.message.includes("fetch")) {
-      error = new AppError(
-        "Không thể tải xuống media từ URL",
-        400,
-        ErrorCode.FILE_DOWNLOAD_ERROR,
-        "mediaUrl"
-      );
-    } else if (err.message && err.message.includes("sharp")) {
-      error = new AppError(
-        "Lỗi khi xử lý hình ảnh",
-        500,
-        ErrorCode.MEDIA_PROCESSING_ERROR
-      );
-    } else if (err.message && err.message.includes("ffmpeg")) {
-      error = new AppError(
-        "Lỗi khi xử lý video",
-        500,
-        ErrorCode.MEDIA_PROCESSING_ERROR
-      );
-    } else {
-      error = new AppError(
-        err.message || "Có lỗi xảy ra",
-        500,
-        ErrorCode.SERVER_ERROR
-      );
-    }
+) => {
+  if (err instanceof AppException) {
+    return appExceptionHandler(err, req, res, next);
   }
+  
+  let error: AppException;
+  
+  if (err instanceof Error) {
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError' || err.name === 'NotBeforeError') {
+      error = handleJWTError(err as any);
+    } else if (err instanceof MulterError) {
+      error = handleMulterError(err);
+    } else if ('isJoi' in err && (err as any).isJoi === true) {
+      error = handleValidationError(err as any);
+    } else if ((err as any).errno && (err as any).sqlMessage) {
+      error = handleMySQLError(err as any);
+    } else {
+      const message = err.message || '';
+      
+      if (message.includes("fetch")) {
+        error = new AppException(
+          "Không thể tải xuống media từ URL",
+          ErrorCode.FILE_DOWNLOAD_ERROR,
+          400,
+          { field: "mediaUrl" }
+        );
+      } else if (message.includes("sharp")) {
+        error = new AppException(
+          "Lỗi khi xử lý hình ảnh",
+          ErrorCode.MEDIA_PROCESSING_ERROR,
+          500
+        );
+      } else if (message.includes("ffmpeg")) {
+        error = new AppException(
+          "Lỗi khi xử lý video",
+          ErrorCode.MEDIA_PROCESSING_ERROR,
+          500
+        );
+      } else {
+        error = new AppException(
+          message || "Có lỗi xảy ra",
+          ErrorCode.SERVER_ERROR,
+          500
+        );
+      }
+    }
+  } else {
+    const appError = createAppError(err);
+    error = new AppException(
+      appError.message,
+      appError.code,
+      errorCodeToStatus[appError.code] || 500,
+      appError.data
+    );
+  }
+  
+  return appExceptionHandler(error, req, res, next);
+};
 
-  const statusCode = error.statusCode || 500;
-
-  res.status(statusCode).json({
-    error:
-      process.env.NODE_ENV === "development" ? error.message : "Lỗi hệ thống",
-    ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
-    status: "error",
-    statusCode,
-    errorCode: error.errorCode,
-    field: error.field,
+export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
+  const error = new AppException(
+    `Không tìm thấy đường dẫn: ${req.method} ${req.path}`,
+    ErrorCode.NOT_FOUND,
+    404,
+    { path: req.originalUrl }
+  );
+  
+  logError('Express', error, `Route không tồn tại: ${req.method} ${req.path}`);
+  
+  res.status(404).json({
+    success: false,
+    error: {
+      code: error.code,
+      message: error.message,
+      data: error.data
+    }
   });
 };
 
@@ -629,20 +292,6 @@ export const catchAsync = (
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
-};
-
-export const notFoundHandler = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  next(
-    new AppError(
-      `Không tìm thấy ${req.originalUrl} trên máy chủ này`,
-      404,
-      ErrorCode.NOT_FOUND
-    )
-  );
 };
 
 
