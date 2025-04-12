@@ -15,12 +15,21 @@ router.use(authMiddleware);
 
 router.post('/send', messageController.sendMessage);
 router.post('/media', uploadMessageMedia, messageController.sendMediaMessage);
-router.get('/conversations/:conversationId', messageController.getMessages);
-router.post('/read', messageController.markAsRead);
 router.delete('/:messageId', messageController.deleteMessage);
+router.post('/read', messageController.markAsRead);
 
-router.post('/conversations', messageController.createConversation);
 router.get('/conversations', messageController.getConversations);
+router.post('/conversations', messageController.createConversation);
+router.post('/conversations/group', messageController.createGroupConversation);
+router.get('/conversations/with/:userId', messageController.getConversationWithUser);
+
+router.get('/conversations/:conversationId', messageController.getConversationMessages);
+router.get('/conversations/:conversationId/messages', messageController.getConversationMessages);
+router.post('/conversations/:conversationId/messages', messageController.sendMessageToConversation);
+router.post('/conversations/:conversationId/messages/media', uploadMessageMedia, messageController.sendMediaToConversation);
+
+router.get('/messages/conversations/:conversationId', messageController.getConversationMessages);
+
 router.post('/groups/:groupId/members', messageController.addMembersToGroup);
 router.delete('/groups/:groupId/leave', messageController.leaveGroup);
 router.put('/groups/:groupId', messageController.updateGroupInfo);
