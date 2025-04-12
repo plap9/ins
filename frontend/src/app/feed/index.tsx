@@ -272,8 +272,8 @@ export default function FeedScreen() {
             >
               <Feather name="heart" size={24} color="black" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/feed/listmessage")}>
-              <AntDesign name="message1" size={24} color="black" />
+            <TouchableOpacity onPress={() => router.push("/message")}>
+              <Feather name="send" size={24} color="black" />
             </TouchableOpacity>
           </View>
         </View>

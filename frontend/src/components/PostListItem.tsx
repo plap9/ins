@@ -3,6 +3,7 @@ import { Ionicons, Feather, AntDesign } from "@expo/vector-icons";
 import { useState, useMemo } from "react";
 import { likePost, unlikePost } from "../services/likeService";
 import { getS3Url } from "../utils/config";
+import { useRouter } from "expo-router";
 
 interface PostListItemProps {
   posts: {
@@ -34,6 +35,7 @@ export default function PostListItem({
   onLikeCountPress,
   onCommentPress,
 }: PostListItemProps) {
+  const router = useRouter();
   const [isLiked, setIsLiked] = useState(posts.is_liked || false);
   const [likeCount, setLikeCount] = useState(posts.like_count || 0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -135,6 +137,16 @@ export default function PostListItem({
     }
   };
 
+  const handleSendMessage = () => {
+    router.push({
+      pathname: "/message/new",
+      params: { 
+        userId: posts.user_id.toString(),
+        username: posts.username
+      }
+    });
+  };
+
   return (
     <View className="bg-white mb-2 border-b border-gray-100">
       <View className="p-3 flex-row items-center gap-3">
@@ -172,7 +184,7 @@ export default function PostListItem({
           <TouchableOpacity onPress={handleCommentPress}>
             <Ionicons name="chatbubble-outline" size={24} color="black" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={handleSendMessage}>
             <Feather name="send" size={24} color="black" />
           </TouchableOpacity>
         </View>

@@ -8,6 +8,7 @@ import {
     getCachedUserProfile, 
     invalidateUserProfileCache 
   } from '../../utils/cacheUtils';
+import { AuthRequest } from '../../middlewares/authMiddleware';
 
 export const getUserProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -155,5 +156,61 @@ export const getUserByUsername = async (req: Request, res: Response, next: NextF
   } catch (error) {
     console.error(`[getUserByUsername] Lỗi:`, error);
     next(error);
+  }
+};
+
+export const getUserConnections = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      return next(new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401));
+    }
+
+    const [users] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+        u.user_id as id, 
+        u.username, 
+        u.profile_picture,
+        TRUE as is_online, 
+        TRUE as is_following,
+        u.is_verified
+      FROM users u
+      JOIN followers f ON u.user_id = f.following_id
+      WHERE f.follower_id = ?
+      ORDER BY u.username ASC`,
+      [userId]
+    );
+    
+    if (!users || users.length === 0) {
+      const [allUsers] = await pool.query<RowDataPacket[]>(
+        `SELECT 
+          user_id as id, 
+          username, 
+          profile_picture,
+          TRUE as is_online, 
+          FALSE as is_following,
+          is_verified
+        FROM users 
+        WHERE user_id != ?
+        ORDER BY username ASC
+        LIMIT 20`,
+        [userId]
+      );
+      
+      res.status(200).json({
+        users: allUsers || []
+      });
+      return;
+    }
+    
+    res.status(200).json({
+      users: users
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách liên hệ:", error);
+    res.status(200).json({
+      users: []
+    });
   }
 };
