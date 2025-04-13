@@ -15,7 +15,6 @@ interface User {
   isVerified: boolean;
 }
 
-// Kiểu dữ liệu API response
 interface UsersResponse {
   users: Array<{
     id?: string;
@@ -50,7 +49,7 @@ export default function NewMessageScreen() {
       setError(null);
       
       try {
-        const response = await apiClient.get<UsersResponse>('/users/connections');
+        const response = await apiClient.get<UsersResponse>('/api/users/connections');
         
         if (response.data && response.data.users) {
           const apiUsers = response.data.users.map((user) => ({
@@ -128,7 +127,7 @@ export default function NewMessageScreen() {
       if (selectedUsers.length === 1) {
         const userId = selectedUsers[0].id;
         
-        const checkResponse = await apiClient.get<ConversationResponse>(`/messages/conversations/with/${userId}`);
+        const checkResponse = await apiClient.get<ConversationResponse>(`/api/messages/conversations/with/${userId}`);
         
         if (checkResponse.data && checkResponse.data.conversation) {
           router.push({
@@ -136,7 +135,7 @@ export default function NewMessageScreen() {
             params: { id: checkResponse.data.conversation.id }
           });
         } else {
-          const createResponse = await apiClient.post<ConversationResponse>('/messages/conversations', {
+          const createResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations', {
             recipient_id: userId
           });
           
@@ -150,7 +149,7 @@ export default function NewMessageScreen() {
       } else {
         const userIds = selectedUsers.map(user => user.id);
         
-        const createGroupResponse = await apiClient.post<ConversationResponse>('/messages/conversations/group', {
+        const createGroupResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations/group', {
           name: `Nhóm (${selectedUsers.length})`,
           member_ids: userIds
         });
@@ -173,7 +172,7 @@ export default function NewMessageScreen() {
   const handleUserNavigation = async (user: User) => {
     try {
       setIsLoading(true);
-      const checkResponse = await apiClient.get<ConversationResponse>(`/messages/conversations/with/${user.id}`);
+      const checkResponse = await apiClient.get<ConversationResponse>(`/api/messages/conversations/with/${user.id}`);
       
       if (checkResponse.data && checkResponse.data.conversation) {
         router.replace({
@@ -181,7 +180,7 @@ export default function NewMessageScreen() {
           params: { id: checkResponse.data.conversation.id }
         });
       } else {
-        const createResponse = await apiClient.post<ConversationResponse>('/messages/conversations', {
+        const createResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations', {
           recipient_id: user.id
         });
         

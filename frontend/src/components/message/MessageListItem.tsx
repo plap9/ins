@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MessageListItemProps {
@@ -34,14 +33,14 @@ const MessageListItem: React.FC<MessageListItemProps> = ({
     if (conversation.mediaType === 'image') {
       return 'Đã gửi một hình ảnh';
     } else if (conversation.mediaType === 'video') {
-      return conversation.lastMessage;
+      return 'Đã gửi một video';
     } else if (conversation.mediaType === 'audio') {
       return 'Đã gửi một tin nhắn thoại';
     } else if (conversation.mediaType === 'file') {
       return 'Đã gửi một tệp đính kèm';
     }
     
-    return conversation.lastMessage;
+    return conversation.lastMessage || 'Chưa có tin nhắn';
   };
 
   return (
@@ -49,39 +48,40 @@ const MessageListItem: React.FC<MessageListItemProps> = ({
       onPress={() => {
         if (conversation.id) {
           onPress(conversation.id);
+        } else {
+          console.log("Không thể ấn vào cuộc trò chuyện vì ID không tồn tại hoặc rỗng");
         }
       }}
-      className="flex-row items-center px-4 py-3"
+      className="flex-row items-center justify-between px-5 py-3"
     >
-      <View className="relative mr-3">
-        <Image 
-          source={{ uri: conversation.avatar }} 
-          className={`w-14 h-14 rounded-full ${conversation.hasStory ? 'border-2 border-pink-500' : ''}`}
-        />
-        {conversation.isOnline && (
-          <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-black"></View>
-        )}
-      </View>
-      
-      <View className="flex-1">
-        <View className="flex-row justify-between items-center">
-          <Text className="text-white font-semibold">{conversation.username}</Text>
-          <Text className="text-gray-400 text-xs">{conversation.timestamp}</Text>
-        </View>
-        
-        <View className="flex-row justify-between items-center mt-1">
-          <Text 
-            className={`${conversation.isRead ? 'text-gray-400' : 'text-white'} text-sm`}
-            numberOfLines={1}
-          >
-            {formatLastMessage()}
-          </Text>
-          
-          {!conversation.isRead && (
-            <View className="w-2.5 h-2.5 rounded-full bg-blue-500"></View>
+      <View className="flex-row items-center flex-1">
+        <View className="relative mr-4">
+          <Image 
+            source={{ uri: conversation.avatar }} 
+            className="w-14 h-14 rounded-full"
+          />
+          {conversation.isOnline && (
+            <View className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-black"></View>
           )}
         </View>
+        
+        <View className="flex-1">
+          <Text className="text-white font-medium text-base">{conversation.username}</Text>
+          <View className="flex-row items-center">
+            <Text 
+              className={`${conversation.isRead ? 'text-gray-500' : 'text-gray-400'} text-sm`}
+              numberOfLines={1}
+            >
+              {formatLastMessage()}
+              {!conversation.isRead ? null : <Text className="text-gray-500"> · {conversation.timestamp}</Text>}
+            </Text>
+          </View>
+        </View>
       </View>
+      
+      <TouchableOpacity className="ml-3">
+        <Ionicons name="camera-outline" size={24} color="#8e8e8e" />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 };

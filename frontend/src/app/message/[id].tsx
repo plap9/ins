@@ -5,14 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
+import { useAuth } from '../context/AuthContext';
+import * as FileSystem from 'expo-file-system';
 
-// Import các components
 import MessageHeader from '../../components/message/MessageHeader';
 import MessageBubble from '../../components/message/MessageBubble';
 import MessageInput from '../../components/message/MessageInput';
 import MessageReaction from '../../components/message/MessageReaction';
 
-// Định nghĩa kiểu tin nhắn
 type MessageType = {
   id: string;
   content: string;
@@ -23,18 +23,19 @@ type MessageType = {
   type: 'text' | 'image' | 'video';
   mediaUrl?: string;
   senderId?: string;
+  senderName?: string;
+  senderAvatar?: string;
 };
 
-// Định nghĩa kiểu người dùng
 type UserType = {
   id: string;
   username: string;
   avatar: string;
   isOnline: boolean;
   lastSeen: string;
+  isGroup?: boolean;
 };
 
-// Định nghĩa kiểu dữ liệu API response
 interface ConversationResponse {
   conversation: {
     id: string;
@@ -51,16 +52,26 @@ interface ConversationResponse {
 }
 
 interface MessagesResponse {
-  messages: Array<{
+  status: string;
+  data: Array<{
     id?: string;
-    _id?: string;
-    content?: string;
-    created_at?: string;
-    is_read?: boolean;
-    media_type?: string;
+    message_id: number;
+    conversation_id: number;
+    content: string;
+    message_type: 'text' | 'media' | 'call';
+    is_read: boolean;
+    sent_at: string;
+    sender_id: number;
+    username?: string;
+    profile_picture?: string | null;
     media_url?: string;
-    sender_id?: string;
   }>;
+  pagination?: {
+    hasMore: boolean;
+    page: number;
+    limit: number;
+    total: number;
+  };
 }
 
 interface MessageResponse {
@@ -73,7 +84,9 @@ interface MessageResponse {
 }
 
 export default function ConversationScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, recipientInfo } = useLocalSearchParams<{ id: string, recipientInfo?: string }>();
+  const { authData } = useAuth();
+  const currentUserId = authData?.user?.user_id || 0;
   const [isLoading, setIsLoading] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
@@ -91,7 +104,6 @@ export default function ConversationScreen() {
   const [error, setError] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
-  // Fetch conversation and messages from API
   useEffect(() => {
     const fetchConversation = async () => {
       if (!id) return;
@@ -100,37 +112,122 @@ export default function ConversationScreen() {
       setError(null);
       
       try {
-        // Fetch conversation details
-        const convResponse = await apiClient.get<ConversationResponse>(`/messages/conversations/${id}`);
+        if (recipientInfo) {
+          try {
+            const recipientData = JSON.parse(recipientInfo);
+            if (recipientData) {
+              setUser({
+                id: recipientData.id?.toString() || '0',
+                username: recipientData.username || 'Người dùng',
+                avatar: recipientData.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(recipientData.username || 'User')}&background=random`,
+                isOnline: recipientData.is_online || false,
+                lastSeen: 'Hoạt động gần đây',
+                isGroup: false
+              });
+            }
+          } catch (parseErr) {
+            console.error('Lỗi khi phân tích thông tin người dùng từ params:', parseErr);
+          }
+        }
         
-        if (convResponse.data && convResponse.data.conversation) {
-          const conv = convResponse.data.conversation;
-          setUser({
-            id: conv.recipient?.id || '',
-            username: conv.recipient?.username || 'Người dùng',
-            avatar: conv.recipient?.profile_picture || 'https://randomuser.me/api/portraits/lego/1.jpg',
-            isOnline: conv.recipient?.is_online || false,
-            lastSeen: formatLastSeen(conv.recipient?.last_active),
-          });
+        const response = await apiClient.get<MessagesResponse>(`/api/messages/conversations/${id}`);
+        
+        if (response.data && response.data.data && response.data.data.length > 0) {
+          const uniqueSenders = Array.from(new Set(response.data.data.map(msg => msg.sender_id)));
           
-          // Fetch messages
-          const messagesResponse = await apiClient.get<MessagesResponse>(`/messages/conversations/${id}/messages`);
+          let senderInfoMap = new Map();
           
-          if (messagesResponse.data && messagesResponse.data.messages) {
-            const apiMessages = messagesResponse.data.messages.map((msg) => ({
-              id: msg.id || msg._id || '',
+          if (recipientInfo) {
+            try {
+              const recipient = JSON.parse(recipientInfo);
+              if (recipient && recipient.id) {
+                senderInfoMap.set(recipient.id.toString(), {
+                  username: recipient.username,
+                  avatar: recipient.profile_picture
+                });
+              }
+            } catch (e) {
+              console.error('Lỗi khi phân tích thông tin recipient:', e);
+            }
+          }
+          
+          const isGroup = uniqueSenders.length > 2;
+          
+          if (!user.username && !isGroup) {
+            const otherUserMessage = response.data.data.find(msg => msg.sender_id !== currentUserId);
+            
+            if (otherUserMessage) {
+              const senderInfo = senderInfoMap.get(otherUserMessage.sender_id.toString());
+              
+              setUser({
+                id: otherUserMessage.sender_id.toString(),
+                username: senderInfo?.username || otherUserMessage.username || 'Người dùng',
+                avatar: senderInfo?.avatar || otherUserMessage.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherUserMessage.username || 'User')}&background=random`,
+                isOnline: false,
+                lastSeen: 'Hoạt động gần đây',
+                isGroup: false
+              });
+            }
+          } else if (isGroup && !user.isGroup) {
+            setUser({
+              id: id,
+              username: 'Nhóm chat',
+              avatar: `https://ui-avatars.com/api/?name=Group&background=random`,
+              isOnline: false,
+              lastSeen: `${uniqueSenders.length} thành viên`,
+              isGroup: true
+            });
+          }
+          
+          const apiMessages = response.data.data.map((msg) => {
+            let senderName, senderAvatar;
+            
+            if (msg.sender_id === currentUserId) {
+              senderName = 'Bạn';
+              senderAvatar = authData?.user?.profile_picture || `https://ui-avatars.com/api/?name=Me&background=random`;
+            } 
+            else if (msg.sender_id !== currentUserId && senderInfoMap.has(msg.sender_id.toString())) {
+              const senderInfo = senderInfoMap.get(msg.sender_id.toString());
+              senderName = senderInfo.username;
+              senderAvatar = senderInfo.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(senderInfo.username)}&background=random`;
+            }
+            else if (msg.sender_id !== currentUserId && recipientInfo) {
+              try {
+                const recipient = JSON.parse(recipientInfo);
+                senderName = recipient.username || msg.username || 'Người dùng';
+                senderAvatar = recipient.profile_picture || msg.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=random`;
+              } catch (e) {
+                senderName = msg.username || 'Người dùng';
+                senderAvatar = msg.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.username || 'User')}&background=random`;
+              }
+            }
+            else {
+              senderName = msg.username || 'Người dùng';
+              senderAvatar = msg.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.username || 'User')}&background=random`;
+            }
+            
+            return {
+              id: msg.message_id?.toString() || '',
               content: msg.content || '',
-              timestamp: msg.created_at || new Date().toISOString(),
+              timestamp: msg.sent_at || new Date().toISOString(),
               isRead: msg.is_read || false,
               isSent: true,
               isDelivered: true,
-              type: msg.media_type ? (msg.media_type === 'photo' ? 'image' : 'video') : 'text' as 'text' | 'image' | 'video',
+              type: msg.message_type === 'media' ? 'image' : (msg.message_type as 'text' | 'image' | 'video'),
               mediaUrl: msg.media_url || undefined,
-              senderId: msg.sender_id,
-            }));
-            
-            setMessages(apiMessages);
-          }
+              senderId: msg.sender_id?.toString() || '',
+              senderName,
+              senderAvatar,
+            };
+          });
+          
+          const sortedMessages = [...apiMessages].sort((a, b) => 
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+          
+          setMessages(sortedMessages);
+        } else {
+          setMessages([]);
         }
       } catch (err) {
         console.error('Lỗi khi tải cuộc trò chuyện:', err);
@@ -141,9 +238,8 @@ export default function ConversationScreen() {
     };
     
     fetchConversation();
-  }, [id]);
+  }, [id, recipientInfo, currentUserId]);
 
-  // Format last seen time
   const formatLastSeen = (lastActive?: string) => {
     if (!lastActive) return 'Không hoạt động';
     
@@ -174,20 +270,20 @@ export default function ConversationScreen() {
       isSent: true,
       isDelivered: false,
       type: 'text',
+      senderName: 'Bạn',
+      senderAvatar: authData?.user?.profile_picture || `https://ui-avatars.com/api/?name=Me&background=random`,
+      senderId: currentUserId.toString(),
     };
 
-    // Optimistic update
-    setMessages(prev => [newMessage, ...prev]);
+    setMessages(prev => [...prev, newMessage]);
 
     try {
-      // Send message to server
-      const response = await apiClient.post<MessageResponse>(`/messages/conversations/${id}/messages`, {
+      const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/messages`, {
         content: text,
         type: 'text'
       });
       
       if (response.data && response.data.message) {
-        // Update with server data
         setMessages(prev => 
           prev.map(msg => 
             msg.id === tempId
@@ -201,7 +297,6 @@ export default function ConversationScreen() {
           )
         );
         
-        // Giả lập đánh dấu đã đọc sau 2 giây
         setTimeout(() => {
           setMessages(prev => 
             prev.map(msg => 
@@ -215,7 +310,6 @@ export default function ConversationScreen() {
     } catch (err) {
       console.error('Lỗi khi gửi tin nhắn:', err);
       
-      // Update message to show error
       setMessages(prev => 
         prev.map(msg => 
           msg.id === tempId
@@ -239,38 +333,28 @@ export default function ConversationScreen() {
       isDelivered: false,
       type,
       mediaUrl: uri,
+      senderName: 'Bạn',
+      senderAvatar: authData?.user?.profile_picture || `https://ui-avatars.com/api/?name=Me&background=random`,
+      senderId: currentUserId.toString(),
     };
 
-    // Optimistic update
-    setMessages(prev => [newMessage, ...prev]);
+    setMessages(prev => [...prev, newMessage]);
 
     try {
-      // Create form data
-      const formData = new FormData();
-      // Thêm typecast để không xảy ra lỗi TypeScript
-      formData.append('media', {
-        uri,
-        type: type === 'image' ? 'image/jpeg' : 'video/mp4',
-        name: `${type}_${Date.now()}.${type === 'image' ? 'jpg' : 'mp4'}`
-      } as unknown as Blob);
-      formData.append('type', type);
-      
-      // Send media to server
-      const response = await apiClient.post<MessageResponse>(`/messages/conversations/${id}/messages/media`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/messages`, {
+        content: `[Hình ảnh] - ${new Date().toLocaleTimeString()}`,
+        type: 'text'
       });
       
+      
       if (response.data && response.data.message) {
-        // Update with server data
         setMessages(prev => 
           prev.map(msg => 
             msg.id === tempId
               ? {
                   ...msg,
                   id: response.data.message.id || response.data.message._id || tempId,
-                  mediaUrl: response.data.message.media_url || uri,
+                  mediaUrl: uri,
                   isRead: false,
                   isDelivered: true
                 }
@@ -278,7 +362,6 @@ export default function ConversationScreen() {
           )
         );
         
-        // Giả lập đánh dấu đã đọc sau 2 giây
         setTimeout(() => {
           setMessages(prev => 
             prev.map(msg => 
@@ -291,8 +374,8 @@ export default function ConversationScreen() {
       }
     } catch (err) {
       console.error('Lỗi khi gửi media:', err);
+      console.error('Chi tiết lỗi:', JSON.stringify(err, null, 2));
       
-      // Update message to show error
       setMessages(prev => 
         prev.map(msg => 
           msg.id === tempId
@@ -309,25 +392,25 @@ export default function ConversationScreen() {
   };
 
   const handleReaction = (emoji: string) => {
-    // Xử lý phản ứng tin nhắn
     setShowReactions(false);
   };
 
   const renderMessage = ({ item }: { item: MessageType }) => {
-    const isOwn = item.senderId !== user.id;
+    const isCurrentUser = item.senderId === currentUserId.toString();
     
     return (
       <MessageBubble
         message={item}
-        isOwn={isOwn}
-        showAvatar={!isOwn && true}
-        avatar={user.avatar}
+        isOwn={isCurrentUser}
+        showAvatar={!isCurrentUser}
+        avatar={isCurrentUser ? '' : (item.senderAvatar || user.avatar)}
+        isGroup={user.isGroup}
         onLongPress={() => handleLongPressMessage(item.id)}
-        onReactionPress={() => setShowReactions(true)}
         onMediaPress={() => {
           if (item.type === 'image' || item.type === 'video') {
             setMediaPreview(item.mediaUrl || null);
             setMediaType(item.type);
+            setShowOptions(true);
           }
         }}
       />
@@ -367,12 +450,7 @@ export default function ConversationScreen() {
         <StatusBar style="light" />
         
         <MessageHeader
-          username={user.username}
-          avatar={user.avatar}
-          userId={user.id}
-          isOnline={user.isOnline}
-          lastSeen={user.lastSeen}
-          showCallButtons={true}
+          user={user}
         />
         
         {error ? (
@@ -385,9 +463,9 @@ export default function ConversationScreen() {
                 data={messages}
                 renderItem={renderMessage}
                 keyExtractor={item => item.id}
-                inverted
+                inverted={true}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingVertical: 10 }}
+                contentContainerStyle={{ paddingVertical: 10, flexDirection: 'column-reverse' }}
               />
             </View>
             
@@ -395,13 +473,11 @@ export default function ConversationScreen() {
               onSendMessage={handleSendMessage}
               onSendMedia={handleSendMedia}
               onTypingStatusChange={(isTyping) => {
-                // Xử lý trạng thái đang nhập
               }}
             />
           </>
         )}
         
-        {/* Hiển thị phản ứng tin nhắn */}
         {showReactions && (
           <View className="absolute bottom-16 left-0 right-0 mx-4">
             <MessageReaction

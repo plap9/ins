@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MessageBubbleProps {
@@ -12,12 +12,14 @@ interface MessageBubbleProps {
     isDelivered: boolean;
     type: 'text' | 'image' | 'video';
     mediaUrl?: string;
+    senderId?: string;
+    senderName?: string;
   };
   isOwn: boolean;
   showAvatar?: boolean;
   avatar?: string;
+  isGroup?: boolean;
   onLongPress?: () => void;
-  onReactionPress?: () => void;
   onMediaPress?: () => void;
 }
 
@@ -26,14 +28,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   isOwn,
   showAvatar = false,
   avatar,
+  isGroup = false,
   onLongPress,
-  onReactionPress,
   onMediaPress,
 }) => {
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.senderName || 'User')}&background=random`;
+  
+  const avatarSource = { uri: avatar || defaultAvatar };
 
   const renderMedia = () => {
     if (message.type === 'image' && message.mediaUrl) {
@@ -65,56 +66,37 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return null;
   };
 
-  const renderStatus = () => {
-    if (!isOwn) return null;
-    
-    if (message.isRead) {
-      return <Text className="text-blue-500 text-xs ml-1">Đã xem</Text>;
-    } else if (message.isDelivered) {
-      return <Text className="text-gray-400 text-xs ml-1">Đã gửi</Text>;
-    } else if (message.isSent) {
-      return <Text className="text-gray-400 text-xs ml-1">Đã gửi</Text>;
-    }
-    
-    return <Text className="text-gray-400 text-xs ml-1">Đang gửi...</Text>;
-  };
-
   return (
-    <View className={`flex-row mb-3 max-w-[80%] ${isOwn ? 'self-end' : 'self-start'}`}>
+    <View className={`flex-row mb-3 max-w-[80%] ${isOwn ? 'self-end ml-auto' : 'self-start'}`}>
       {!isOwn && showAvatar && (
         <View className="mr-2 mt-auto">
-          <Image source={{ uri: avatar }} className="w-8 h-8 rounded-full" />
+          <Image 
+            source={avatarSource} 
+            className="w-9 h-9 rounded-full" 
+          />
         </View>
       )}
       
       <View>
+        {isGroup && !isOwn && message.senderName && (
+          <Text className="text-gray-400 text-xs mb-1 ml-2">{message.senderName}</Text>
+        )}
+        
         <TouchableOpacity 
           onLongPress={onLongPress}
-          className={`rounded-2xl p-3 ${
+          className={`rounded-3xl px-4 py-2.5 ${
             isOwn 
-              ? 'bg-[#0084ff]' 
+              ? 'bg-[#ba00ff]' 
               : 'bg-[#303030]'
           }`}
         >
           {renderMedia()}
           
           {message.content && (
-            <Text className="text-white">{message.content}</Text>
+            <Text className="text-white text-base">{message.content}</Text>
           )}
         </TouchableOpacity>
-        
-        <View className={`flex-row items-center mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-          <Text className="text-gray-400 text-xs">{formatTime(message.timestamp)}</Text>
-          {renderStatus()}
-        </View>
       </View>
-      
-      <TouchableOpacity 
-        onPress={onReactionPress}
-        className="ml-2 self-end mb-6"
-      >
-        <Ionicons name="arrow-redo-outline" size={18} color="#8e8e8e" />
-      </TouchableOpacity>
     </View>
   );
 };

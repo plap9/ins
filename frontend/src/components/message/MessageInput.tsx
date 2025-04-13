@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, TextInput, TouchableOpacity, Animated, Keyboard } from 'react-native';
+import { View, TextInput, TouchableOpacity, Keyboard } from 'react-native';
 import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -62,8 +62,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 1,
+      allowsEditing: false,
+      quality: 0.5,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -83,8 +84,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
     
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      quality: 1,
+      allowsEditing: false,
+      quality: 0.5,
+      exif: false,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -95,45 +97,45 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <View className="flex-row items-center px-2 py-2 bg-black border-t border-gray-800">
+    <View className="flex-row items-center px-2 py-2 bg-black">
       <TouchableOpacity 
+        className="w-12 h-12 justify-center items-center"
         onPress={handleOpenCamera}
-        className="w-10 h-10 justify-center items-center"
       >
-        <Ionicons name="camera-outline" size={28} color="#0095f6" />
+        <Ionicons name="camera" size={28} color="#e44dff" />
       </TouchableOpacity>
       
-      <View className="flex-1 flex-row items-center bg-[#303030] rounded-full px-3 py-1 mx-2">
+      <View className="flex-1 flex-row items-center bg-[#262626] rounded-full px-3 py-1 mx-2">
         <TextInput
           ref={inputRef}
           value={message}
           onChangeText={handleTextChange}
           placeholder={placeholder}
           placeholderTextColor="#8e8e8e"
-          className="flex-1 text-white py-1 px-2"
+          className="flex-1 text-white py-2 px-2 text-base"
           multiline
           maxLength={1000}
         />
         
-        <TouchableOpacity onPress={handlePickImage} className="mr-2">
-          <Ionicons name="image-outline" size={24} color="#8e8e8e" />
+        <TouchableOpacity className="mr-2" onPress={handlePickImage}>
+          <Ionicons name="image" size={24} color="#8e8e8e" />
         </TouchableOpacity>
         
         <TouchableOpacity>
-          <FontAwesome name="microphone" size={20} color="#8e8e8e" />
+          <MaterialCommunityIcons name="sticker-emoji" size={24} color="#8e8e8e" />
         </TouchableOpacity>
       </View>
       
       {message.trim() ? (
         <TouchableOpacity 
           onPress={handleSendMessage}
-          className="w-10 h-10 justify-center items-center"
+          className="w-12 h-12 justify-center items-center"
         >
-          <Ionicons name="send" size={24} color="#0095f6" />
+          <Ionicons name="send" size={24} color="#e44dff" />
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity className="w-10 h-10 justify-center items-center">
-          <MaterialCommunityIcons name="sticker-emoji" size={28} color="#0095f6" />
+        <TouchableOpacity className="w-12 h-12 justify-center items-center">
+          <Ionicons name="mic" size={24} color="#e44dff" />
         </TouchableOpacity>
       )}
     </View>

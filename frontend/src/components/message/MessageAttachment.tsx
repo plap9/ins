@@ -83,7 +83,6 @@ const MessageAttachment: React.FC<MessageAttachmentProps> = ({
     );
   }
   
-  // File attachment
   return (
     <View className={`${preview ? 'mb-2' : ''}`}>
       <TouchableOpacity 

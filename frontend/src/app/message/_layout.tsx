@@ -43,7 +43,6 @@ export default function MessageLayout() {
   );
 }
 
-// Thêm cấu hình cho route động
 export const unstable_settings = {
   initialRouteName: "index",
   "[id]": {
