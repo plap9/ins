@@ -22,13 +22,21 @@ interface Conversation {
   hasStory: boolean;
   isTyping: boolean;
   mediaType?: 'image' | 'video' | 'audio' | 'file';
+  recipient?: {
+    id?: number;
+    username?: string;
+    profile_picture?: string;
+    is_online?: boolean;
+  };
 }
 
 interface ConversationsResponse {
   conversations: Array<{
     id?: string;
     _id?: string;
+    group_id?: number;
     recipient?: {
+      id?: number;
       username?: string;
       profile_picture?: string;
       is_online?: boolean;
@@ -50,6 +58,7 @@ export default function MessageListScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'messages' | 'pending'>('messages');
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -57,11 +66,11 @@ export default function MessageListScreen() {
       setError(null);
       
       try {
-        const response = await apiClient.get<ConversationsResponse>('/messages/conversations');
+        const response = await apiClient.get<ConversationsResponse>('/api/messages/conversations');
         
         if (response.data && response.data.conversations) {
           const apiConversations = response.data.conversations.map((conv) => ({
-            id: conv.id || conv._id || '',
+            id: conv.group_id?.toString() || '',
             username: conv.recipient?.username || 'Người dùng',
             avatar: conv.recipient?.profile_picture || 'https://randomuser.me/api/portraits/lego/1.jpg',
             lastMessage: conv.last_message?.content || '',
@@ -74,6 +83,7 @@ export default function MessageListScreen() {
             hasStory: false,
             isTyping: false,
             mediaType: conv.last_message?.media_type as 'image' | 'video' | 'audio' | 'file' | undefined,
+            recipient: conv.recipient,
           }));
           
           setConversations(apiConversations);
@@ -126,10 +136,21 @@ export default function MessageListScreen() {
     }
   }, [searchQuery, conversations]);
 
-  const handleConversationPress = (id: string) => {
+  const handleConversationPress = (conversation: Conversation) => {
+
+    const recipientInfo = conversation.recipient ? 
+      JSON.stringify({
+        id: conversation.recipient.id,
+        username: conversation.recipient.username,
+        profile_picture: conversation.recipient.profile_picture,
+        is_online: conversation.recipient.is_online
+      }) : '';
+
     router.push({
-      pathname: "/message/[id]",
-      params: { id }
+      pathname: `/message/${conversation.id}`,
+      params: {
+        recipientInfo: recipientInfo
+      }
     });
   };
 
@@ -175,53 +196,69 @@ export default function MessageListScreen() {
 
   return (
     <SafeAreaView edges={['top' as Edge]} className="flex-1 bg-black">
+      <StatusBar style="light" />
+      
       {/* Header */}
-      <View className="px-4 py-2">
-        <View className="flex-row items-center justify-between mb-4">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="white" />
+      <View className="flex-row items-center justify-between px-4 py-3 mb-1">
+        <Text className="text-white text-2xl font-normal">plap04</Text>
+        <TouchableOpacity onPress={handleNewMessage}>
+          <Ionicons name="create-outline" size={26} color="white" />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Thanh tìm kiếm */}
+      <View className="bg-[#262626] rounded-3xl flex-row items-center px-4 py-2.5 mx-6 mb-6">
+        <Ionicons name="search" size={18} color="#8e8e8e" className="mr-2" />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Tìm kiếm"
+          placeholderTextColor="#8e8e8e"
+          className="flex-1 text-white text-base"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color="#8e8e8e" />
           </TouchableOpacity>
-          
-          <Text className="text-white text-xl font-semibold">Tin nhắn</Text>
-          
-          <TouchableOpacity onPress={handleNewMessage}>
-            <Ionicons name="create-outline" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Thanh tìm kiếm */}
-        <View className="bg-[#262626] rounded-lg flex-row items-center px-3 py-2 mb-4">
-          <Ionicons name="search" size={20} color="#8e8e8e" className="mr-2" />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Tìm kiếm"
-            placeholderTextColor="#8e8e8e"
-            className="flex-1 text-white"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#8e8e8e" />
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
+      </View>
+      
+      {/* Tab Bar */}
+      <View className="flex-row border-b border-gray-900 mb-1">
+        <TouchableOpacity 
+          className={`flex-1 items-center py-3 ${activeTab === 'messages' ? 'border-b-[2px] border-white' : ''}`}
+          onPress={() => setActiveTab('messages')}
+        >
+          <Text className={`${activeTab === 'messages' ? 'text-white font-bold' : 'text-gray-500'} text-base`}>
+            Tin nhắn
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          className={`flex-1 items-center py-3 ${activeTab === 'pending' ? 'border-b-[2px] border-white' : ''}`}
+          onPress={() => setActiveTab('pending')}
+        >
+          <Text className={`${activeTab === 'pending' ? 'text-white font-bold' : 'text-gray-500'} text-base`}>
+            Tin nhắn đang chờ
+          </Text>
+        </TouchableOpacity>
       </View>
       
       {/* Danh sách cuộc trò chuyện */}
       {error ? (
         renderErrorState()
-      ) : filteredConversations.length === 0 ? (
+      ) : activeTab === 'messages' && filteredConversations.length === 0 ? (
         renderEmptyState()
       ) : (
         <FlatList
-          data={filteredConversations}
-          keyExtractor={(item) => item.id}
+          data={activeTab === 'messages' ? filteredConversations : []}
           renderItem={({ item }) => (
             <MessageListItem
               conversation={item}
-              onPress={handleConversationPress}
+              onPress={() => handleConversationPress(item)}
             />
           )}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingHorizontal: 16 }}
           showsVerticalScrollIndicator={false}
         />
       )}

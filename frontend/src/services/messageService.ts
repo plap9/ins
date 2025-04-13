@@ -75,13 +75,17 @@ class MessageService {
   }
 
   async getMessages(conversationId: number, page: number = 1, limit: number = 20): Promise<{ messages: Message[], hasMore: boolean }> {
-    const response = await apiClient.get<ApiResponse<Message[]>>(`/api/messages/conversations/${conversationId}`, {
-      params: { page, limit }
-    });
-    return {
-      messages: response.data.data,
-      hasMore: response.data.pagination?.hasMore || false
-    };
+    try {
+      const response = await apiClient.get<ApiResponse<Message[]>>(`/api/messages/conversations/${conversationId}`, {
+        params: { page, limit }
+      });
+      return {
+        messages: response.data.data,
+        hasMore: response.data.pagination?.hasMore || false
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   async markAsRead(messageIds: number[]): Promise<void> {
@@ -102,13 +106,18 @@ class MessageService {
   }
 
   async getConversations(page: number = 1, limit: number = 20): Promise<{ conversations: Conversation[], hasMore: boolean }> {
-    const response = await apiClient.get<ApiResponse<Conversation[]>>('/api/messages/conversations', {
-      params: { page, limit }
-    });
-    return {
-      conversations: response.data.data,
-      hasMore: response.data.pagination?.hasMore || false
-    };
+    try {
+      const response = await apiClient.get<ApiResponse<Conversation[]>>('/api/messages/conversations', {
+        params: { page, limit }
+      });
+      return {
+        conversations: response.data.data,
+        hasMore: response.data.pagination?.hasMore || false
+      };
+    } catch (error) {
+      console.error(`Lỗi khi gọi API /api/messages/conversations:`, error);
+      throw error;
+    }
   }
 
   async addMembersToGroup(groupId: number, userIds: number[]): Promise<void> {

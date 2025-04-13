@@ -21,7 +21,6 @@ const IncomingCall: React.FC<IncomingCallProps> = ({
 }) => {
   const [ringingTime, setRingingTime] = useState(0);
   
-  // Đếm thời gian đổ chuông
   useEffect(() => {
     const interval = setInterval(() => {
       setRingingTime(prev => prev + 1);
@@ -30,7 +29,6 @@ const IncomingCall: React.FC<IncomingCallProps> = ({
     return () => clearInterval(interval);
   }, []);
   
-  // Tự động từ chối sau 30 giây
   useEffect(() => {
     if (ringingTime >= 30) {
       onReject();

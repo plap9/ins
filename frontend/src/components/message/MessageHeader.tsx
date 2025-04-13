@@ -1,90 +1,75 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, Image, TouchableOpacity, Platform } from 'react-native';
+import { useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 interface MessageHeaderProps {
-  username: string;
-  avatar: string;
-  userId: string;
-  isOnline?: boolean;
-  lastSeen?: string;
-  showCallButtons?: boolean;
+  user: {
+    id: string;
+    username: string;
+    avatar: string;
+    isOnline?: boolean;
+    lastSeen?: string;
+    isGroup?: boolean;
+  };
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({
-  username,
-  avatar,
-  userId,
-  isOnline = false,
-  lastSeen,
-  showCallButtons = true,
-}) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
   const router = useRouter();
-
-  const handleGoBack = () => {
-    router.back();
-  };
-
-  const handleUserProfile = () => {
-    router.push(`/profile/${userId}`);
-  };
-
-  const handleAudioCall = () => {
-    // Xử lý cuộc gọi âm thanh
-  };
-
-  const handleVideoCall = () => {
-    // Xử lý cuộc gọi video
-  };
-
+  const navigation = useNavigation();
+  
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`;
+  
+  const avatarSource = user.isGroup 
+    ? { uri: 'https://ui-avatars.com/api/?name=Group&size=128&background=7558ff&color=fff' }
+    : { uri: user.avatar || defaultAvatar };
+  
+  const statusText = user.isGroup 
+    ? user.lastSeen 
+    : user.isOnline 
+      ? 'Đang hoạt động' 
+      : user.lastSeen || 'Hoạt động gần đây';
+  
   return (
-    <View className="flex-row items-center justify-between px-4 py-2 bg-black border-b border-gray-800">
+    <View className="flex-row items-center justify-between px-4 h-16 bg-[#201F24]">
       <View className="flex-row items-center">
-        <TouchableOpacity onPress={handleGoBack} className="mr-3">
-          <Ionicons name="arrow-back" size={24} color="white" />
+        <TouchableOpacity onPress={() => router.back()} className="mr-3">
+          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         
         <TouchableOpacity 
-          onPress={handleUserProfile}
-          className="flex-row items-center"
+          className="flex-row items-center" 
+          onPress={() => user.isGroup ? router.push('/group-info') : router.push(`/profile/${user.id}`)}
         >
           <Image 
-            source={{ uri: avatar }} 
-            className="w-9 h-9 rounded-full mr-3"
+            source={avatarSource} 
+            className="w-10 h-10 rounded-full mr-3" 
           />
           
           <View>
-            <View className="flex-row items-center">
-              <Text className="text-white font-semibold text-base">{username}</Text>
-              {userId.includes('_') && (
-                <Text className="text-gray-400 text-xs ml-2">_{userId.split('_')[1]}</Text>
-              )}
-            </View>
-            
-            {isOnline ? (
-              <Text className="text-gray-400 text-xs">Đang hoạt động</Text>
-            ) : lastSeen ? (
-              <Text className="text-gray-400 text-xs">{lastSeen}</Text>
-            ) : null}
+            <Text className="text-white font-medium text-base">{user.username || 'Người dùng'}</Text>
+            <Text className="text-[#BBBBBB] text-xs">
+              {statusText}
+            </Text>
           </View>
         </TouchableOpacity>
       </View>
       
-      {showCallButtons && (
-        <View className="flex-row">
-          <TouchableOpacity 
-            onPress={handleAudioCall}
-            className="mr-5"
-          >
-            <Ionicons name="call-outline" size={24} color="white" />
+      <View className="flex-row items-center space-x-4">
+        {!user.isGroup && (
+          <TouchableOpacity>
+            <Ionicons name="call" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          
-          <TouchableOpacity onPress={handleVideoCall}>
-            <Ionicons name="videocam-outline" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+        
+        <TouchableOpacity>
+          <Ionicons name={user.isGroup ? "people" : "videocam"} size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity>
+          <Ionicons name="ellipsis-vertical" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
