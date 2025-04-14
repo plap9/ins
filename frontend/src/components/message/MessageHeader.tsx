@@ -31,7 +31,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
       : user.lastSeen || 'Hoạt động gần đây';
   
   return (
-    <View className="flex-row items-center justify-between px-4 h-16 bg-[#201F24]">
+    <View className="flex-row items-center justify-between px-4 h-16 bg-black">
       <View className="flex-row items-center">
         <TouchableOpacity onPress={() => router.back()} className="mr-3">
           <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
@@ -48,7 +48,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
           
           <View>
             <Text className="text-white font-medium text-base">{user.username || 'Người dùng'}</Text>
-            <Text className="text-[#BBBBBB] text-xs">
+            <Text className="text-gray-400 text-xs">
               {statusText}
             </Text>
           </View>

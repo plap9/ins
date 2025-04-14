@@ -27,6 +27,7 @@ router.get('/conversations/:conversationId', messageController.getConversationMe
 router.get('/conversations/:conversationId/messages', messageController.getConversationMessages);
 router.post('/conversations/:conversationId/messages', messageController.sendMessageToConversation);
 router.post('/conversations/:conversationId/messages/media', uploadMessageMedia, messageController.sendMediaToConversation);
+router.post('/conversations/:conversationId/upload-media', messageController.uploadMediaMessage);
 
 router.get('/messages/conversations/:conversationId', messageController.getConversationMessages);
 

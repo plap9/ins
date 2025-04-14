@@ -32,12 +32,10 @@ const MessageInput: React.FC<MessageInputProps> = ({
       onTypingStatusChange?.(false);
     }
     
-    // Reset typing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // Set new typing timeout
     if (text.length > 0) {
       typingTimeoutRef.current = setTimeout(() => {
         setIsTyping(false);
@@ -98,14 +96,14 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <View className="flex-row items-center px-2 py-2 bg-black">
-      <TouchableOpacity 
-        className="w-12 h-12 justify-center items-center"
-        onPress={handleOpenCamera}
-      >
-        <Ionicons name="camera" size={28} color="#e44dff" />
-      </TouchableOpacity>
-      
-      <View className="flex-1 flex-row items-center bg-[#262626] rounded-full px-3 py-1 mx-2">
+      <View className="flex-1 flex-row items-center bg-[#262626] rounded-full px-3 py-1 mx-1">
+        <TouchableOpacity 
+          className="p-2"
+          onPress={handleOpenCamera}
+        >
+          <Ionicons name="camera" size={24} color="#e44dff" />
+        </TouchableOpacity>
+        
         <TextInput
           ref={inputRef}
           value={message}
@@ -117,27 +115,23 @@ const MessageInput: React.FC<MessageInputProps> = ({
           maxLength={1000}
         />
         
-        <TouchableOpacity className="mr-2" onPress={handlePickImage}>
+        <TouchableOpacity className="p-2" onPress={handlePickImage}>
           <Ionicons name="image" size={24} color="#8e8e8e" />
         </TouchableOpacity>
         
-        <TouchableOpacity>
-          <MaterialCommunityIcons name="sticker-emoji" size={24} color="#8e8e8e" />
-        </TouchableOpacity>
+        {message.trim() ? (
+          <TouchableOpacity 
+            onPress={handleSendMessage}
+            className="p-2"
+          >
+            <Ionicons name="send" size={24} color="#e44dff" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity className="p-2">
+            <Ionicons name="mic" size={24} color="#e44dff" />
+          </TouchableOpacity>
+        )}
       </View>
-      
-      {message.trim() ? (
-        <TouchableOpacity 
-          onPress={handleSendMessage}
-          className="w-12 h-12 justify-center items-center"
-        >
-          <Ionicons name="send" size={24} color="#e44dff" />
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity className="w-12 h-12 justify-center items-center">
-          <Ionicons name="mic" size={24} color="#e44dff" />
-        </TouchableOpacity>
-      )}
     </View>
   );
 };
