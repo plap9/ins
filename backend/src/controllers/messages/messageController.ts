@@ -5,6 +5,10 @@ import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { RowDataPacket, OkPacket, ResultSetHeader } from "mysql2";
 import SocketService from "../../utils/socketService";
+import { uploadToS3 } from "../../utils/s3Utils";
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 
 let socketServiceInstance: SocketService;
 
@@ -1379,7 +1383,7 @@ export const sendMediaToConversation = async (req: AuthRequest, res: Response): 
       
       const messageId = messageResult.insertId;
       
-      const mediaType = type === 'image' ? 'image' : type === 'video' ? 'video' : 'audio';
+      const mediaType = type === 'image' ? 'image' : 'video';
       
       await connection.query(
         "INSERT INTO media (media_url, media_type, message_id, content_type) VALUES (?, ?, ?, 'message')",
@@ -1473,5 +1477,202 @@ export const createGroupConversation = async (req: AuthRequest, res: Response): 
     res.status(500).json({
       error: "Lỗi khi tạo nhóm chat"
     });
+  }
+};
+
+export const uploadMediaMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
+    }
+    
+    const conversationId = req.params.conversationId;
+    const { type = 'image', caption = '', base64Data, fileName } = req.body;
+    
+    if (!conversationId) {
+      throw new AppException("Thiếu thông tin tin nhắn", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    let mediaUrl = '';
+    let mediaKey = '';
+    
+    if (req.file) {
+      try {
+        const fileBuffer = req.file.buffer;
+        const key = `messages/${conversationId}/${Date.now()}-${uuidv4()}${path.extname(req.file.originalname)}`;
+        
+        const uploadResult = await uploadToS3(fileBuffer, key, req.file.mimetype);
+        mediaUrl = uploadResult.Location;
+        mediaKey = uploadResult.Key;
+      } catch (error) {
+        console.error('Lỗi khi upload file lên S3:', error);
+        throw new AppException("Không thể upload file", ErrorCode.FILE_PROCESSING_ERROR, 500);
+      }
+    } else if (base64Data) {
+      try {
+        const base64Content = base64Data.replace(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/, '');
+        
+        const fileBuffer = Buffer.from(base64Content, 'base64');
+        
+        const fileExt = type === 'image' ? '.jpg' : '.mp4';
+        const key = `messages/${conversationId}/${Date.now()}-${uuidv4()}${fileExt}`;
+        
+        const contentType = type === 'image' ? 'image/jpeg' : 'video/mp4';
+        
+        const uploadResult = await uploadToS3(fileBuffer, key, contentType);
+        mediaUrl = uploadResult.Location;
+        mediaKey = uploadResult.Key;
+      } catch (error) {
+        console.error('Lỗi khi xử lý dữ liệu base64:', error);
+        throw new AppException("Không thể xử lý dữ liệu ảnh/video", ErrorCode.FILE_PROCESSING_ERROR, 500);
+      }
+    } else {
+      throw new AppException("Không có tệp tin hoặc dữ liệu base64", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      
+      let receiverId = null;
+      let groupId = null;
+      
+      if (conversationId.includes('_')) {
+        const userIds = conversationId.split('_');
+        
+        if (userIds.length !== 2) {
+          throw new AppException("ID cuộc trò chuyện không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+        }
+        
+        if (userIds[0] !== userId.toString() && userIds[1] !== userId.toString()) {
+          throw new AppException("Bạn không thuộc cuộc trò chuyện này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+        }
+        
+        receiverId = userIds[0] === userId.toString() ? parseInt(userIds[1]) : parseInt(userIds[0]);
+      } else {
+        const [memberCheck] = await connection.query<RowDataPacket[]>(
+          "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+          [conversationId, userId]
+        );
+        
+        if (memberCheck.length === 0) {
+          throw new AppException("Bạn không thuộc nhóm chat này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+        }
+        
+        groupId = parseInt(conversationId);
+      }
+      
+      let senderUsername = "Bạn";
+      let senderProfilePicture = null;
+      
+      if (userId) {
+        const [userInfo] = await pool.query<RowDataPacket[]>(
+          "SELECT username, profile_picture FROM users WHERE user_id = ?",
+          [userId]
+        );
+        
+        if (userInfo.length > 0) {
+          senderUsername = userInfo[0].username;
+          senderProfilePicture = userInfo[0].profile_picture;
+        }
+      }
+      
+      let query = '';
+      let queryParams = [];
+
+      if (groupId) {
+        const [members] = await connection.query<RowDataPacket[]>(
+          "SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ? LIMIT 1",
+          [groupId, userId]
+        );
+        
+        let tempReceiverId = members.length > 0 ? members[0].user_id : null;
+        
+        if (!tempReceiverId) {
+          const [groupInfo] = await connection.query<RowDataPacket[]>(
+            "SELECT creator_id FROM chat_groups WHERE group_id = ?",
+            [groupId]
+          );
+          
+          tempReceiverId = groupInfo.length > 0 ? groupInfo[0].creator_id : userId;
+        }
+        
+        query = "INSERT INTO messages (sender_id, receiver_id, content, message_type, group_id) VALUES (?, ?, ?, ?, ?)";
+        queryParams = [userId, tempReceiverId, caption, 'media', groupId];
+      } else {
+        query = "INSERT INTO messages (sender_id, receiver_id, content, message_type) VALUES (?, ?, ?, ?)";
+        queryParams = [userId, receiverId, caption, 'media'];
+      }
+
+      const [messageResult] = await connection.query<ResultSetHeader>(query, queryParams);
+      
+      const messageId = messageResult.insertId;
+      
+      const mediaType = type === 'image' ? 'image' : 'video';
+      
+      await connection.query(
+        "INSERT INTO media (media_url, media_type, message_id, content_type) VALUES (?, ?, ?, 'message')",
+        [mediaUrl, mediaType, messageId]
+      );
+      
+      await connection.commit();
+      
+      const [messages] = await pool.query<RowDataPacket[]>(
+        `SELECT m.*, u.username, u.profile_picture, med.media_url, med.media_type 
+         FROM messages m
+         JOIN users u ON m.sender_id = u.user_id
+         JOIN media med ON m.message_id = med.message_id
+         WHERE m.message_id = ?`,
+        [messageId]
+      );
+      
+      if (messages.length === 0) {
+        throw new AppException("Lỗi khi tạo tin nhắn", ErrorCode.SERVER_ERROR, 500);
+      }
+      
+      const message = messages[0];
+      
+      if (groupId && socketServiceInstance) {
+        socketServiceInstance.notifyNewMessage(`group_${groupId}`, message);
+      } else if (receiverId && socketServiceInstance) {
+        socketServiceInstance.notifyNewMessage(`user_${receiverId}`, message);
+      }
+      
+      res.status(201).json({
+        message: {
+          id: messageId.toString(),
+          message_id: messageId,
+          content: caption,
+          message_type: 'media',
+          media_type: mediaType,
+          media_url: mediaUrl,
+          is_read: false,
+          sent_at: new Date().toISOString(),
+          sender_id: userId,
+          username: senderUsername,
+          profile_picture: senderProfilePicture
+        }
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("Lỗi khi gửi tin nhắn đa phương tiện từ camera:", error);
+    if (error instanceof AppException) {
+      res.status(error.status || 500).json({
+        status: "error",
+        message: error.message
+      });
+    } else {
+      res.status(500).json({
+        status: "error",
+        message: "Lỗi khi gửi tin nhắn đa phương tiện từ camera"
+      });
+    }
   }
 }; 

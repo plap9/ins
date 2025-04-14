@@ -323,6 +323,16 @@ export default function ConversationScreen() {
   const handleSendMedia = async (uri: string, type: 'image' | 'video') => {
     if (!uri || !id) return;
     
+    // Kiểm tra và xử lý URI dựa trên nguồn gốc file
+    let processedUri = uri;
+    
+    // Kiểm tra URI của tệp có phải là từ camera không
+    const isCameraFile = uri.startsWith('file://') && (
+      uri.includes('/cache/') || 
+      uri.includes('/Camera/') || 
+      uri.includes('/temporary/')
+    );
+    
     const tempId = Date.now().toString();
     const newMessage: MessageType = {
       id: tempId,
@@ -332,7 +342,7 @@ export default function ConversationScreen() {
       isSent: true,
       isDelivered: false,
       type,
-      mediaUrl: uri,
+      mediaUrl: processedUri, // Sử dụng URI đã xử lý
       senderName: 'Bạn',
       senderAvatar: authData?.user?.profile_picture || `https://ui-avatars.com/api/?name=Me&background=random`,
       senderId: currentUserId.toString(),
@@ -341,20 +351,50 @@ export default function ConversationScreen() {
     setMessages(prev => [...prev, newMessage]);
 
     try {
-      const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/messages`, {
-        content: `[Hình ảnh] - ${new Date().toLocaleTimeString()}`,
-        type: 'text'
-      });
+      let response;
       
+      if (isCameraFile) {
+        // Xử lý đặc biệt cho file từ camera - chuyển thành base64 và gửi lên server
+        try {
+          // Đọc file từ URI thành base64
+          const base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64
+          });
+          
+          // Xác định content type dựa vào loại media
+          const contentType = type === 'image' ? 'image/jpeg' : 'video/mp4';
+          
+          // Tạo dữ liệu URI đầy đủ
+          const dataUri = `data:${contentType};base64,${base64Data}`;
+          
+          // Gửi lên server
+          response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/upload-media`, {
+            type,
+            caption: `[${type === 'image' ? 'Hình ảnh' : 'Video'}] - ${new Date().toLocaleTimeString()}`,
+            base64Data: dataUri
+          });
+        } catch (err) {
+          console.error('Lỗi khi chuyển đổi URI thành base64:', err);
+          throw err;
+        }
+      } else {
+        // Nếu không phải file từ camera, giữ nguyên phương thức gửi tin nhắn văn bản
+        response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/messages`, {
+          content: `[${type === 'image' ? 'Hình ảnh' : 'Video'}] - ${new Date().toLocaleTimeString()}`,
+          type: 'text'
+        });
+      }
       
-      if (response.data && response.data.message) {
+      if (response?.data && response.data.message) {
+        const mediaUrlFromServer = response.data.message.media_url;
+        
         setMessages(prev => 
           prev.map(msg => 
             msg.id === tempId
               ? {
                   ...msg,
                   id: response.data.message.id || response.data.message._id || tempId,
-                  mediaUrl: uri,
+                  mediaUrl: mediaUrlFromServer || processedUri,
                   isRead: false,
                   isDelivered: true
                 }
@@ -432,8 +472,8 @@ export default function ConversationScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-black">
-        <View className="flex-1 justify-center items-center">
+      <SafeAreaView edges={['bottom']} style={{ flex: 1 }} className="flex-1 bg-black">
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#0095f6" />
         </View>
       </SafeAreaView>
