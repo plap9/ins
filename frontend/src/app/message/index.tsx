@@ -66,7 +66,7 @@ export default function MessageListScreen() {
       setError(null);
       
       try {
-        const response = await apiClient.get<ConversationsResponse>('/api/messages/conversations');
+        const response = await apiClient.get<ConversationsResponse>('/messages/conversations');
         
         if (response.data && response.data.conversations) {
           const apiConversations = response.data.conversations.map((conv) => ({

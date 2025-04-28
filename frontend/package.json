@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "^10.0.0",
     "@expo/vector-icons": "^14.0.2",
     "@gorhom/bottom-sheet": "^5.1.2",
     "@react-native-async-storage/async-storage": "1.23.1",
@@ -20,11 +21,13 @@
     "clsx": "^2.1.1",
     "expo": "~52.0.42",
     "expo-av": "^15.0.2",
+    "expo-blur": "^14.0.3",
     "expo-camera": "~16.0.18",
     "expo-clipboard": "~7.0.1",
     "expo-constants": "~17.0.8",
     "expo-dev-client": "~5.0.19",
     "expo-file-system": "~18.0.12",
+    "expo-image": "^2.0.7",
     "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.2",
     "expo-linking": "~7.0.5",
@@ -33,6 +36,7 @@
     "expo-router": "~4.0.20",
     "expo-status-bar": "~2.0.1",
     "expo-video-thumbnails": "^9.0.3",
+    "expo-webrtc": "^0.0.0",
     "lucide-react-native": "^0.482.0",
     "nativewind": "^4.1.23",
     "prettier-plugin-tailwindcss": "^0.6.11",
@@ -49,6 +53,7 @@
     "react-native-swipe-gestures": "^1.0.5",
     "react-native-vector-icons": "^10.2.0",
     "react-native-web": "~0.19.13",
+    "react-native-webrtc": "^124.0.5",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.0.2"
   },

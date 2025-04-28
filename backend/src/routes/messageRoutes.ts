@@ -35,4 +35,14 @@ router.post('/groups/:groupId/members', messageController.addMembersToGroup);
 router.delete('/groups/:groupId/leave', messageController.leaveGroup);
 router.put('/groups/:groupId', messageController.updateGroupInfo);
 
+router.get('/search', messageController.searchMessages);
+router.get('/recent', messageController.getRecentConversations);
+router.post('/messages/:message_id/reactions', messageController.sendReaction);
+
+router.post('/calls', messageController.initiateCall);
+router.put('/calls/:call_id/answer', messageController.answerCall);
+router.put('/calls/:call_id/end', messageController.endCall);
+router.get('/calls', messageController.getCallHistory);
+router.get('/calls/:call_id', messageController.getCallDetails);
+
 export default router; 
