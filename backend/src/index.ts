@@ -28,7 +28,6 @@ process.env.STUN_URLS = process.env.STUN_URLS || 'stun:stun.l.google.com:19302,s
 
 if (!process.env.TURN_SERVER_URIS) {
   console.warn('CẢNH BÁO: TURN server chưa được cấu hình. WebRTC có thể không hoạt động qua NAT nghiêm ngặt!');
-  console.log('Để cấu hình TURN, hãy thiết lập các biến môi trường TURN_SERVER_URIS, STATIC_TURN_SECRET, TURN_CREDENTIAL_TTL');
 }
 
 process.env.ENABLE_SFU = process.env.ENABLE_SFU || 'true';
@@ -81,7 +80,7 @@ app.use("/cache", cacheRoutes);
 app.use("/stories", story);
 app.use("/search", search);
 app.use("/messages", messageRoutes);
-app.use("/api/webrtc", webrtcRoutes);
+app.use("/webrtc", webrtcRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
@@ -99,9 +98,12 @@ if (require.main === module) {
   });
 
   server.listen(PORT, '0.0.0.0', () => {
+    const ip = getIPAddress();
     console.log(`Server đang chạy với socket.io trên:`);
     console.log(`- Local: http://localhost:${PORT}`);
-    console.log(`- Network: http://${getIPAddress()}:${PORT}\n`);
+    console.log(`- Network: http://${ip}:${PORT}`);
+    console.log(`\n*** ĐỂ KẾT NỐI TỪ FRONTEND, SỬ DỤNG: ***`);
+    console.log(`API_URL = "http://${ip}:${PORT}"\n`);
   });
 }
 

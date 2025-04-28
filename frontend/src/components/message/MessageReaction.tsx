@@ -26,7 +26,6 @@ const MessageReaction: React.FC<MessageReactionProps> = ({
   }
 
   if (compact && reactions.length > 0) {
-    // Hiển thị dạng nhỏ gọn cho tin nhắn
     return (
       <View className="flex-row items-center bg-[#303030] rounded-full px-2 py-1 self-start mt-1">
         {reactions.slice(0, 2).map((reaction, index) => (
@@ -42,7 +41,6 @@ const MessageReaction: React.FC<MessageReactionProps> = ({
     );
   }
 
-  // Hiển thị đầy đủ cho bottom sheet
   return (
     <View className="bg-[#262626] rounded-2xl p-4">
       <View className="flex-row justify-between mb-4">

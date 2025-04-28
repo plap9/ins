@@ -127,15 +127,12 @@ class SocketService {
         try {
           const { createAdapter } = require('@socket.io/redis-adapter');
           this.io.adapter(createAdapter(this.redisClient, this.redisSubscriber));
-          console.log('Socket.IO Redis adapter đã được thiết lập (@socket.io/redis-adapter)');
         } catch (adapterError) {
           try {
             const redisAdapter = require('socket.io-redis');
             this.io.adapter(redisAdapter({ pubClient: this.redisClient, subClient: this.redisSubscriber }));
-            console.log('Socket.IO Redis adapter đã được thiết lập (socket.io-redis)');
           } catch (legacyAdapterError) {
             logError('SocketService', legacyAdapterError, 'Không thể thiết lập Redis adapter, sử dụng bộ nhớ trong');
-            console.log('Socket.IO sẽ hoạt động mà không có Redis adapter');
           }
         }
         
@@ -259,13 +256,10 @@ class SocketService {
   private initializeListeners(): void {
     this.io.use(this.authMiddleware);
     this.io.on('connection', (socket: Socket) => {
-      console.log(`[${new Date().toISOString()}] Người dùng đã kết nối: ${socket.id}`);
-      
       const userId = socket.data.userId as number;
 
       const reconnected = this.offlineUsers.has(userId);
       if (reconnected) {
-        console.log(`[${new Date().toISOString()}] Người dùng ${userId} đã kết nối lại`);
         this.offlineUsers.delete(userId);
         
         const existingUser = this.activeUsers.get(userId);
@@ -294,7 +288,6 @@ class SocketService {
       });
 
       socket.on('disconnect', (reason) => {
-        console.log(`[${new Date().toISOString()}] Người dùng ngắt kết nối: ${socket.id}, lý do: ${reason}`);
         
         this.handleTemporaryDisconnect(userId, socket.id);
         
@@ -309,7 +302,6 @@ class SocketService {
         if (rooms && Array.isArray(rooms)) {
           for (const roomId of rooms) {
             socket.join(roomId);
-            console.log(`[${new Date().toISOString()}] Người dùng ${userId} đã tham gia lại phòng ${roomId}`);
           }
         }
       });
@@ -334,7 +326,6 @@ class SocketService {
       this.offlineUsers.set(userId, new Date());
       
       userSocket.reconnectTimer = setTimeout(() => {
-        console.log(`[${new Date().toISOString()}] Đã hết thời gian chờ kết nối lại cho người dùng ${userId}, xóa thông tin người dùng`);
         this.removeUser(userId, socketId);
       }, this.RECONNECT_TIMEOUT_MS);
     }
@@ -488,8 +479,6 @@ class SocketService {
             .filter(msg => msg.conversationId === roomId);
           
           if (pendingMessages.length > 0) {
-            console.log(`[${new Date().toISOString()}] Phát hiện ${pendingMessages.length} tin nhắn đang chờ gửi cho roomId ${roomId}`);
-            
             socket.emit('message:pending', { 
               roomId,
               count: pendingMessages.length,
@@ -634,7 +623,7 @@ class SocketService {
     socket.on('message:sync', async ({ conversationIds }: { conversationIds?: string[] }) => {
       try {
         const result = await this.messageQueueService.syncMessages(userId, async (localMessages, lastSyncTimestamp) => {
-          return []; // Thay thế bằng lệnh gọi API thực tế
+          return [];
         });
         
         socket.emit('message:sync-result', {
@@ -1105,6 +1094,10 @@ class SocketService {
       roomId,
       message
     });
+  }
+
+  public notifyCall(roomId: string, event: string, callData: any): void {
+    this.io.to(roomId).emit(event, callData);
   }
 
   public getUserSocket(userId: number): Socket | null {

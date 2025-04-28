@@ -11,15 +11,38 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  if (Platform.OS === "android") {
-    config.url = config.url?.replace(/^\/api/, "");
+  if (config.url?.startsWith('/api/')) {
+    const oldUrl = config.url;
+    config.url = config.url.replace(/^\/api\//, '/');
   }
+  
+  if (config.url?.includes('/messages/calls')) {
+    console.log('URL:', config.url);
+    console.log('Method:', config.method?.toUpperCase());
+    console.log('Headers:', JSON.stringify(config.headers));
+    console.log('Data:', config.data ? JSON.stringify(config.data) : 'No data');
+  }
+  
   return config;
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.url?.includes('/messages/calls')) {
+      console.log('URL:', response.config.url);
+      console.log('Status:', response.status);
+      console.log('Data:', JSON.stringify(response.data));
+    }
+    return response;
+  },
   (error) => {
+    if (error.config?.url?.includes('/messages/calls')) {
+      console.log('URL:', error.config.url);
+      console.log('Status:', error.response?.status || 'No response');
+      console.log('Error:', error.message);
+      console.log('Response data:', error.response?.data ? JSON.stringify(error.response.data) : 'No data');
+    }
+    
     if (error.code === "ECONNABORTED") {
       console.error("Request timeout:", error);
       return Promise.reject(new Error("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng."));
@@ -33,6 +56,7 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 apiClient.interceptors.request.use((config) => {
   console.log("Request URL:", config.url);
   console.log("Request Headers:", config.headers);

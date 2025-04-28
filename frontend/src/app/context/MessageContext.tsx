@@ -334,4 +334,6 @@ export const useMessages = (): MessageContextType => {
     throw new Error('useMessages must be used within a MessageProvider');
   }
   return context;
-}; 
+};
+
+export default MessageContext; 

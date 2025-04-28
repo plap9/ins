@@ -721,3 +721,35 @@ CREATE TABLE
     CONSTRAINT `follow_requests_ibfk_1` FOREIGN KEY (`requester_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
     CONSTRAINT `follow_requests_ibfk_2` FOREIGN KEY (`target_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
   ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+  DROP TABLE IF EXISTS `conversations`;
+
+CREATE TABLE `conversations` (
+  `conversation_id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `type` enum('private','group') NOT NULL DEFAULT 'private',
+  `title` varchar(255) DEFAULT NULL,
+  `avatar` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `last_message_id` bigint(20) DEFAULT NULL,
+  PRIMARY KEY (`conversation_id`),
+  KEY `idx_conversations_last_message` (`last_message_id`),
+  CONSTRAINT `conversations_ibfk_1` FOREIGN KEY (`last_message_id`) REFERENCES `messages` (`message_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+DROP TABLE IF EXISTS `conversation_members`;
+
+CREATE TABLE `conversation_members` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `conversation_id` bigint(20) NOT NULL,
+  `user_id` bigint(20) NOT NULL,
+  `joined_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `last_read_message_id` bigint(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_conversation_member` (`conversation_id`,`user_id`),
+  KEY `idx_conversation_members_user` (`user_id`),
+  KEY `idx_conversation_members_lastread` (`last_read_message_id`),
+  CONSTRAINT `conversation_members_ibfk_1` FOREIGN KEY (`conversation_id`) REFERENCES `conversations` (`conversation_id`) ON DELETE CASCADE,
+  CONSTRAINT `conversation_members_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `conversation_members_ibfk_3` FOREIGN KEY (`last_read_message_id`) REFERENCES `messages` (`message_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

@@ -130,6 +130,46 @@ class SocketService {
         listeners.forEach(listener => listener(data));
       }
     });
+
+    this.socket.on('call:initiated', (data) => {
+      const listeners = this.callListeners.get('initiated') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:accepted', (data) => {
+      const listeners = this.callListeners.get('accepted') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:missed', (data) => {
+      const listeners = this.callListeners.get('missed') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:signal', (data) => {
+      const listeners = this.callListeners.get('signal') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:status', (data) => {
+      const listeners = this.callListeners.get('status') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:user-muted', (data) => {
+      const listeners = this.callListeners.get('user-muted') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:user-camera', (data) => {
+      const listeners = this.callListeners.get('user-camera') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('call:recipient-offline', (data) => {
+      const listeners = this.callListeners.get('recipient-offline') || new Set();
+      listeners.forEach(listener => listener(data));
+    });
   }
 
   disconnect() {
@@ -212,7 +252,34 @@ class SocketService {
     this.socket.emit('call:end', { roomId, rtcSessionId });
   }
 
-  onCall(type: 'incoming' | 'user-joined' | 'rejected' | 'ended' | 'user-left' | 'rtc-offer' | 'rtc-answer' | 'rtc-ice' | 'media-state' | 'config', callback: (data: any) => void) {
+  sendCallSignal(callId: number, recipientId: number, signalData: any, signalType: 'offer' | 'answer' | 'ice-candidate') {
+    if (!this.socket) return;
+    this.socket.emit('call:signal', { 
+      call_id: callId, 
+      recipient_id: recipientId, 
+      signal_data: signalData,
+      signal_type: signalType
+    });
+  }
+
+  updateCallStatus(callId: number, status: 'connecting' | 'connected' | 'reconnecting' | 'disconnected', recipientId?: number) {
+    if (!this.socket) return;
+    const data: any = { call_id: callId, status };
+    if (recipientId) data.recipient_id = recipientId;
+    this.socket.emit('call:status', data);
+  }
+
+  toggleMute(callId: number, muted: boolean) {
+    if (!this.socket) return;
+    this.socket.emit('call:mute', { call_id: callId, muted });
+  }
+
+  toggleCamera(callId: number, enabled: boolean) {
+    if (!this.socket) return;
+    this.socket.emit('call:camera', { call_id: callId, enabled });
+  }
+
+  onCall(type: 'incoming' | 'user-joined' | 'rejected' | 'ended' | 'user-left' | 'rtc-offer' | 'rtc-answer' | 'rtc-ice' | 'media-state' | 'config' | 'signal' | 'status' | 'user-muted' | 'user-camera' | 'initiated' | 'accepted' | 'missed' | 'recipient-offline', callback: (data: any) => void) {
     if (!this.callListeners.has(type)) {
       this.callListeners.set(type, new Set());
     }
@@ -252,6 +319,21 @@ class SocketService {
 
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  public requestReconnection(peerId: string): void {
+    if (this.socket) {
+      this.socket.emit('request-reconnection', { peerId });
+      console.log('Đã gửi yêu cầu kết nối lại tới:', peerId);
+    } else {
+      console.error('Socket không khả dụng, không thể yêu cầu kết nối lại');
+    }
+  }
+
+  public onReconnectionRequest(callback: (data: { peerId: string }) => void): void {
+    if (this.socket) {
+      this.socket.on('reconnection-request', callback);
+    }
   }
 }
 
