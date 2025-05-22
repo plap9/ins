@@ -175,7 +175,7 @@ sequenceDiagram
     ClientA->>ClientB: Direct Media Stream (Audio/Video via WebRTC)
     ClientB->>ClientA: Direct Media Stream (Audio/Video via WebRTC)
 
-    Note over ClientA, SIO_Server, ClientB: Call Termination (Example: Client A hangs up)
+    Note over ClientA,ClientB: Call Termination (Example: Client A hangs up)
     ClientA->>SIO_Server: call:end
     SIO_Server->>ClientB: call:end
     Note over ClientA: Close PeerConnection, Stop Media
