@@ -1,24 +1,14 @@
-import express, { Router } from "express";
-import { login } from "../controllers/auth/loginController";
-import { register } from "../controllers/auth/registerController";
-import { verifyAccount } from "../controllers/auth/verificationController";
-import { logout, refreshToken } from "../controllers/auth/tokenController";
-import { loginRateLimiter, forgotPasswordRateLimiter } from "../middlewares/rateLimit";
-import { validate } from "../middlewares/validate";
-import { loginSchema, registerSchema, verifyPhoneSchema, verifySchema , resendVerificationSchema, forgotPasswordSchema, resetPasswordSchema} from "../validations/authValidation";
-import { forgotPassword, resetPassword } from "../controllers/auth/forgotPasswordController";
-import { resendVerification } from "../controllers/auth/resendVerificationController";
+import express, { Router, RequestHandler } from "express";
+import { register } from "../controllers/registerController";
+import { login } from "../controllers/loginController";
+import { verifyEmail } from "../controllers/registerController";
+import { verifyPhone } from "../controllers/registerController";
 
 const router: Router = express.Router();
 
-router.post("/register", validate(registerSchema), register);
-router.post("/login", loginRateLimiter, validate(loginSchema), login);
-router.post("/verify", validate(verifySchema), verifyAccount)
-router.post("/logout", logout);
-router.post("/refresh-token", refreshToken);
-router.post("/forgot-password", forgotPasswordRateLimiter, validate(forgotPasswordSchema), forgotPassword);
-router.post("/reset-password", validate(resetPasswordSchema), resetPassword);
-
-router.post("/resend-verification", resendVerification);
+router.post("/register", register as RequestHandler);
+router.post("/login", login as RequestHandler);
+router.get("/verify-email", verifyEmail as RequestHandler);
+router.post("/verify-phone", verifyPhone as RequestHandler);
 
 export default router;
