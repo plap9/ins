@@ -40,6 +40,9 @@ export default function LoginScreen() {
     try {
       setLoading(true);
 
+      const trimmedLogin = login.trim();
+      const trimmedPassword = password.trim();
+
       const response = await apiClient.post<{
         status?: string;
         data?: {
@@ -48,8 +51,8 @@ export default function LoginScreen() {
           user: any;
         };
       }>("/auth/login", {
-        login,
-        password,
+        login: trimmedLogin,
+        password: trimmedPassword,
       });
 
       if (!response.data.data?.token || !response.data.data?.user) {

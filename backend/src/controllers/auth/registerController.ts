@@ -31,6 +31,22 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
             );
         }
 
+        // Kiểm tra username đã tồn tại
+        const [existingUsername] = await connection.query(
+            "SELECT * FROM users WHERE username = ?",
+            [username]
+        );
+
+        if ((existingUsername as any[]).length > 0) {
+            throw new AppException(
+                "Tên người dùng đã tồn tại", 
+                ErrorCode.EXISTING_USER, 
+                409,
+                { field: "username" }
+            );
+        }
+
+        // Kiểm tra email/phone đã tồn tại
         const [existingUsers] = await connection.query(
             "SELECT * FROM users WHERE email = ? OR phone_number = ?",
             [email || null, phone || null]

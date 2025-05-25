@@ -39,3 +39,4 @@ export const rateLimit = (windowMs: number = 60 * 1000, maxRequests: number = 10
 };
 
 export const loginRateLimiter = rateLimit(15 * 60 * 1000, 5);
+export const forgotPasswordRateLimiter = rateLimit(60 * 60 * 1000, 3); // 3 requests per hour

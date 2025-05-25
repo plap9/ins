@@ -5,6 +5,7 @@ import { AppException } from "../../middlewares/errorHandler";
 import { ErrorCode } from "../../types/errorCode";
 import { createController } from "../../utils/errorUtils";
 import bcrypt from "bcryptjs";
+import { resetPasswordSchema } from "../../validations/authValidation";
 
 const forgotPasswordHandler = async (req: Request, res: Response): Promise<void> => {
   const { contact } = req.body;
@@ -33,7 +34,7 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
   const resetExpires = new Date(Date.now() + 15 * 60 * 1000); 
 
   const [users] = await connection.query(
-    "SELECT id FROM users WHERE email = ? OR phone_number = ?",
+    "SELECT user_id FROM users WHERE email = ? OR phone_number = ?",
     [isEmail ? contact : null, isPhone ? contact : null]
   );
 
@@ -45,18 +46,17 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
     );
   }
 
-  const userId = (users as any[])[0].id;
+  const userId = (users as any[])[0].user_id;
 
   await connection.beginTransaction();
 
   try {
     await connection.execute(
       `UPDATE users SET 
-       reset_token = ?, 
-       reset_code = ?, 
-       reset_expires = ? 
-       WHERE id = ?`,
-      [resetToken, resetCode, resetExpires, userId]
+       reset_password_code = ?, 
+       reset_password_expires = ? 
+       WHERE user_id = ?`,
+      [resetCode, resetExpires, userId]
     );
 
     if (isEmail) {
@@ -71,8 +71,6 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
       status: "success",
       message: `Mã xác nhận đã được gửi tới ${isEmail ? 'email' : 'số điện thoại'} của bạn`,
       data: {
-        tokenType: "reset",
-        resetToken: resetToken,
         contact: contact,
         method: isEmail ? "email" : "sms"
       }
@@ -84,29 +82,35 @@ const forgotPasswordHandler = async (req: Request, res: Response): Promise<void>
 };
 
 const resetPasswordHandler = async (req: Request, res: Response): Promise<void> => {
-  const { resetToken, code, newPassword } = req.body;
-
-  if (!resetToken || !code || !newPassword) {
+  // Validate input using Joi schema
+  const { error, value } = resetPasswordSchema.validate(req.body);
+  if (error) {
     throw new AppException(
-      "Vui lòng cung cấp đầy đủ thông tin", 
-      ErrorCode.MISSING_CREDENTIALS, 
-      400
+      error.details[0].message,
+      ErrorCode.VALIDATION_ERROR,
+      400,
+      { field: error.details[0].path[0] }
     );
   }
 
-  if (newPassword.length < 8) {
+  const { contact, code, newPassword } = value;
+
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+  const isPhone = /^\+?[0-9]{10,15}$/.test(contact);
+
+  if (!isEmail && !isPhone) {
     throw new AppException(
-      "Mật khẩu phải có ít nhất 8 ký tự", 
+      "Định dạng email hoặc số điện thoại không hợp lệ", 
       ErrorCode.INVALID_FORMAT, 
       400, 
-      { field: "newPassword" }
+      { field: "contact" }
     );
   }
 
   const [users] = await connection.query(
-    `SELECT id, reset_expires, reset_code FROM users 
-     WHERE reset_token = ? AND reset_expires > NOW()`,
-    [resetToken]
+    `SELECT user_id, reset_password_expires, reset_password_code, password_hash FROM users 
+     WHERE (email = ? OR phone_number = ?) AND reset_password_expires > NOW()`,
+    [isEmail ? contact : null, isPhone ? contact : null]
   );
 
   if ((users as any[]).length === 0) {
@@ -119,12 +123,23 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
 
   const user = (users as any[])[0];
 
-  if (user.reset_code !== code) {
+  if (user.reset_password_code !== code) {
     throw new AppException(
       "Mã xác nhận không chính xác", 
       ErrorCode.INVALID_VERIFICATION, 
       400, 
       { field: "code" }
+    );
+  }
+
+  // Check if new password is same as current password
+  const isSamePassword = await bcrypt.compare(newPassword, user.password_hash);
+  if (isSamePassword) {
+    throw new AppException(
+      "Mật khẩu mới không được trùng với mật khẩu cũ", 
+      ErrorCode.INVALID_FORMAT, 
+      400, 
+      { field: "newPassword" }
     );
   }
 
@@ -135,12 +150,11 @@ const resetPasswordHandler = async (req: Request, res: Response): Promise<void> 
   try {
     await connection.execute(
       `UPDATE users SET 
-       password = ?, 
-       reset_token = NULL, 
-       reset_code = NULL, 
-       reset_expires = NULL 
-       WHERE id = ?`,
-      [hashedPassword, user.id]
+       password_hash = ?, 
+       reset_password_code = NULL, 
+       reset_password_expires = NULL 
+               WHERE user_id = ?`,
+      [hashedPassword, user.user_id]
     );
 
     await connection.commit();

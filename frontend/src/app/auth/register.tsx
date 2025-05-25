@@ -42,16 +42,16 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
       await apiClient.post("/auth/register", {
-        username,
-        contact,
-        password,
+        username: username.trim(),
+        contact: contact.trim(),
+        password: password.trim(),
       });
 
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
       router.push({
         pathname: "/auth/verification",
         params: {
-          contact: contact,
+          contact: contact.trim(),
           verificationType: isEmail ? "email" : "phone",
         },
       });
