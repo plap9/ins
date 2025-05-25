@@ -157,6 +157,24 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
     console.log(`Xem bình luận của bài viết ${postId}`);
   };
 
+  const handlePostDeleted = (deletedPostId: number) => {
+    setPosts((currentPosts) =>
+      currentPosts.filter((post) => post.post_id !== deletedPostId)
+    );
+    setReels((currentReels) =>
+      currentReels.filter((reel) => reel.post_id !== deletedPostId)
+    );
+    setSelectedPostsCollection((currentCollection) =>
+      currentCollection.filter((post) => post.post_id !== deletedPostId)
+    );
+    
+    // Đóng modal nếu post hiện tại bị xóa
+    if (selectedPost === deletedPostId) {
+      setShowPostModal(false);
+      setSelectedPost(null);
+    }
+  };
+
   let currentData: Post[] = [];
   if (activeTab === "posts") currentData = posts;
   if (activeTab === "reels") currentData = reels;
@@ -276,6 +294,7 @@ const ProfilePostList: React.FC<ProfilePostListProps> = ({
                 posts={item}
                 onLikeCountPress={handleLikeCountPress}
                 onCommentPress={handleCommentPress}
+                onPostDeleted={handlePostDeleted}
               />
             )}
             initialScrollIndex={selectedPostsCollection.findIndex(

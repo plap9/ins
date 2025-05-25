@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { likePost, unlikePost } from "../services/likeService";
 import { getS3Url } from "../utils/config";
 import { useRouter } from "expo-router";
+import PostOptionsMenu from "./PostOptionsMenu";
 
 interface PostListItemProps {
   posts: {
@@ -25,6 +26,7 @@ interface PostListItemProps {
   onRefresh?: () => void;
   onLikeCountPress?: (postId: number) => void;
   onCommentPress?: (postId: number) => void;
+  onPostDeleted?: (postId: number) => void;
 }
 const DEFAULT_AVATAR = "https://via.placeholder.com/100";
 
@@ -34,6 +36,7 @@ export default function PostListItem({
   onRefresh,
   onLikeCountPress,
   onCommentPress,
+  onPostDeleted,
 }: PostListItemProps) {
   const router = useRouter();
   const [isLiked, setIsLiked] = useState(posts.is_liked || false);
@@ -163,7 +166,11 @@ export default function PostListItem({
         <Text className="font-semibold flex-1" numberOfLines={1}>
           {username}
         </Text>
-        <Feather name="more-horizontal" size={20} color="black" />
+        <PostOptionsMenu
+          postId={posts.post_id}
+          postUserId={posts.user_id}
+          onPostDeleted={onPostDeleted}
+        />
       </View>
 
       {displayMediaUrl ? (

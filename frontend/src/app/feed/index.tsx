@@ -87,6 +87,12 @@ export default function FeedScreen() {
     );
   }, []);
 
+  const handlePostDeleted = useCallback((deletedPostId: number) => {
+    setPosts((currentPosts) =>
+      currentPosts.filter((post) => post.post_id !== deletedPostId)
+    );
+  }, []);
+
   const fetchPosts = useCallback(
     async (fetchPage = 1, isRefreshAction = false) => {
       if (allCaughtUp && !isRefreshAction) return;
@@ -286,6 +292,7 @@ export default function FeedScreen() {
               posts={item}
               onCommentPress={openCommentSheet}
               onLikeCountPress={openLikeSheet}
+              onPostDeleted={handlePostDeleted}
             />
           )}
           keyExtractor={(item) => item.post_id.toString()}

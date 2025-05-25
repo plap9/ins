@@ -27,7 +27,7 @@ const registerHandler = async (req: Request, res: Response, next: NextFunction):
             return;
         }
 
-        const [existingUsers]: any = await pool.query(
+        const [existingUsers]: any = await connection.query(
             "SELECT * FROM users WHERE email = ? OR phone_number = ?",
             [email || null, phone || null]
         );

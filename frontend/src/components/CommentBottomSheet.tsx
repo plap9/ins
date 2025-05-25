@@ -24,15 +24,17 @@ import {
   BottomSheetBackdrop,
   BottomSheetTextInput,
 } from "@gorhom/bottom-sheet";
-import { AntDesign } from "@expo/vector-icons";
+import { AntDesign, Feather } from "@expo/vector-icons";
 import {
   getComments,
   createComment,
   likeComment,
   unlikeComment,
   getReplies,
+  deleteComment,
 } from "../services/commentService";
 import { TextInput as RNGHTextInput } from 'react-native-gesture-handler';
+import { useAuth } from "~/app/context/AuthContext";
 
 interface Comment {
   comment_id: number;
@@ -125,6 +127,8 @@ const CommentBottomSheet = forwardRef<
   const [loadingReplies, setLoadingReplies] = useState<number | null>(null);
   const textInputRef = useRef<RNGHTextInput>(null);
   const currentPostIdRef = useRef<number | null>(null);
+  const { authData } = useAuth();
+  const currentUser = authData?.user;
   
 
   const snapPoints = useMemo(() => ["60%", "90%"], []);
@@ -544,6 +548,50 @@ const CommentBottomSheet = forwardRef<
     );
   }, [updateCommentsInTree]);
 
+  const handleDeleteComment = useCallback(async (commentId: number) => {
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa bình luận này?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel"
+        },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteComment(commentId);
+              // Remove comment from UI (backend handles cascade delete)
+              setComments((prev) => {
+                const removeComment = (comments: Comment[]): Comment[] => {
+                  return comments.filter(comment => {
+                    if (comment.comment_id === commentId) {
+                      return false; // Remove this comment
+                    }
+                    // Also remove from replies if it's a nested comment
+                    if (comment.replies) {
+                      comment.replies = removeComment(comment.replies);
+                    }
+                    return true;
+                  });
+                };
+                return removeComment(prev);
+              });
+              if (onCommentAdded && postId) {
+                onCommentAdded(postId);
+              }
+            } catch (error) {
+              console.error("Lỗi khi xóa bình luận:", error);
+              Alert.alert("Lỗi", "Không thể xóa bình luận.");
+            }
+          }
+        }
+      ]
+    );
+  }, [postId, onCommentAdded]);
+
   const CommentItem = ({
     item,
     depth = 0,
@@ -630,6 +678,14 @@ const CommentBottomSheet = forwardRef<
               color={item.is_liked ? "red" : "grey"}
             />
           </TouchableOpacity>
+          {currentUser && currentUser.user_id === item.user_id && (
+            <TouchableOpacity
+              className="p-1 ml-2 mt-1"
+              onPress={() => handleDeleteComment(item.comment_id)}
+            >
+              <Feather name="trash" size={14} color="red" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {item.total_reply_count > 0 && (

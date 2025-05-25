@@ -59,4 +59,14 @@ export const getUserPosts = async (userId: number): Promise<PostResponse> => {
     console.error('[postService] Lỗi trong getUserPosts:', error);
     throw error;
   }
+};
+
+export const deletePost = async (postId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const response = await apiClient.delete<{ success: boolean; message: string }>(`/posts/${postId}`);
+    return response.data;
+  } catch (error) {
+    console.error('[postService] Lỗi khi xóa bài viết:', error);
+    throw error;
+  }
 }; 
