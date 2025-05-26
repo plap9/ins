@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import pool from "../../config/db";
 import { AuthRequest } from "../../middlewares/authMiddleware"; 
 import { AppException } from "../../middlewares/errorHandler";
@@ -49,326 +49,288 @@ const FOLLOW_DAILY_LIMIT = 200;
 const FOLLOW_HOURLY_LIMIT = 60; 
 const UNFOLLOW_DAILY_LIMIT = 100; 
 
-export const getFollowing = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getFollowing = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.user_id;
-    
-    if (!userId) {
-      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
-    }
-    
-    const targetUserId = parseInt(req.params.userId) || userId;
-    
-    const [userExists] = await pool.query<UserRow[]>(
-      "SELECT user_id FROM users WHERE user_id = ?",
-      [targetUserId]
-    );
-    
-    if (userExists.length === 0) {
-      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
+    const userId = parseInt(req.params.userId, 10);
+    const page = Math.max(parseInt(req.query.page as string || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
+    const loggedInUserId = req.user?.user_id;
+
+    if (!loggedInUserId) {
+      return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
     }
 
-    if (targetUserId !== userId) {
-      const [privacyCheck] = await pool.query<UserRow[]>(
-        `SELECT is_private FROM users WHERE user_id = ?`,
-        [targetUserId]
-      );
-      
-      const isPrivate = privacyCheck[0]?.is_private === 1;
-      
-      if (isPrivate) {  
-        const [followCheck] = await pool.query<FollowRow[]>(
-          `SELECT id FROM followers WHERE follower_id = ? AND following_id = ?`,
-          [userId, targetUserId]
-        );
-        
-        if (followCheck.length === 0) {
-          throw new AppException(
-            "Không thể xem danh sách theo dõi của tài khoản riêng tư", ErrorCode.USER_PROFILE_ACCESS_DENIED
-          , 403);
-        }
-      }
+    if (isNaN(userId)) {
+      return next(new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400));
     }
 
-    const [following] = await pool.query<RowDataPacket[]>(
-      `SELECT u.user_id, u.username, u.full_name, u.profile_picture, u.is_verified,
-       (SELECT COUNT(*) FROM followers WHERE follower_id = ? AND following_id = u.user_id) AS is_following
-       FROM users u
-       JOIN followers f ON u.user_id = f.following_id
-       WHERE f.follower_id = ?
-       ORDER BY f.created_at DESC`,
-      [userId, targetUserId]
-    );
+    const offset = (page - 1) * limit;
 
-    res.status(200).json({
-      status: "success",
-      data: following
-    });
-  } catch (error) {
-    if (error instanceof AppException) {
-      throw error;
-    }
-    throw new AppException("Lỗi khi lấy danh sách đang theo dõi", ErrorCode.SERVER_ERROR, 500);
-  }
-};
+    // Lấy danh sách following
+    const [following] = await pool.query<RowDataPacket[]>(`
+      SELECT 
+        f.following_id as user_id,
+        u.username,
+        u.full_name,
+        u.profile_picture,
+        u.bio,
+        CASE WHEN f2.follower_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_following,
+        CASE WHEN f.following_id = ? THEN TRUE ELSE FALSE END AS is_self
+      FROM followers f
+      INNER JOIN users u ON f.following_id = u.user_id
+      LEFT JOIN followers f2 ON f2.follower_id = ? AND f2.following_id = f.following_id
+      WHERE f.follower_id = ?
+      ORDER BY f.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [loggedInUserId, loggedInUserId, userId, limit, offset]);
 
-export const getFollowers = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.user_id;
-    
-    if (!userId) {
-      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
-    }
-    
-    const targetUserId = parseInt(req.params.userId) || userId;
-    
-    const [userExists] = await pool.query<UserRow[]>(
-      "SELECT user_id FROM users WHERE user_id = ?",
-      [targetUserId]
-    );
-    
-    if (userExists.length === 0) {
-      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
-    }
-
-    if (targetUserId !== userId) {
-      const [privacyCheck] = await pool.query<UserRow[]>(
-        `SELECT is_private FROM users WHERE user_id = ?`,
-        [targetUserId]
-      );
-      
-      const isPrivate = privacyCheck[0]?.is_private === 1;
-      
-      if (isPrivate) {
-        const [followCheck] = await pool.query<FollowRow[]>(
-          `SELECT id FROM followers WHERE follower_id = ? AND following_id = ?`,
-          [userId, targetUserId]
-        );
-        
-        if (followCheck.length === 0) {
-          throw new AppException(
-            "Không thể xem danh sách người theo dõi của tài khoản riêng tư", ErrorCode.USER_PROFILE_ACCESS_DENIED
-          , 403);
-        }
-      }
-    }
-
-    const [followers] = await pool.query<RowDataPacket[]>(
-      `SELECT u.user_id, u.username, u.full_name, u.profile_picture, u.is_verified,
-       (SELECT COUNT(*) FROM followers WHERE follower_id = ? AND following_id = u.user_id) AS is_following
-       FROM users u
-       JOIN followers f ON u.user_id = f.follower_id
-       WHERE f.following_id = ?
-       ORDER BY f.created_at DESC`,
-      [userId, targetUserId]
-    );
-
-    res.status(200).json({
-      status: "success",
-      data: followers
-    });
-  } catch (error) {
-    if (error instanceof AppException) {
-      throw error;
-    }
-    throw new AppException("Lỗi khi lấy danh sách người theo dõi", ErrorCode.SERVER_ERROR, 500);
-  }
-};
-
-export const followUser = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.user_id;
-    
-    if (!userId) {
-      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
-    }
-    
-    const targetUserId = parseInt(req.params.userId);
-    
-    if (!targetUserId) {
-      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
-    }
-    
-    if (userId === targetUserId) {
-      throw new AppException("Không thể tự theo dõi chính mình", ErrorCode.INVALID_OPERATION, 400);
-    }
-
-    await checkFollowLimits(userId);
-
-    const [userExists] = await pool.query<UserRow[]>(
-      "SELECT user_id, is_private, allow_follow_requests, allow_follow_notifications FROM users WHERE user_id = ?",
-      [targetUserId]
-    );
-    
-    if (userExists.length === 0) {
-      throw new AppException("Người dùng không tồn tại", ErrorCode.USER_NOT_FOUND, 404);
-    }
-
-    const [isBlocked] = await pool.query<BlockRow[]>(
-      "SELECT block_id FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?",
-      [targetUserId, userId]
-    );
-    
-    if (isBlocked.length > 0) {
-      throw new AppException("Không thể theo dõi người dùng này", ErrorCode.USER_PROFILE_ACCESS_DENIED, 403);
-    }
-
-    const [existingFollow] = await pool.query<FollowRow[]>(
-      "SELECT id FROM followers WHERE follower_id = ? AND following_id = ?",
-      [userId, targetUserId]
-    );
-    
-    if (existingFollow.length > 0) {
-      throw new AppException("Bạn đã theo dõi người dùng này rồi", ErrorCode.DUPLICATE_ENTRY, 400);
-    }
-    
-    const [existingRequest] = await pool.query<FollowRequestRow[]>(
-      "SELECT request_id, status FROM follow_requests WHERE requester_id = ? AND target_id = ?",
-      [userId, targetUserId]
-    );
-    
-    if (existingRequest.length > 0) {
-      if (existingRequest[0].status === 'pending') {
-        throw new AppException("Bạn đã gửi yêu cầu theo dõi tới người dùng này", ErrorCode.DUPLICATE_ENTRY, 400);
-      } else if (existingRequest[0].status === 'rejected') {
-        await pool.query(
-          "UPDATE follow_requests SET status = 'pending', created_at = NOW() WHERE request_id = ?",
-          [existingRequest[0].request_id]
-        );
-        
-        res.status(200).json({
-          status: "success",
-          message: "Đã gửi lại yêu cầu theo dõi"
-        });
-        return;
-      }
-    }
-
-    const isPrivate = userExists[0].is_private === 1;
-    const allowFollowRequests = userExists[0].allow_follow_requests === 1;
-    
-    if (isPrivate && allowFollowRequests) {
-      await pool.query(
-        "INSERT INTO follow_requests (requester_id, target_id, status) VALUES (?, ?, 'pending')",
-        [userId, targetUserId]
-      );
-      
-      await pool.query(
-        "INSERT INTO notifications (user_id, type, related_id, message) VALUES (?, ?, ?, ?)",
-        [
-          targetUserId, 
-          "follow_request", 
-          userId, 
-          "đã gửi yêu cầu theo dõi bạn"
-        ]
-      );
-      
-      res.status(200).json({
-        status: "success",
-        message: "Đã gửi yêu cầu theo dõi"
-      });
-    } 
-    else if (isPrivate && !allowFollowRequests) {
-      throw new AppException("Người dùng này không chấp nhận yêu cầu theo dõi", ErrorCode.USER_PROFILE_ACCESS_DENIED, 403);
-    }
-    else {
-      await pool.query(
-        "INSERT INTO followers (follower_id, following_id) VALUES (?, ?)",
-        [userId, targetUserId]
-      );
-      
-      const allowFollowNotifs = userExists[0]?.allow_follow_notifications === 1;
-      if (allowFollowNotifs) {
-        await pool.query(
-          "INSERT INTO notifications (user_id, type, related_id, message) VALUES (?, ?, ?, ?)",
-          [
-            targetUserId, 
-            "follow", 
-            userId, 
-            "đã bắt đầu theo dõi bạn"
-          ]
-        );
-      }
-      
-      await pool.query(
-        "INSERT INTO follow_history (user_id, followed_id, action_type) VALUES (?, ?, 'follow')",
-        [userId, targetUserId]
-      );
-
-      res.status(200).json({
-        status: "success",
-        message: "Đã theo dõi người dùng thành công"
-      });
-    }
-  } catch (error) {
-    if (error instanceof AppException) {
-      throw error;
-    }
-    throw new AppException("Lỗi khi theo dõi người dùng", ErrorCode.SERVER_ERROR, 500);
-  }
-};
-
-export const unfollowUser = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user?.user_id;
-    
-    if (!userId) {
-      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
-    }
-    
-    const targetUserId = parseInt(req.params.userId);
-    
-    if (!targetUserId) {
-      throw new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
-    }
-    
-    if (userId === targetUserId) {
-      throw new AppException("Không thể tự bỏ theo dõi chính mình", ErrorCode.INVALID_OPERATION, 400);
-    }
-
-    const [unfollowCount] = await pool.query<RateLimitRow[]>(
-      "SELECT COUNT(*) as count FROM follow_history WHERE user_id = ? AND action_type = 'unfollow' AND created_at > DATE_SUB(NOW(), INTERVAL 1 DAY)",
+    // Đếm tổng số following
+    const [[totalRow]] = await pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) as total FROM followers WHERE follower_id = ?",
       [userId]
     );
-    
-    if (unfollowCount[0].count >= UNFOLLOW_DAILY_LIMIT) {
-      throw new AppException(
-        `Bạn đã đạt giới hạn bỏ theo dõi hôm nay (${UNFOLLOW_DAILY_LIMIT} người/ngày)`, ErrorCode.RATE_LIMIT_EXCEEDED
-      , 429);
-    }
 
-    const [existingFollow] = await pool.query<FollowRow[]>(
-      "SELECT id FROM followers WHERE follower_id = ? AND following_id = ?",
-      [userId, targetUserId]
-    );
-    
-    if (existingFollow.length === 0) {
-      throw new AppException("Bạn chưa theo dõi người dùng này", ErrorCode.NOT_FOUND, 400);
-    }
-
-    await pool.query(
-      "DELETE FROM followers WHERE follower_id = ? AND following_id = ?",
-      [userId, targetUserId]
-    );
-    
-    await pool.query(
-      "INSERT INTO follow_history (user_id, followed_id, action_type) VALUES (?, ?, 'unfollow')",
-      [userId, targetUserId]
-    );
+    const total = totalRow?.total || 0;
 
     res.status(200).json({
-      status: "success",
-      message: "Đã bỏ theo dõi người dùng thành công"
+      success: true,
+      following: following.map(user => ({
+        user_id: user.user_id,
+        username: user.username,
+        full_name: user.full_name,
+        profile_picture: user.profile_picture,
+        bio: user.bio,
+        is_following: !!user.is_following,
+        is_self: !!user.is_self
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPage: Math.ceil(total / limit)
+      }
     });
   } catch (error) {
-    if (error instanceof AppException) {
-      throw error;
-    }
-    throw new AppException("Lỗi khi bỏ theo dõi người dùng", ErrorCode.SERVER_ERROR, 500);
+    next(error);
   }
 };
 
-export const getFollowStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getFollowers = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    const page = Math.max(parseInt(req.query.page as string || '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string || '20', 10), 5), 50);
+    const loggedInUserId = req.user?.user_id;
+
+    if (!loggedInUserId) {
+      return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
+    }
+
+    if (isNaN(userId)) {
+      return next(new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    const offset = (page - 1) * limit;
+
+    // Lấy danh sách followers
+    const [followers] = await pool.query<RowDataPacket[]>(`
+      SELECT 
+        f.follower_id as user_id,
+        u.username,
+        u.full_name,
+        u.profile_picture,
+        u.bio,
+        CASE WHEN f2.follower_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_following,
+        CASE WHEN f.follower_id = ? THEN TRUE ELSE FALSE END AS is_self
+      FROM followers f
+      INNER JOIN users u ON f.follower_id = u.user_id
+      LEFT JOIN followers f2 ON f2.follower_id = ? AND f2.following_id = f.follower_id
+      WHERE f.following_id = ?
+      ORDER BY f.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [loggedInUserId, loggedInUserId, userId, limit, offset]);
+
+    // Đếm tổng số followers
+    const [[totalRow]] = await pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) as total FROM followers WHERE following_id = ?",
+      [userId]
+    );
+
+    const total = totalRow?.total || 0;
+
+    res.status(200).json({
+      success: true,
+      followers: followers.map(follower => ({
+        user_id: follower.user_id,
+        username: follower.username,
+        full_name: follower.full_name,
+        profile_picture: follower.profile_picture,
+        bio: follower.bio,
+        is_following: !!follower.is_following,
+        is_self: !!follower.is_self
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPage: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const followUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const followerId = req.user?.user_id;
+    const followingId = parseInt(req.params.userId, 10);
+
+    if (!followerId) {
+      return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
+    }
+
+    if (isNaN(followingId)) {
+      return next(new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    if (followerId === followingId) {
+      return next(new AppException("Không thể follow chính mình", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    // Kiểm tra user tồn tại
+    const [[targetUser]] = await connection.query<RowDataPacket[]>(
+      "SELECT user_id, username FROM users WHERE user_id = ?",
+      [followingId]
+    );
+
+    if (!targetUser) {
+      return next(new AppException("Người dùng không tồn tại", ErrorCode.NOT_FOUND, 404));
+    }
+
+    // Kiểm tra đã follow chưa
+    const [[existingFollow]] = await connection.query<RowDataPacket[]>(
+      "SELECT id FROM followers WHERE follower_id = ? AND following_id = ?",
+      [followerId, followingId]
+    );
+
+    if (existingFollow) {
+      return next(new AppException("Đã follow người dùng này", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    // Thêm follow relationship
+    await connection.query(
+      "INSERT INTO followers (follower_id, following_id) VALUES (?, ?)",
+      [followerId, followingId]
+    );
+
+    // Cập nhật follow counts (nếu có columns này trong users table)
+    await connection.query(
+      "UPDATE users SET following_count = following_count + 1 WHERE user_id = ?",
+      [followerId]
+    );
+
+    await connection.query(
+      "UPDATE users SET followers_count = followers_count + 1 WHERE user_id = ?",
+      [followingId]
+    );
+
+    await connection.commit();
+
+    res.status(201).json({
+      success: true,
+      message: `Đã follow ${targetUser.username}`,
+      following: {
+        user_id: followingId,
+        username: targetUser.username,
+        is_following: true
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+};
+
+export const unfollowUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const followerId = req.user?.user_id;
+    const followingId = parseInt(req.params.userId, 10);
+
+    if (!followerId) {
+      return next(new AppException("Người dùng chưa được xác thực", ErrorCode.USER_NOT_AUTHENTICATED, 401));
+    }
+
+    if (isNaN(followingId)) {
+      return next(new AppException("ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    // Kiểm tra follow relationship tồn tại
+    const [[existingFollow]] = await connection.query<RowDataPacket[]>(
+      "SELECT id FROM followers WHERE follower_id = ? AND following_id = ?",
+      [followerId, followingId]
+    );
+
+    if (!existingFollow) {
+      return next(new AppException("Chưa follow người dùng này", ErrorCode.VALIDATION_ERROR, 400));
+    }
+
+    // Xóa follow relationship
+    const [deleteResult] = await connection.query<ResultSetHeader>(
+      "DELETE FROM followers WHERE follower_id = ? AND following_id = ?",
+      [followerId, followingId]
+    );
+
+    if (deleteResult.affectedRows === 0) {
+      return next(new AppException("Lỗi khi unfollow", ErrorCode.SERVER_ERROR, 500));
+    }
+
+    // Cập nhật follow counts
+    await connection.query(
+      "UPDATE users SET following_count = GREATEST(0, following_count - 1) WHERE user_id = ?",
+      [followerId]
+    );
+
+    await connection.query(
+      "UPDATE users SET followers_count = GREATEST(0, followers_count - 1) WHERE user_id = ?",
+      [followingId]
+    );
+
+    await connection.commit();
+
+    const [[targetUser]] = await connection.query<RowDataPacket[]>(
+      "SELECT username FROM users WHERE user_id = ?",
+      [followingId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Đã unfollow ${targetUser?.username || 'người dùng'}`,
+      following: {
+        user_id: followingId,
+        username: targetUser?.username,
+        is_following: false
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    next(error);
+  } finally {
+    connection.release();
+  }
+};
+
+export const checkFollowStatus = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user?.user_id;
     

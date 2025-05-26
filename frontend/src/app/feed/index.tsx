@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -27,7 +28,7 @@ import {
   BottomSheetModal,
   BottomSheetModalProvider,
 } from "@gorhom/bottom-sheet";
-import { setRefreshFeedCallback, refreshFeed } from "~/services/feedService";
+import { setRefreshFeedCallback, refreshFeed, getFeed, clearFeedCache, FeedType } from "~/services/feedService";
 import AuthContext from "~/app/context/AuthContext";
 
 import AllCaughtUpScreen from "./allCaughtUp";
@@ -40,7 +41,7 @@ import StoryService from "../../services/storyService";
 
 interface Post {
   post_id: number;
-  content: string;
+  content?: string;
   location?: string;
   post_privacy: string;
   created_at: string;
@@ -49,10 +50,12 @@ interface Post {
   comment_count: number;
   user_id: number;
   username: string;
-  profile_picture: string | null;
+  profile_picture?: string;
   media_urls: string[];
   media_types: string[];
   is_liked?: boolean;
+  feed_type?: 'following' | 'discover';
+  engagement_score?: number;
 }
 
 export default function FeedScreen() {
@@ -87,12 +90,6 @@ export default function FeedScreen() {
     );
   }, []);
 
-  const handlePostDeleted = useCallback((deletedPostId: number) => {
-    setPosts((currentPosts) =>
-      currentPosts.filter((post) => post.post_id !== deletedPostId)
-    );
-  }, []);
-
   const fetchPosts = useCallback(
     async (fetchPage = 1, isRefreshAction = false) => {
       if (allCaughtUp && !isRefreshAction) return;
@@ -103,14 +100,11 @@ export default function FeedScreen() {
       if (isRefreshAction) setIsRefreshing(true);
 
       try {
-        const response = await apiClient.get<{
-          message: string;
-          posts: Post[];
-        }>(`/posts?page=${fetchPage}&limit=10`);
-        const fetchedPosts = (response.data.posts || []).map((p) => ({
+        const response = await getFeed(fetchPage, 10, 'following', isRefreshAction);
+        const fetchedPosts = (response.posts || []).map((p) => ({
           ...p,
-          is_liked: p.is_liked ?? Math.random() < 0.3,
-          profile_picture: p.profile_picture || null,
+          is_liked: p.is_liked ?? false,
+          profile_picture: p.profile_picture || undefined,
         }));
 
         if (fetchedPosts.length === 0) {
@@ -152,40 +146,33 @@ export default function FeedScreen() {
     };
   }, []);
 
-  const onRefresh = useCallback(() => {
-    
+    const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     
     setPosts([]);
     setPage(1);
     setAllCaughtUp(false);
     
-    apiClient.get('/cache/clear/posts')
-      .then(() => {
-        const timestamp = Date.now();
-        
-        return apiClient.get<{ message: string; posts: Post[] }>(`/posts?page=1&limit=20&_=${timestamp}`);
-      })
-      .then(response => {
-        const fetchedPosts = (response.data.posts || []).map((p) => ({
-          ...p,
-          is_liked: p.is_liked ?? Math.random() < 0.3,
-          profile_picture: p.profile_picture || null,
-        }));
-        
-        setPosts(fetchedPosts);
-        
-        if (fetchedPosts.length < 20) {
-          setAllCaughtUp(true);
-        }
-        
-        setIsRefreshing(false);
-      })
-      .catch(error => {
-        console.error("API error refreshing posts:", error);
-        Alert.alert("Lỗi", "Không thể tải bài viết");
-        setIsRefreshing(false);
-      });
+    try {
+      await clearFeedCache();
+      const response = await getFeed(1, 20, 'following', true);
+      const fetchedPosts = (response.posts || []).map((p) => ({
+        ...p,
+        is_liked: p.is_liked ?? false,
+        profile_picture: p.profile_picture || undefined,
+      }));
+      
+      setPosts(fetchedPosts);
+      
+      if (fetchedPosts.length < 20) {
+        setAllCaughtUp(true);
+      }
+    } catch (error) {
+      console.error("API error refreshing posts:", error);
+      Alert.alert("Lỗi", "Không thể tải bài viết");
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
   const loadMorePosts = () => {
@@ -258,7 +245,7 @@ export default function FeedScreen() {
 
   return (
     <BottomSheetModalProvider>
-      <SafeAreaView className="flex-1 bg-white">
+      <View className="flex-1 bg-white" style={{ paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0 }}>
         <View className="flex-row items-center justify-between px-4 py-2 border-b border-gray-100">
           <TouchableOpacity onPress={() => setModalVisible(true)}>
             <View className="flex-row items-center">
@@ -292,7 +279,6 @@ export default function FeedScreen() {
               posts={item}
               onCommentPress={openCommentSheet}
               onLikeCountPress={openLikeSheet}
-              onPostDeleted={handlePostDeleted}
             />
           )}
           keyExtractor={(item) => item.post_id.toString()}
@@ -308,7 +294,7 @@ export default function FeedScreen() {
             </View>
           }
           ListFooterComponent={renderFooter}
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 10, gap: 10 }}
+          contentContainerStyle={{ flexGrow: 1 }}
           ListEmptyComponent={
             isLoading && posts.length === 0 ? (
               <View className="flex-1 justify-center items-center">
@@ -397,7 +383,7 @@ export default function FeedScreen() {
         >
           <StoryLibraryScreen onClose={closeStoryLibrary} />
         </Modal>
-      </SafeAreaView>
+      </View>
     </BottomSheetModalProvider>
   );
 }

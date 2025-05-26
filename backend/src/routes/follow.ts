@@ -1,22 +1,28 @@
-import express from "express";
-import { 
-  getFollowing, 
-  getFollowers, 
-  followUser, 
-  unfollowUser, 
-  getFollowStatus,
-  getSuggestedUsers,
-  getFollowCounts
-} from "../controllers/follows/followController";
+import express, { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { 
+    followUser, 
+    unfollowUser, 
+    getFollowers, 
+    getFollowing, 
+    checkFollowStatus,
+    getSuggestedUsers,
+    getFollowCounts
+} from "../controllers/follows/followController";
 
-const router = express.Router();
+const router: Router = express.Router();
 
-router.get("/following/:userId?", authMiddleware, getFollowing);
-router.get("/followers/:userId?", authMiddleware, getFollowers);
-router.post("/follow/:userId", authMiddleware, followUser);
-router.delete("/unfollow/:userId", authMiddleware, unfollowUser);
-router.get("/status/:userId", authMiddleware, getFollowStatus);
+// Follow/Unfollow routes
+router.post("/:userId/follow", authMiddleware, followUser);
+router.delete("/:userId/follow", authMiddleware, unfollowUser);
+
+// Get followers/following lists
+router.get("/:userId/followers", authMiddleware, getFollowers);
+router.get("/:userId/following", authMiddleware, getFollowing);
+
+// Check follow status
+router.get("/:userId/status", authMiddleware, checkFollowStatus);
+
 router.get("/suggested", authMiddleware, getSuggestedUsers);
 router.get("/counts/:userId?", authMiddleware, getFollowCounts);
 

@@ -1,71 +1,96 @@
 import apiClient from './apiClient';
 
-interface Post {
+export interface FeedPost {
   post_id: number;
-  content: string;
+  user_id: number;
+  content?: string;
   location?: string;
   post_privacy: string;
   created_at: string;
   updated_at: string;
   like_count: number;
   comment_count: number;
-  user_id: number;
   username: string;
-  profile_picture: string | null;
+  profile_picture?: string;
+  is_liked: boolean;
   media_urls: string[];
   media_types: string[];
-  is_liked?: boolean;
+  feed_type: 'following' | 'discover';
+  engagement_score?: number;
 }
 
-let refreshFeedCallback: (() => void) | null = null;
+export interface FeedResponse {
+  success: boolean;
+  posts: FeedPost[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+    feedType: string;
+    isFollowingAnyone: boolean;
+  };
+  fromCache: boolean;
+}
 
-let lastRefreshTime = 0;
-const REFRESH_THROTTLE_MS = 2000;
+export type FeedType = 'following' | 'discover' | 'mixed';
+
+// Global callback for refreshing feed
+let refreshFeedCallback: (() => void) | null = null;
 
 export const setRefreshFeedCallback = (callback: () => void) => {
   refreshFeedCallback = callback;
 };
 
 export const refreshFeed = () => {
-  const now = Date.now();
-  
-  if (now - lastRefreshTime < REFRESH_THROTTLE_MS) {
-    return;
-  }
-  
-  lastRefreshTime = now;
-  
   if (refreshFeedCallback) {
-    const callback = refreshFeedCallback; 
-    
-    try {
-      const timestamp = Date.now();
-      
-      apiClient.get(`/cache/clear/posts?_=${timestamp}`)
-        .then(() => {
-          console.log('Đã xóa cache posts thành công');
-          
-          if (callback) callback();
-        })
-        .catch(err => {
-          console.warn('Không thể xóa cache posts:', err);
-          if (callback) callback();
-        });
-    } catch (error) {
-      console.warn('Lỗi khi gọi API xóa cache:', error);
-      if (callback) callback();
-    }
-  } else {
-    console.warn('Hàm refresh feed chưa được đăng ký');
+    refreshFeedCallback();
   }
 };
 
-export const fetchPosts = async (page: number = 1, limit: number = 10): Promise<Post[]> => {
+// Get feed with new algorithm
+export const getFeed = async (
+  page: number = 1, 
+  limit: number = 10, 
+  feedType: FeedType = 'mixed',
+  forceRefresh: boolean = false
+): Promise<FeedResponse> => {
   try {
-    const response = await apiClient.get<{ message: string; posts: Post[] }>(`/posts?page=${page}&limit=${limit}`);
-    return response.data.posts || [];
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      type: feedType
+    });
+
+    if (forceRefresh) {
+      params.append('_', Date.now().toString());
+    }
+
+    const response = await apiClient.get<FeedResponse>(`/feed?${params.toString()}`);
+    return response.data;
   } catch (error) {
-    console.error('Lỗi khi lấy danh sách bài viết:', error);
+    console.error('[feedService] Lỗi khi lấy feed:', error);
     throw error;
+  }
+};
+
+// Legacy function for backward compatibility
+export const getUserPosts = async (userId: number): Promise<any> => {
+  try {
+    const response = await apiClient.get(`/posts?user_id=${userId}&page=1&limit=50`);
+    return response.data;
+  } catch (error) {
+    console.error('[feedService] Lỗi trong getUserPosts:', error);
+    throw error;
+  }
+};
+
+// Clear feed cache
+export const clearFeedCache = async (): Promise<void> => {
+  try {
+    await apiClient.get('/cache/clear/posts');
+  } catch (error) {
+    console.error('[feedService] Lỗi khi clear cache:', error);
+    // Don't throw error for cache clearing
   }
 }; 

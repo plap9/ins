@@ -15,9 +15,10 @@ interface MessageHeaderProps {
     lastSeen?: string;
     isGroup?: boolean;
   };
+  isOnline?: boolean;
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ user, isOnline: isNetworkOnline = true }) => {
   const router = useRouter();
   const navigation = useNavigation();
   
@@ -46,60 +47,27 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
   };
 
   const handleVideoCall = () => {
-    console.log(`[VIDEO CALL] BẮT ĐẦU THỬ GỌI VIDEO TỪ HEADER - ${new Date().toISOString()}`);
-    console.log(`[VIDEO CALL] Thông tin người dùng:`, JSON.stringify(user));
-    console.log(`[VIDEO CALL] Hỗ trợ WebRTC: ${supportsVideoCall}`);
-    
     if (!supportsVideoCall) {
-      console.error('[VIDEO CALL] THIẾT BỊ KHÔNG HỖ TRỢ GỌI VIDEO!');
-      Alert.alert(
-        "Không hỗ trợ gọi video",
-        "Thiết bị của bạn không hỗ trợ gọi video. Bạn có muốn thực hiện cuộc gọi thoại thay thế không?",
-        [
-          { text: "Không", style: "cancel" },
-          { text: "Gọi thoại", onPress: handleAudioCall }
-        ]
-      );
+      Alert.alert('Thông báo', 'Tính năng gọi video chưa được hỗ trợ');
       return;
     }
     
-    console.log(`[VIDEO CALL] Chuẩn bị chuyển đến trang gọi video với ID người dùng: ${user.id}`);
-    
-    try {
-      const params = {
-        id: user.id,
-        callType: 'video',
-        isIncoming: 'false'
-      };
-      
-      console.log(`[VIDEO CALL] Tham số truyền vào:`, JSON.stringify(params));
-      console.log(`[VIDEO CALL] Gọi router.push với pathname: /message/calls/video`);
-      
-      router.push({
-        pathname: '/message/calls/video',
-        params
-      });
-      
-      console.log('[VIDEO CALL] Đã gọi router.push thành công, đang điều hướng...');
-    } catch (error) {
-      console.error('[VIDEO CALL] *** LỖI KHI ĐIỀU HƯỚNG ĐẾN TRANG GỌI ***', error);
-      
-      if (error instanceof Error) {
-        console.error('[VIDEO CALL] Chi tiết lỗi:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
-      
-      Alert.alert(
-        "Lỗi Chuyển Hướng",
-        "Không thể bắt đầu cuộc gọi video. Vui lòng thử lại sau.",
-        [{ text: "OK" }]
-      );
-    }
-    
-    console.log(`[VIDEO CALL] Kết thúc xử lý nút gọi video`);
+    const params = {
+      id: user.id,
+      callType: 'video',
+      isIncoming: 'false'
+    };
+    router.push({
+      pathname: '/message/calls/video',
+      params
+    });
+  };
+
+  const handleGroupInfo = () => {
+    router.push({
+      pathname: '/message/group-info',
+      params: { id: user.id }
+    });
   };
   
   return (
@@ -111,7 +79,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
         
         <TouchableOpacity 
           className="flex-row items-center" 
-          onPress={() => user.isGroup ? router.push('/group-info') : router.push(`/profile/${user.id}`)}
+          onPress={() => user.isGroup ? handleGroupInfo() : router.push(`/profile/${user.id}`)}
         >
           <Image 
             source={avatarSource} 
@@ -120,9 +88,17 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
           
           <View>
             <Text className="text-white font-medium text-base">{user.username || 'Người dùng'}</Text>
-            <Text className="text-gray-400 text-xs">
-              {statusText}
-            </Text>
+            <View className="flex-row items-center">
+              <Text className="text-gray-400 text-xs">
+                {statusText}
+              </Text>
+              {!isNetworkOnline && (
+                <View className="flex-row items-center ml-2">
+                  <View className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1" />
+                  <Text className="text-red-400 text-xs">Không có mạng</Text>
+                </View>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
       </View>
@@ -134,7 +110,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ user }) => {
           </TouchableOpacity>
         )}
         
-        <TouchableOpacity onPress={user.isGroup ? undefined : handleVideoCall}>
+        <TouchableOpacity onPress={user.isGroup ? handleGroupInfo : handleVideoCall}>
           <Ionicons name={user.isGroup ? "people" : "videocam"} size={22} color="#FFFFFF" />
         </TouchableOpacity>
         

@@ -14,6 +14,8 @@ import story from "./routes/story";
 import search from "./routes/search";
 import messageRoutes from "./routes/messageRoutes";
 import webrtcRoutes from "./routes/webrtcRoutes";
+import followRoutes from "./routes/follow";
+import feedRoutes from "./routes/feed";
 import SocketService from './utils/socketService';
 import { initializeSocketService as initMessageSocketService } from './controllers/messages/messageController';
 import { initializeSocketService as initSocketHandlers, setupMessageSocketHandlers } from './controllers/messages/messageSocketController';
@@ -74,6 +76,7 @@ app.use((req, res, next) => {
 });
 app.use("/posts", post);
 app.use("/auth", authRouter);
+app.use("/users", followRoutes);
 app.use("/users", user);
 app.use("/comments", comment);
 app.use("/cache", cacheRoutes);
@@ -81,6 +84,8 @@ app.use("/stories", story);
 app.use("/search", search);
 app.use("/messages", messageRoutes);
 app.use("/webrtc", webrtcRoutes);
+app.use("/follow", followRoutes);
+app.use("/feed", feedRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);

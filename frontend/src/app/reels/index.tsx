@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, Dimensions, Image, StyleSheet, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Heart, MessageCircle, Share2 } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import Feather from '@expo/vector-icons/Feather';
 import Entypo from '@expo/vector-icons/Entypo';

@@ -98,9 +98,9 @@ class MessageService {
 
   async createConversation(userIds: number[], isGroup: boolean = false, groupName?: string): Promise<Conversation> {
     const response = await apiClient.post<ApiResponse<Conversation>>('/messages/conversations', {
-      user_ids: userIds,
-      is_group: isGroup,
-      group_name: groupName
+      participants: userIds,
+      type: isGroup ? 'group' : 'private',
+      name: groupName
     });
     return response.data.data;
   }
@@ -122,7 +122,7 @@ class MessageService {
 
   async addMembersToGroup(groupId: number, userIds: number[]): Promise<void> {
     await apiClient.post(`/messages/groups/${groupId}/members`, {
-      user_ids: userIds
+      participants: userIds
     });
   }
 

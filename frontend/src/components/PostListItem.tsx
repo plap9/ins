@@ -9,7 +9,7 @@ import PostOptionsMenu from "./PostOptionsMenu";
 interface PostListItemProps {
   posts: {
     post_id: number;
-    content: string;
+    content?: string;
     location?: string;
     post_privacy: string;
     created_at: string;
@@ -18,10 +18,12 @@ interface PostListItemProps {
     comment_count: number;
     user_id: number;
     username: string;
-    profile_picture: string | null;
+    profile_picture?: string;
     media_urls: string[];
     media_types: string[];
     is_liked?: boolean;
+    feed_type?: 'following' | 'discover';
+    engagement_score?: number;
   };
   onRefresh?: () => void;
   onLikeCountPress?: (postId: number) => void;

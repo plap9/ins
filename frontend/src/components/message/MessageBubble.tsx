@@ -12,6 +12,8 @@ interface MessageBubbleProps {
     isRead: boolean;
     isSent: boolean;
     isDelivered: boolean;
+    isFailed?: boolean;
+    queuedMessageId?: string;
     type: 'text' | 'image' | 'video';
     mediaUrl?: string;
     senderId?: string;
@@ -23,6 +25,7 @@ interface MessageBubbleProps {
   isGroup?: boolean;
   onLongPress?: () => void;
   onMediaPress?: () => void;
+  onRetryMessage?: (messageId: string) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -33,6 +36,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   isGroup = false,
   onLongPress,
   onMediaPress,
+  onRetryMessage,
 }) => {
   const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(message.senderName || 'User')}&background=random`;
   
@@ -131,6 +135,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
 
     const isVideo = isVideoMedia(message.mediaUrl);
+    const maxWidth = 240; // 60 units = 240px
+    const maxHeight = 240;
 
     if (!isVideo) {
       return (
@@ -140,16 +146,23 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           <Image 
             source={{ uri: message.mediaUrl }} 
-            className="w-60 h-60 rounded-xl"
-            resizeMode="cover"
+            style={{ 
+              width: maxWidth,
+              height: maxHeight,
+              maxWidth: '100%',
+              aspectRatio: 1
+            }}
+            className="rounded-xl"
+            resizeMode="contain"
           />
         </TouchableOpacity>
       );
     } else {
       return (
-        <View className={`${isOwn ? 'self-end' : 'self-start'} rounded-xl overflow-hidden mb-1 bg-black`}>
+        <View className={`${isOwn ? 'self-end' : 'self-start'} rounded-xl overflow-hidden mb-1 bg-black`}
+             style={{ maxWidth: maxWidth, maxHeight: maxHeight, aspectRatio: 1 }}>
           {isPlaying ? (
-            <View className="w-60 h-60 rounded-xl bg-black relative">
+            <View className="rounded-xl bg-black relative" style={{ width: '100%', height: '100%' }}>
               {isVideoLoading && (
                 <View className="absolute inset-0 z-10 flex-1 justify-center items-center bg-black/70">
                   <ActivityIndicator size="large" color="#ffffff" />
@@ -164,14 +177,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 resizeMode={ResizeMode.CONTAIN}
                 shouldPlay
                 useNativeControls
-                className="w-60 h-60 rounded-xl bg-black z-0"
-                style={{ flex: 1 }}
+                className="rounded-xl bg-black z-0"
+                style={{ width: '100%', height: '100%' }}
                 onReadyForDisplay={() => {
-                  console.log(`[Video] Video sẵn sàng hiển thị: ${message.mediaUrl}`);
                   setIsVideoLoading(false);
                 }}
                 onLoad={(status) => {
-                  console.log(`[Video] Video đã tải xong: ${message.mediaUrl}`);
                   setIsVideoPreloaded(true);
                   if (status.isLoaded && status.durationMillis) {
                     setVideoDuration(status.durationMillis);
@@ -194,7 +205,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           ) : (
             <TouchableOpacity 
               onPress={handleVideoPlay}
-              className="w-60 h-60 rounded-xl bg-gray-800 overflow-hidden relative"
+              className="rounded-xl bg-gray-800 overflow-hidden relative"
+              style={{ width: '100%', height: '100%' }}
             >
               {isLoadingThumbnail ? (
                 <View className="flex-1 justify-center items-center bg-gray-800">
@@ -207,8 +219,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               ) : (
                 <Image 
                   source={{ uri: thumbnailUri || message.mediaUrl || '' }} 
-                  className="w-full h-full rounded-xl"
-                  resizeMode="cover"
+                  className="rounded-xl"
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
                   onError={(error) => {
                     console.error('[Thumbnail Error]:', error);
                     setThumbnailError(true);
@@ -241,8 +254,65 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
+  const renderMessageStatus = () => {
+    if (!isOwn) return null;
+    
+    let statusColor = '#8e8e8e';
+    let statusText = '';
+    let iconName: keyof typeof Ionicons.glyphMap = 'time-outline';
+    let showRetryButton = false;
+    
+    if (message.isFailed) {
+      statusColor = '#ff3b30';
+      statusText = 'Gửi thất bại';
+      iconName = 'alert-circle-outline';
+      showRetryButton = true;
+    } else if (!message.isSent) {
+      statusColor = '#ff9500';
+      statusText = 'Đang gửi...';
+      iconName = 'time-outline';
+    } else if (message.isSent && !message.isDelivered) {
+      statusColor = '#8e8e8e';
+      statusText = 'Đã gửi';
+      iconName = 'checkmark';
+    } else if (message.isDelivered && !message.isRead) {
+      statusColor = '#8e8e8e';
+      statusText = 'Đã nhận';
+      iconName = 'checkmark-done';
+    } else if (message.isRead) {
+      statusColor = '#0095f6';
+      statusText = 'Đã xem';
+      iconName = 'checkmark-done';
+    }
+    
+    return (
+      <View className="flex-row items-center justify-end mt-1 mr-1">
+        <Text className="text-gray-400 text-xs mr-2">
+          {new Date(message.timestamp).toLocaleTimeString('vi-VN', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
+        </Text>
+        <View className="flex-row items-center">
+          <Text className="text-xs mr-1" style={{ color: statusColor }}>
+            {statusText}
+          </Text>
+          <Ionicons name={iconName} size={14} color={statusColor} />
+          {showRetryButton && onRetryMessage && (
+            <TouchableOpacity 
+              onPress={() => onRetryMessage(message.queuedMessageId || message.id)}
+              className="ml-2 bg-red-500 px-2 py-1 rounded-lg"
+            >
+              <Text className="text-white text-xs font-medium">Thử lại</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View className={`flex-row mb-3 max-w-[80%] ${isOwn ? 'self-end ml-auto' : 'self-start'}`}>
+    <View className={`flex-row mb-3 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       {!isOwn && showAvatar && (
         <View className="mr-2 mt-auto">
           <Image 
@@ -252,7 +322,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
       
-      <View>
+      <View className={`max-w-[80%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {isGroup && !isOwn && message.senderName && (
           <Text className="text-gray-400 text-xs mb-1 ml-2">{message.senderName}</Text>
         )}
@@ -261,16 +331,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           onLongPress={onLongPress}
           className={`${ 
             message.type === 'text' && !message.mediaUrl
-              ? `rounded-2xl px-4 py-2.5 ${isOwn ? 'bg-blue-500' : 'bg-gray-800'}` 
+              ? `rounded-2xl px-3 py-2 ${isOwn ? 'bg-blue-500' : 'bg-gray-800'}` 
               : ''
           }`}
         >
           {message.mediaUrl ? renderMedia() : null}
           
           {message.content && (!message.mediaUrl || message.type === 'text') && (
-            <Text className={`text-white text-base`}>{message.content}</Text>
+            <Text className={`text-white text-base`} style={{ flexWrap: 'wrap' }}>{message.content}</Text>
           )}
         </TouchableOpacity>
+        
+        {renderMessageStatus()}
       </View>
     </View>
   );

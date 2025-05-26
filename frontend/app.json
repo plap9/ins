@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Ins",
+    "slug": "Ins",
     "scheme": "InstaClone",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,7 +21,8 @@
         "NSCameraUsageDescription": "Cho phép ứng dụng truy cập camera của bạn để thực hiện cuộc gọi video.",
         "NSMicrophoneUsageDescription": "Cho phép ứng dụng truy cập microphone của bạn để thực hiện cuộc gọi.",
         "NSPhotoLibraryUsageDescription": "Cho phép ứng dụng truy cập thư viện ảnh của bạn."
-      }
+      },
+      "bitcode": false
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +39,9 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.BLUETOOTH"
+        "android.permission.BLUETOOTH",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK"
       ],
       "usesCleartextTraffic": true
     },
@@ -74,7 +77,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "252d3044-0580-4630-858e-672bd5a8d295"
+        "projectId": "cc3acd94-e4da-4b97-a941-e16912df5b95"
       }
     }
   }

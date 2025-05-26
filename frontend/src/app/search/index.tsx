@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, Platform, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Heart, MoreVertical, Grid } from "lucide-react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Dimensions } from "react-native";
@@ -61,9 +60,9 @@ const SearchScreen = () => {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white" style={{ paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0 }}>
       {/* Header với thanh tìm kiếm */}
-      <View className="px-4 p-10 border-b border-gray-200 flex-row items-center">
+      <View className="px-4 py-3 border-b border-gray-200 flex-row items-center">
         <TouchableOpacity
           className="flex-1 flex-row items-center bg-gray-100 rounded-full px-4 py-3"
           style={{ height: 50 }}
@@ -97,27 +96,27 @@ const SearchScreen = () => {
             {/* Biểu tượng cho nhiều ảnh */}
             {item.hasMultipleMedia && (
               <View className="absolute top-2 right-2">
-                <Grid size={16} color="white" />
+                <Ionicons name="grid-outline" size={16} color="white" />
               </View>
             )}
 
             {/* Biểu tượng xem chi tiết */}
             <View className="absolute bottom-0 left-0 right-0 flex-row justify-between p-2 bg-black/30">
               <View className="flex-row items-center">
-                <Heart size={14} color="white" fill="white" />
+                <Ionicons name="heart" size={14} color="white" />
                 <Text className="text-white text-xs ml-1">{item.likes}</Text>
               </View>
               <View className="flex-row items-center">
-                <MoreVertical size={14} color="white" />
+                <Ionicons name="chatbubble-outline" size={14} color="white" />
                 <Text className="text-white text-xs ml-1">{item.comments}</Text>
               </View>
             </View>
           </TouchableOpacity>
         )}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

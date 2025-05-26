@@ -323,15 +323,16 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
       throw new AppException("Danh sách người tham gia không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
-    if (type === 'private' && participants.length > 1) {
-      throw new AppException("Cuộc trò chuyện riêng tư chỉ cho phép 2 người", ErrorCode.VALIDATION_ERROR, 400);
-    }
-    
     if (!participants.includes(userId)) {
       participants.push(userId);
     }
     
+    if (type === 'private' && participants.length > 2) {
+      throw new AppException("Cuộc trò chuyện riêng tư chỉ cho phép 2 người", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
     if (type === 'private' && participants.length === 2) {
+      const otherUserId = participants.find(id => id !== userId);
       const [existingConversation] = await connection.query<ConversationRow[]>(
         `SELECT cg.group_id AS conversation_id
          FROM chat_groups cg
@@ -341,9 +342,9 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
            JOIN group_members gm2 ON gm1.group_id = gm2.group_id
            WHERE gm1.user_id = ? AND gm2.user_id = ?
            GROUP BY gm1.group_id
-           HAVING COUNT(DISTINCT gm1.user_id, gm2.user_id) = 2
+           HAVING COUNT(gm1.user_id) = 2
          )`,
-        [userId, participants.find(id => id !== userId)]
+        [userId, otherUserId]
       );
       
       if (existingConversation.length > 0) {
@@ -355,8 +356,13 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
           status: "success",
           message: "Cuộc trò chuyện đã tồn tại",
           data: {
-            conversation_id: conversation.conversation_id,
-            type: 'private'
+            group_id: conversation.conversation_id,
+            type: 'private',
+            group_name: null,
+            creator_id: userId,
+            participants: [userId, otherUserId],
+            created_at: new Date(),
+            is_group: false
           }
         });
         return;
@@ -364,10 +370,9 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
     }
     
     const [conversationResult] = await connection.query<ResultSetHeader>(
-      "INSERT INTO chat_groups (creator_id, name, type) VALUES (?, ?, ?)",
+      "INSERT INTO chat_groups (creator_id, group_name, type) VALUES (?, ?, ?)",
       [userId, name || null, type]
     );
-    
     const conversationId = conversationResult.insertId;
     
     const memberValues = participants.map(participantId => {
@@ -376,6 +381,7 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
     });
     
     const memberPlaceholders = memberValues.map(() => '(?, ?, ?)').join(',');
+    
     await connection.query(
       `INSERT INTO group_members (group_id, user_id, role) VALUES ${memberPlaceholders}`,
       memberValues.flat()
@@ -383,16 +389,20 @@ export const createConversation = async (req: AuthRequest, res: Response): Promi
     
     await connection.commit();
     
-    res.status(201).json({
+    const responseData = {
       status: "success",
       data: {
-        conversation_id: conversationId,
+        group_id: conversationId,
         type,
-        name: name || null,
+        group_name: name || null,
         creator_id: userId,
-        participants
+        participants,
+        created_at: new Date(),
+        is_group: type === 'group'
       }
-    });
+    };
+    
+    res.status(201).json(responseData);
   } catch (error) {
     await connection.rollback();
     if (error instanceof AppException) {
@@ -667,14 +677,14 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     }
     
     const groupId = parseInt(req.params.groupId);
-    const { user_ids } = req.body;
+    const { participants } = req.body;
     
     if (!groupId) {
       throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
-    if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
-      throw new AppException("Danh sách ID người dùng không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+    if (!participants || !Array.isArray(participants) || participants.length === 0) {
+      throw new AppException("Danh sách người tham gia không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
     }
     
     const [adminCheck] = await pool.query<ConversationMemberRow[]>(
@@ -701,16 +711,16 @@ export const addMembersToGroup = async (req: AuthRequest, res: Response): Promis
     
     const existingMembersQuery = `
       SELECT user_id FROM group_members 
-      WHERE group_id = ? AND user_id IN (${user_ids.map(() => '?').join(',')})
+      WHERE group_id = ? AND user_id IN (${participants.map(() => '?').join(',')})
     `;
     
     const [existingMembers] = await pool.query<RowDataPacket[]>(
       existingMembersQuery,
-      [groupId, ...user_ids]
+      [groupId, ...participants]
     );
     
     const existingMemberIds = existingMembers.map((member: any) => member.user_id);
-    const newMemberIds = user_ids.filter((id: number) => !existingMemberIds.includes(id));
+    const newMemberIds = participants.filter((id: number) => !existingMemberIds.includes(id));
     
     if (newMemberIds.length === 0) {
       throw new AppException("Tất cả người dùng đã có trong nhóm", ErrorCode.VALIDATION_ERROR, 400);
@@ -2330,5 +2340,193 @@ export const getCallDetails = async (req: AuthRequest, res: Response): Promise<v
       throw error;
     }
     throw new AppException("Lỗi khi lấy chi tiết cuộc gọi", ErrorCode.SERVER_ERROR, 500);
+  }
+};
+
+export const getGroupInfo = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
+    }
+    
+    const groupId = parseInt(req.params.groupId);
+    
+    if (!groupId) {
+      throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+      "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+      [groupId, userId]
+    );
+    
+    if (memberCheck.length === 0) {
+      throw new AppException("Bạn không thuộc nhóm này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    }
+    
+    const [groupInfo] = await pool.query<ConversationRow[]>(
+      "SELECT * FROM chat_groups WHERE group_id = ?",
+      [groupId]
+    );
+    
+    if (groupInfo.length === 0) {
+      throw new AppException("Nhóm không tồn tại", ErrorCode.NOT_FOUND, 404);
+    }
+    
+    const [members] = await pool.query<RowDataPacket[]>(`
+      SELECT gm.*, u.username, u.profile_picture
+      FROM group_members gm
+      JOIN users u ON gm.user_id = u.user_id
+      WHERE gm.group_id = ?
+      ORDER BY gm.role DESC, gm.joined_at ASC
+    `, [groupId]);
+    
+    const groupData = {
+      group_id: groupInfo[0].group_id,
+      group_name: groupInfo[0].group_name,
+      group_avatar: groupInfo[0].group_avatar,
+      creator_id: groupInfo[0].creator_id,
+      type: groupInfo[0].type || 'group',
+      members: members.map((member: any) => ({
+        user_id: member.user_id,
+        username: member.username,
+        profile_picture: member.profile_picture,
+        role: member.role,
+        joined_at: member.joined_at
+      }))
+    };
+
+    res.status(200).json({
+      status: "success",
+      data: groupData
+    });
+  } catch (error) {
+    if (error instanceof AppException) {
+      throw error;
+    }
+    throw new AppException("Lỗi khi lấy thông tin nhóm", ErrorCode.SERVER_ERROR, 500);
+  }
+};
+
+export const getGroupMembers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
+    }
+    
+    const groupId = parseInt(req.params.groupId);
+    
+    if (!groupId) {
+      throw new AppException("ID nhóm không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+      "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+      [groupId, userId]
+    );
+    
+    if (memberCheck.length === 0) {
+      throw new AppException("Bạn không thuộc nhóm này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    }
+    
+    const [members] = await pool.query<RowDataPacket[]>(`
+      SELECT gm.user_id
+      FROM group_members gm
+      WHERE gm.group_id = ?
+    `, [groupId]);
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        members: members.map((member: any) => ({
+          user_id: member.user_id
+        }))
+      }
+    });
+  } catch (error) {
+    if (error instanceof AppException) {
+      throw error;
+    }
+    throw new AppException("Lỗi khi lấy danh sách thành viên", ErrorCode.SERVER_ERROR, 500);
+  }
+};
+
+export const removeMemberFromGroup = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.user_id;
+    
+    if (!userId) {
+      throw new AppException("Không xác định được người dùng", ErrorCode.USER_NOT_AUTHENTICATED, 401);
+    }
+    
+    const groupId = parseInt(req.params.groupId);
+    const memberUserId = parseInt(req.params.userId);
+    
+    if (!groupId || !memberUserId) {
+      throw new AppException("ID nhóm hoặc ID thành viên không hợp lệ", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    const [adminCheck] = await pool.query<ConversationMemberRow[]>(
+      "SELECT * FROM group_members WHERE group_id = ? AND user_id = ? AND role = 'admin'",
+      [groupId, userId]
+    );
+    
+    if (adminCheck.length === 0) {
+      throw new AppException("Bạn không có quyền xóa thành viên khỏi nhóm này", ErrorCode.RESOURCE_ACCESS_DENIED, 403);
+    }
+    
+    const [groupInfo] = await pool.query<ConversationRow[]>(
+      "SELECT * FROM chat_groups WHERE group_id = ?",
+      [groupId]
+    );
+    
+    if (groupInfo.length === 0) {
+      throw new AppException("Nhóm không tồn tại", ErrorCode.NOT_FOUND, 404);
+    }
+    
+    if (groupInfo[0].type === 'private') {
+      throw new AppException("Không thể xóa thành viên khỏi cuộc trò chuyện riêng tư", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    const [memberCheck] = await pool.query<ConversationMemberRow[]>(
+      "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+      [groupId, memberUserId]
+    );
+    
+    if (memberCheck.length === 0) {
+      throw new AppException("Thành viên không có trong nhóm", ErrorCode.NOT_FOUND, 404);
+    }
+    
+    if (memberCheck[0].role === 'admin' && memberUserId !== userId) {
+      throw new AppException("Không thể xóa admin khác", ErrorCode.VALIDATION_ERROR, 400);
+    }
+    
+    await pool.query(
+      "DELETE FROM group_members WHERE group_id = ? AND user_id = ?",
+      [groupId, memberUserId]
+    );
+    
+    const roomId = `conversation_${groupId}`;
+    if (socketServiceInstance) {
+      socketServiceInstance.broadcastEvent('group:member-removed', {
+        conversation_id: groupId,
+        removed_by: userId,
+        removed_user: memberUserId
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Đã xóa thành viên khỏi nhóm"
+    });
+  } catch (error) {
+    if (error instanceof AppException) {
+      throw error;
+    }
+    throw new AppException("Lỗi khi xóa thành viên khỏi nhóm", ErrorCode.SERVER_ERROR, 500);
   }
 };

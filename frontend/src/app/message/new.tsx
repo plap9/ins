@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TextInput, TouchableOpacity, Image, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
+import messageService from '../../services/messageService';
+import { useAuth } from '../context/AuthContext';
 
 interface User {
-  id: string;
+  id: number;
   username: string;
   avatar: string;
   isOnline: boolean;
@@ -17,9 +19,8 @@ interface User {
 
 interface UsersResponse {
   users: Array<{
-    id?: string;
-    _id?: string;
-    username?: string;
+    id: number;
+    username: string;
     profile_picture?: string;
     is_online?: boolean;
     is_following?: boolean;
@@ -28,19 +29,24 @@ interface UsersResponse {
 }
 
 interface ConversationResponse {
-  conversation: {
-    id: string;
+  status: string;
+  data: {
+    conversation_id: number;
+    type: string;
+    participants?: number[];
   };
 }
 
 export default function NewMessageScreen() {
   const router = useRouter();
+  const { authData } = useAuth();
   const params = useLocalSearchParams<{ userId?: string, username?: string }>();
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,8 +59,8 @@ export default function NewMessageScreen() {
         
         if (response.data && response.data.users) {
           const apiUsers = response.data.users.map((user) => ({
-            id: user.id || user._id || '',
-            username: user.username || 'Người dùng',
+            id: user.id,
+            username: user.username,
             avatar: user.profile_picture || 'https://randomuser.me/api/portraits/lego/1.jpg',
             isOnline: user.is_online || false,
             isFollowing: user.is_following || false,
@@ -65,13 +71,13 @@ export default function NewMessageScreen() {
           setFilteredUsers(apiUsers);
           
           if (params.userId) {
-            const targetUser = apiUsers.find(user => user.id === params.userId);
+            const targetUser = apiUsers.find(user => user.id === parseInt(params.userId!));
             if (targetUser) {
               setSelectedUsers([targetUser]);
               handleUserNavigation(targetUser);
             } else if (params.username) {
               const tempUser: User = {
-                id: params.userId,
+                id: parseInt(params.userId),
                 username: params.username,
                 avatar: 'https://randomuser.me/api/portraits/lego/1.jpg',
                 isOnline: false,
@@ -121,80 +127,65 @@ export default function NewMessageScreen() {
   const handleNext = async () => {
     if (selectedUsers.length === 0) return;
     
-    setIsLoading(true);
+    setIsCreating(true);
+    setError(null);
     
     try {
       if (selectedUsers.length === 1) {
-        const userId = selectedUsers[0].id;
+        const recipientId = selectedUsers[0].id;
+        const conversation = await messageService.createConversation([recipientId]);
         
-        const checkResponse = await apiClient.get<ConversationResponse>(`/api/messages/conversations/with/${userId}`);
-        
-        if (checkResponse.data && checkResponse.data.conversation) {
-          router.push({
-            pathname: "/message/[id]",
-            params: { id: checkResponse.data.conversation.id }
-          });
-        } else {
-          const createResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations', {
-            recipient_id: userId
-          });
-          
-          if (createResponse.data && createResponse.data.conversation) {
-            router.push({
-              pathname: "/message/[id]",
-              params: { id: createResponse.data.conversation.id }
-            });
+        router.push({
+          pathname: "/message/[id]",
+          params: { 
+            id: conversation.group_id.toString(),
+            recipientInfo: JSON.stringify({
+              id: recipientId,
+              username: selectedUsers[0].username,
+              profile_picture: selectedUsers[0].avatar
+            })
           }
-        }
+        });
       } else {
         const userIds = selectedUsers.map(user => user.id);
+        const groupName = `Nhóm (${selectedUsers.length + 1})`;
+        const conversation = await messageService.createConversation(userIds, true, groupName);
         
-        const createGroupResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations/group', {
-          name: `Nhóm (${selectedUsers.length})`,
-          member_ids: userIds
+        router.push({
+          pathname: "/message/[id]",
+          params: { id: conversation.group_id.toString() }
         });
-        
-        if (createGroupResponse.data && createGroupResponse.data.conversation) {
-          router.push({
-            pathname: "/message/[id]",
-            params: { id: createGroupResponse.data.conversation.id }
-          });
-        }
       }
     } catch (err) {
       console.error('Lỗi khi tạo cuộc trò chuyện:', err);
       setError('Không thể tạo cuộc trò chuyện, vui lòng thử lại sau.');
     } finally {
-      setIsLoading(false);
+      setIsCreating(false);
     }
   };
 
   const handleUserNavigation = async (user: User) => {
     try {
-      setIsLoading(true);
-      const checkResponse = await apiClient.get<ConversationResponse>(`/api/messages/conversations/with/${user.id}`);
+      setIsCreating(true);
+      setError(null);
       
-      if (checkResponse.data && checkResponse.data.conversation) {
-        router.replace({
-          pathname: "/message/[id]",
-          params: { id: checkResponse.data.conversation.id }
-        });
-      } else {
-        const createResponse = await apiClient.post<ConversationResponse>('/api/messages/conversations', {
-          recipient_id: user.id
-        });
-        
-        if (createResponse.data && createResponse.data.conversation) {
-          router.replace({
-            pathname: "/message/[id]",
-            params: { id: createResponse.data.conversation.id }
-          });
+      const conversation = await messageService.createConversation([user.id]);
+      
+      router.replace({
+        pathname: "/message/[id]",
+        params: { 
+          id: conversation.group_id.toString(),
+          recipientInfo: JSON.stringify({
+            id: user.id,
+            username: user.username,
+            profile_picture: user.avatar
+          })
         }
-      }
+      });
     } catch (err) {
       console.error('Lỗi khi tạo cuộc trò chuyện:', err);
       setError('Không thể tạo cuộc trò chuyện, vui lòng thử lại sau.');
-      setIsLoading(false);
+      setIsCreating(false);
     }
   };
 
@@ -264,12 +255,19 @@ export default function NewMessageScreen() {
         <Text className="text-white text-lg font-semibold">Tin nhắn mới</Text>
         
         <TouchableOpacity 
+          className={`px-6 py-3 rounded-full ${
+            selectedUsers.length > 0 && !isCreating ? 'bg-blue-500' : 'bg-gray-700'
+          }`}
           onPress={handleNext}
-          disabled={selectedUsers.length === 0 || isLoading}
+          disabled={selectedUsers.length === 0 || isCreating}
         >
-          <Text className={`${selectedUsers.length > 0 && !isLoading ? 'text-blue-500' : 'text-blue-500/50'} font-semibold`}>
-            {isLoading ? 'Đang xử lý...' : 'Tiếp'}
-          </Text>
+          {isCreating ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <Text className="text-white font-medium">
+              {selectedUsers.length === 1 ? 'Trò chuyện' : `Tạo nhóm (${selectedUsers.length})`}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
       
@@ -310,7 +308,7 @@ export default function NewMessageScreen() {
       ) : (
         <FlatList
           data={filteredUsers}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={renderUserItem}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={() => (
@@ -320,6 +318,18 @@ export default function NewMessageScreen() {
             </View>
           )}
         />
+      )}
+
+      {/* Overlay khi đang tạo conversation */}
+      {isCreating && (
+        <View className="absolute inset-0 bg-black/50 flex-1 justify-center items-center z-50">
+          <View className="bg-gray-800 rounded-lg p-6 items-center">
+            <ActivityIndicator size="large" color="#0095f6" />
+            <Text className="text-white mt-3 text-base">
+              {selectedUsers.length === 1 ? 'Đang tạo cuộc trò chuyện...' : 'Đang tạo nhóm chat...'}
+            </Text>
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );

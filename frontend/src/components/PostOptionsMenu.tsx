@@ -116,7 +116,6 @@ const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({
               <TouchableOpacity
                 className="flex-row items-center p-3 rounded-lg"
                 onPress={() => {
-                  // TODO: Implement report functionality
                   Alert.alert('Thông báo', 'Chức năng báo cáo đang được phát triển');
                 }}
               >

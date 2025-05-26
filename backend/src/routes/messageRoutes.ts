@@ -32,6 +32,9 @@ router.post('/conversations/:conversationId/upload-media', messageController.upl
 router.get('/messages/conversations/:conversationId', messageController.getConversationMessages);
 
 router.post('/groups/:groupId/members', messageController.addMembersToGroup);
+router.get('/groups/:groupId', messageController.getGroupInfo);
+router.get('/groups/:groupId/members', messageController.getGroupMembers);
+router.delete('/groups/:groupId/members/:userId', messageController.removeMemberFromGroup);
 router.delete('/groups/:groupId/leave', messageController.leaveGroup);
 router.put('/groups/:groupId', messageController.updateGroupInfo);
 

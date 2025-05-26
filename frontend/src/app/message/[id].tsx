@@ -7,6 +7,8 @@ import { SafeAreaView, Edge } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
 import { useAuth } from '../context/AuthContext';
 import * as FileSystem from 'expo-file-system';
+import socketService from '../../services/socketService';
+import networkService from '../../services/networkService';
 
 import MessageHeader from '../../components/message/MessageHeader';
 import MessageBubble from '../../components/message/MessageBubble';
@@ -20,6 +22,8 @@ type MessageType = {
   isRead: boolean;
   isSent: boolean;
   isDelivered: boolean;
+  isFailed?: boolean;
+  queuedMessageId?: string;
   type: 'text' | 'image' | 'video';
   mediaUrl?: string;
   senderId?: string;
@@ -88,6 +92,7 @@ export default function ConversationScreen() {
   const { authData } = useAuth();
   const currentUserId = authData?.user?.user_id || 0;
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [showReactions, setShowReactions] = useState(false);
@@ -102,6 +107,7 @@ export default function ConversationScreen() {
     lastSeen: '',
   });
   const [error, setError] = useState<string | null>(null);
+  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -240,6 +246,136 @@ export default function ConversationScreen() {
     fetchConversation();
   }, [id, recipientInfo, currentUserId]);
 
+  useEffect(() => {
+    const unsubscribeNetwork = networkService.onNetworkChange((online) => {
+      setIsOnline(online);
+      if (online) {
+        console.log('[Conversation] Network back online, processing queued messages');
+      }
+      const queuedForThisConversation = networkService.getQueuedMessages(id);
+      setQueuedMessagesCount(queuedForThisConversation.length);
+    });
+
+    networkService.setSendCallback(async (queuedMessage) => {
+      try {
+        const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${queuedMessage.conversationId}/messages`, {
+          content: queuedMessage.content,
+          type: queuedMessage.type
+        });
+
+        if (response.data && response.data.message) {
+          setMessages(prev => prev.map(msg => {
+            if (msg.queuedMessageId === queuedMessage.id) {
+              return {
+                ...msg,
+                id: response.data.message.id || response.data.message._id || msg.id,
+                isSent: true,
+                isDelivered: true,
+                isFailed: false,
+                queuedMessageId: undefined
+              };
+            }
+            return msg;
+          }));
+
+          socketService.emit('chat:message', {
+            roomId: `conversation_${queuedMessage.conversationId}`,
+            message: {
+              message_id: response.data.message.id || response.data.message._id,
+              content: queuedMessage.content,
+              sent_at: new Date().toISOString(),
+              sender_id: currentUserId,
+              username: authData?.user?.username || 'Bạn',
+              profile_picture: authData?.user?.profile_picture,
+              message_type: queuedMessage.type
+            }
+          });
+        }
+      } catch (error) {
+        console.error('[NetworkService] Failed to send queued message:', error);
+        throw error;
+      }
+    });
+
+    setIsOnline(networkService.isNetworkAvailable());
+
+    return () => {
+      unsubscribeNetwork();
+    };
+  }, [id, currentUserId, authData]);
+
+  useEffect(() => {
+    if (!id || !socketService) return;
+
+    socketService.joinRoom(`conversation_${id}`);
+
+    const unsubscribeDelivered = socketService.onMessageEvent('message:delivered', (data: {
+      conversation_id: number;
+      user_id: number;
+      message_ids: number[];
+    }) => {
+      if (data.conversation_id.toString() === id) {
+        setMessages(prev => prev.map(msg => {
+          if (data.message_ids.includes(parseInt(msg.id)) && msg.senderId === currentUserId.toString()) {
+            return { ...msg, isDelivered: true };
+          }
+          return msg;
+        }));
+      }
+    });
+
+    const unsubscribeRead = socketService.onMessageEvent('message:read', (data: {
+      conversation_id: number;
+      reader_id: number;
+      message_ids: number[];
+    }) => {
+      if (data.conversation_id.toString() === id) {
+        setMessages(prev => prev.map(msg => {
+          if (data.message_ids.includes(parseInt(msg.id)) && msg.senderId === currentUserId.toString()) {
+            return { ...msg, isRead: true };
+          }
+          return msg;
+        }));
+      }
+    });
+
+    const unsubscribeNewMessage = socketService.onRoomMessage('chat:message', (data: any) => {
+      if (data.roomId === `conversation_${id}`) {
+        const newMessage: MessageType = {
+          id: data.message.message_id?.toString() || Date.now().toString(),
+          content: data.message.content || '',
+          timestamp: data.message.sent_at || new Date().toISOString(),
+          isRead: false,
+          isSent: true,
+          isDelivered: true,
+          type: data.message.message_type === 'media' ? 'image' : 'text',
+          mediaUrl: data.message.media_url,
+          senderId: data.message.sender_id?.toString() || '',
+          senderName: data.message.username || 'Người dùng',
+          senderAvatar: data.message.profile_picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.message.username || 'User')}&background=random`,
+        };
+        
+        setMessages(prev => [...prev, newMessage]);
+        
+        if (data.message.sender_id !== currentUserId) {
+          setTimeout(() => {
+            socketService.emit('message:read', {
+              conversation_id: parseInt(id),
+              message_ids: [parseInt(newMessage.id)]
+            });
+          }, 1000);
+        }
+      }
+    });
+
+    return () => {
+      socketService.leaveRoom(`conversation_${id}`);
+      unsubscribeDelivered();
+      unsubscribeRead();
+      unsubscribeNewMessage();
+    };
+  }, [id, currentUserId]);
+
   const formatLastSeen = (lastActive?: string) => {
     if (!lastActive) return 'Không hoạt động';
     
@@ -267,8 +403,9 @@ export default function ConversationScreen() {
       content: text,
       timestamp: new Date().toISOString(),
       isRead: false,
-      isSent: true,
+      isSent: false,
       isDelivered: false,
+      isFailed: false,
       type: 'text',
       senderName: 'Bạn',
       senderAvatar: authData?.user?.profile_picture || `https://ui-avatars.com/api/?name=Me&background=random`,
@@ -277,6 +414,28 @@ export default function ConversationScreen() {
 
     setMessages(prev => [...prev, newMessage]);
 
+    if (!isOnline) {
+      try {
+        const queuedMessageId = await networkService.queueMessage(id, text, 'text');
+        
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, queuedMessageId }
+            : msg
+        ));
+        
+        console.log(`[Conversation] Message queued for offline sending: ${queuedMessageId}`);
+      } catch (error) {
+        console.error('[Conversation] Failed to queue message:', error);
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, isFailed: true }
+            : msg
+        ));
+      }
+      return;
+    }
+
     try {
       const response = await apiClient.post<MessageResponse>(`/api/messages/conversations/${id}/messages`, {
         content: text,
@@ -284,23 +443,38 @@ export default function ConversationScreen() {
       });
       
       if (response.data && response.data.message) {
+        const actualMessageId = response.data.message.id || response.data.message._id || tempId;
+        
         setMessages(prev => 
           prev.map(msg => 
             msg.id === tempId
               ? {
                   ...msg,
-                  id: response.data.message.id || response.data.message._id || tempId,
-                  isRead: false,
+                  id: actualMessageId,
+                  isSent: true,
                   isDelivered: true
                 }
               : msg
           )
         );
         
+        socketService.emit('chat:message', {
+          roomId: `conversation_${id}`,
+          message: {
+            message_id: actualMessageId,
+            content: text,
+            sent_at: new Date().toISOString(),
+            sender_id: currentUserId,
+            username: authData?.user?.username || 'Bạn',
+            profile_picture: authData?.user?.profile_picture,
+            message_type: 'text'
+          }
+        });
+        
         setTimeout(() => {
           setMessages(prev => 
             prev.map(msg => 
-              msg.id === (response.data.message.id || response.data.message._id || tempId)
+              msg.id === actualMessageId
                 ? { ...msg, isRead: true }
                 : msg
             )
@@ -313,7 +487,7 @@ export default function ConversationScreen() {
       setMessages(prev => 
         prev.map(msg => 
           msg.id === tempId
-            ? { ...msg, isSent: false, isDelivered: false }
+            ? { ...msg, isFailed: true }
             : msg
         )
       );
@@ -427,6 +601,22 @@ export default function ConversationScreen() {
     setShowReactions(false);
   };
 
+  const handleRetryMessage = async (messageId: string) => {
+    try {
+      await networkService.retryMessage(messageId);
+      console.log(`[Conversation] Retrying message: ${messageId}`);
+    } catch (error) {
+      console.error(`[Conversation] Failed to retry message ${messageId}:`, error);
+      
+      setMessages(prev => prev.map(msg => {
+        if (msg.queuedMessageId === messageId || msg.id === messageId) {
+          return { ...msg, isFailed: true };
+        }
+        return msg;
+      }));
+    }
+  };
+
   const renderMessage = ({ item }: { item: MessageType }) => {
     const isCurrentUser = item.senderId === currentUserId.toString();
     
@@ -445,6 +635,7 @@ export default function ConversationScreen() {
             setShowOptions(true);
           }
         }}
+        onRetryMessage={() => handleRetryMessage(item.id)}
       />
     );
   };
@@ -483,12 +674,21 @@ export default function ConversationScreen() {
         
         <MessageHeader
           user={user}
+          isOnline={isOnline}
         />
         
         {error ? (
           renderErrorState()
         ) : (
           <>
+            {!isOnline && queuedMessagesCount > 0 && (
+              <View className="bg-orange-500 px-4 py-2 mx-2 mb-2 rounded-lg">
+                <Text className="text-white text-sm text-center">
+                  📱 Không có mạng - {queuedMessagesCount} tin nhắn đang chờ gửi
+                </Text>
+              </View>
+            )}
+            
             <View className="flex-1 px-2">  
               <FlatList
                 ref={flatListRef}

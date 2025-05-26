@@ -63,6 +63,18 @@ class SocketService {
       listeners.forEach(listener => listener({ type: 'read', messageId: data.messageId, userId: data.userId }));
     });
 
+    this.socket.on('message:delivered', (data) => {
+      const eventKey = 'message:delivered';
+      const listeners = this.statusListeners.get(eventKey) || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
+    this.socket.on('message:read', (data) => {
+      const eventKey = 'message:read';
+      const listeners = this.statusListeners.get(eventKey) || new Set();
+      listeners.forEach(listener => listener(data));
+    });
+
     this.socket.on('user:online', (data) => {
       const listeners = this.statusListeners.get('online') || new Set();
       listeners.forEach(listener => listener(data));
@@ -214,6 +226,15 @@ class SocketService {
       this.messageListeners.set(roomId, new Set());
     }
     const listeners = this.messageListeners.get(roomId)!;
+    listeners.add(callback);
+    return () => listeners.delete(callback);
+  }
+
+  onMessageEvent(eventName: string, callback: (data: any) => void) {
+    if (!this.statusListeners.has(eventName)) {
+      this.statusListeners.set(eventName, new Set());
+    }
+    const listeners = this.statusListeners.get(eventName)!;
     listeners.add(callback);
     return () => listeners.delete(callback);
   }

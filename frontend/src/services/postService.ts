@@ -59,7 +59,7 @@ export const getUserPosts = async (userId: number): Promise<PostResponse> => {
     console.error('[postService] Lỗi trong getUserPosts:', error);
     throw error;
   }
-};
+}; 
 
 export const deletePost = async (postId: number): Promise<{ success: boolean; message: string }> => {
   try {
