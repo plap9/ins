@@ -120,4 +120,4 @@
         * Xóa lịch sử tìm kiếm.
 ## 5. Thiết kế cơ sở dữ liệu
 ![Sơ đồ ERD Instagram Clone](https://clone-ins-s3.s3.ap-southeast-2.amazonaws.com/erd.png)
-
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/plap9/ins)
