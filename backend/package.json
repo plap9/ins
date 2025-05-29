@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
-    "test": "jest --detectOpenHandles --forceExit --maxWorkers=1",
-    "test:redis": "redis-server --port 6380 --save '' --appendonly no",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts",
-    "test:watch": "jest --watchAll"
+  "build": "tsc",
+  "start": "node dist/index.js",
+  "test": "jest --detectOpenHandles --forceExit --maxWorkers=1",
+  "test:redis": "redis-server --port 6380 --save '' --appendonly no",
+  "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts",
+  "test:watch": "jest --watchAll"
   },
   "keywords": [],
   "author": "",
