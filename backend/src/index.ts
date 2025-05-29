@@ -16,9 +16,11 @@ import messageRoutes from "./routes/messageRoutes";
 import webrtcRoutes from "./routes/webrtcRoutes";
 import followRoutes from "./routes/follow";
 import feedRoutes from "./routes/feed";
+import workersRoutes from "./routes/workers";
 import SocketService from './utils/socketService';
 import { initializeSocketService as initMessageSocketService } from './controllers/messages/messageController';
 import { initializeSocketService as initSocketHandlers, setupMessageSocketHandlers } from './controllers/messages/messageSocketController';
+import workerManager from './workers/workerManager';
 
 dotenv.config();
 const app = express();
@@ -86,6 +88,7 @@ app.use("/messages", messageRoutes);
 app.use("/webrtc", webrtcRoutes);
 app.use("/follow", followRoutes);
 app.use("/feed", feedRoutes);
+app.use("/workers", workersRoutes);
 
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
@@ -93,6 +96,10 @@ app.use(globalErrorHandler);
 let socketService: SocketService | null = null;
 
 if (require.main === module) {
+  console.log(' Khởi tạo background workers...');
+  const workerStats = workerManager.getWorkerStats();
+  console.log(` Đã khởi tạo ${workerStats.totalWorkers} workers thành công`);
+  
   socketService = new SocketService(server);
 
   initMessageSocketService(socketService);
@@ -109,6 +116,12 @@ if (require.main === module) {
     console.log(`- Network: http://${ip}:${PORT}`);
     console.log(`\n*** ĐỂ KẾT NỐI TỪ FRONTEND, SỬ DỤNG: ***`);
     console.log(`API_URL = "http://${ip}:${PORT}"\n`);
+    
+    console.log(' BACKGROUND WORKERS STATUS:');
+    workerStats.workers.forEach(worker => {
+      console.log(`  ${worker.name}:  HOẠT ĐỘNG (concurrency: ${worker.concurrency})`);
+    });
+    console.log(' Hệ thống đã sẵn sàng!');
   });
 }
 

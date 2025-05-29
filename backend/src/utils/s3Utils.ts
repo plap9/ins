@@ -5,7 +5,6 @@ import sharp from 'sharp';
 import { Readable } from 'stream';
 import dotenv from 'dotenv';
 import { redisClient } from '../config/redis'; 
-import { fileTypeFromBuffer, fileTypeFromStream } from 'file-type';
 
 dotenv.config();
 
@@ -42,6 +41,8 @@ interface UploadResult {
 
 const detectContentType = async (data: Buffer | Readable): Promise<string> => {
     try {
+      const { fileTypeFromBuffer, fileTypeFromStream } = await import('file-type');
+      
       if (Buffer.isBuffer(data)) {
         const type = await fileTypeFromBuffer(data);
         return type?.mime || 'application/octet-stream';
